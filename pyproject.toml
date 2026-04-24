@@ -30,7 +30,8 @@ dev = [
     "pytest-dependency",
     "ruff",
     "dvc",
-    "jupyterlab"
+    "jupyterlab",
+    "pre-commit"
 ]
 
 [project.scripts]   # <-- entry point CLI
@@ -65,4 +66,3 @@ dialect = "duckdb"
 templater = "placeholder"
 rules = "layout"
 exclude_rules = "AM04, AL05, LT05"
-
