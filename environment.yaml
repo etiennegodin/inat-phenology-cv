@@ -1,0 +1,16 @@
+name: inat_pheno_cv
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+  - defaults
+  - defaults
+dependencies:
+  - python=3.12
+  - pytorch 
+  - torchvision 
+  - torchaudio
+  - pytorch-cuda=12.2
+  - pip
+  - pip:
+    - -e ".[dev]"

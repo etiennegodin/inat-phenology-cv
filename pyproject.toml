@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project]
+name = "pytorch_pipeline"
+version = "0.0.1"
+description = "Pytorch inat vision"
+authors = [{ name="Etienne Godin", email="etiennegodin@duck.com" }]
+
+dependencies = [
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "plotly",
+    "optuna",
+    "mlflow",
+    "tqdm",
+    "duckdb == 1.4.3",
+    "seaborn",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-dependency",
+    "ruff",
+    "dvc",
+    "jupyterlab"
+]
+
+[project.scripts]   # <-- entry point CLI
+inat_pipe = "inat_pipeline.cli:main"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+# E: pycodestyle errors, F: Pyflakes, I: isort (imports)
+select = ["E", "F", "I"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+# Matches Black's default style
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+# Updated the cov path to match your project name
+addopts = "--cov=src/inat_pipeline --cov-report=term-missing --cov-report=html"
+[tool.sqlfluff.core]
+dialect = "duckdb"
+templater = "placeholder"
+rules = "layout"
+exclude_rules = "AM04, AL05, LT05"
+
