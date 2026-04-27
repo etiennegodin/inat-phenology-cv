@@ -7,7 +7,7 @@ from .train import train
 def main():
     os.makedirs("checkpoints", exist_ok=True)
     configs = Config(
-        root="/home/etienne/projects/inat-phenology-cv/data/photos",
+        root="/home/etienne/projects/inat-phenology-cv/data/photos", epochs=10
     )
     train(
         model=configs.model,

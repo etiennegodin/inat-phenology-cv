@@ -1,3 +1,5 @@
+import time
+
 import torch
 import torch.optim as optim
 from torch import nn
@@ -38,8 +40,9 @@ def train(
     optimizer: optim.Optimizer,
     criterion: nn.Module,
     epochs: int,
-) -> nn.Module:
+):
     for epoch in range(epochs):
+        start = time.time()
         train_loss = train_one_epoch(
             model=model,
             dataloader=train_loader,
@@ -47,6 +50,12 @@ def train(
             criterion=criterion,
         )
         val_loss = evaluate(model=model, dataloader=val_loader, criterion=criterion)
-        print(f"Epoch {epoch}: train={train_loss:.3f} val={val_loss:.3f}")
+        elapsed = time.time() - start
+
+        gap = val_loss - train_loss
+        print(
+            f"Epoch {epoch}: train={train_loss:.3f} val={val_loss:.3f}"
+            f"gap={gap:.3f} time ={elapsed:.3f}s"
+        )
 
     torch.save(model.state_dict(), "checkpoints/model.pth")
