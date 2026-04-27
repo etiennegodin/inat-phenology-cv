@@ -1,8 +1,33 @@
-import numpy as np
+import pandas as pd
+from PIL import Image
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Subset
+from torch.utils.data import Dataset
 from torchvision import transforms
-from torchvision.datasets import ImageFolder
+
+from .utils import get_df_from_table
+
+LABEL_MAPPING = {13: 1, 21: 0}
+
+
+class PhenologyDataset(Dataset):
+    def __init__(self, df: pd.DataFrame, transform, samples_params) -> None:
+        self.transform = transform
+        self.samples_params = samples_params
+        self.df = self._format_df(df)
+        super().__init__()
+
+    def __len__(self) -> int:
+        return len(self.df)
+
+    def __getitem__(self, index: int):
+        path, target = self.df.iloc[index]
+        sample = Image.open(path).convert("RGB")
+        if self.transform is not None:
+            sample = self.transform(sample)
+        return sample, target
+
+    def _format_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        return df[["path", self.samples_params.label_col]].reset_index(drop=True)
 
 
 def build_base_transforms(input_size: tuple, mean: tuple, std: tuple):
@@ -29,34 +54,62 @@ def build_transforms(
     return train_transform, val_transform
 
 
-def get_split_idx(root: str) -> tuple[list, list, list]:
-    full_dataset = ImageFolder(
-        root,
-    )
-    idx = np.arange(0, len(full_dataset.samples))
-    labels = np.array([item[1] for item in full_dataset.samples])
+def split_dataset(
+    df: pd.DataFrame,
+    idx_col: str = "observation_id",
+    label_col: str = "controlled_value_id",
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    # Collapse to one observation per row
+    obs_df = df.drop_duplicates(subset=[idx_col])
+
     train_idx, temp_idx, train_labels, temp_labels = train_test_split(
-        idx, labels, test_size=0.40, random_state=42, stratify=labels
+        obs_df[idx_col],
+        obs_df[label_col],
+        test_size=0.40,
+        random_state=42,
+        stratify=obs_df[label_col],
     )
+
     val_idx, test_idx, val_labels, test_labels = train_test_split(
         temp_idx, temp_labels, test_size=0.5, random_state=42, stratify=temp_labels
     )
-    return (train_idx, val_idx, test_idx)
+    train_df = df[df[idx_col].isin(train_idx)]
+    val_df = df[df[idx_col].isin(val_idx)]
+    test_df = df[df[idx_col].isin(test_idx)]
+
+    return (train_df, val_df, test_df)
 
 
-def build_datasets(root: str, model_configs: dict) -> tuple[Subset, Subset, Subset]:
-    train_idx, val_idx, test_idx = get_split_idx(root=root)
+def get_samples(paths, samples_params) -> pd.DataFrame:
+    df = get_df_from_table(paths.db_path, "cv_photos")
+    df["path"] = (
+        paths.root
+        + "/"
+        + df[samples_params.label_col].astype(str)
+        + "/"
+        + df[samples_params.photo_id_col].astype(str)
+        + ".jpg"
+    )
+    df[samples_params.label_col] = df[samples_params.label_col].map(LABEL_MAPPING)
+    return df
 
+
+def build_datasets(
+    paths, samples_params, model_configs: dict
+) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
+    df = get_samples(paths, samples_params)
+
+    train_df, val_df, test_df = split_dataset(
+        df, idx_col=samples_params.observations_col, label_col=samples_params.label_col
+    )
+    print(train_df)
     base_transforms = build_base_transforms(
         **{k: model_configs[k] for k in ("input_size", "mean", "std")}
     )
-
     train_transform, val_transform = build_transforms(base_transforms)
 
-    train_dataset = ImageFolder(root, transform=train_transform)
-    val_dataset = ImageFolder(root, transform=val_transform)
+    train_set = PhenologyDataset(train_df, train_transform, samples_params)
+    val_set = PhenologyDataset(val_df, val_transform, samples_params)
+    test_set = PhenologyDataset(test_df, val_transform, samples_params)
 
-    train_subset = Subset(train_dataset, train_idx)
-    val_subset = Subset(val_dataset, val_idx)
-    test_subset = Subset(val_dataset, test_idx)  # same transforms as val
-    return train_subset, val_subset, test_subset
+    return train_set, val_set, test_set

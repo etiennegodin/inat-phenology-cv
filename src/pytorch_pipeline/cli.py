@@ -21,6 +21,7 @@ def main():
     paths = PathsParams(
         root="/home/etienne/projects/inat-phenology-cv/data/photos",
         checkpoint_path="/home/etienne/projects/inat-phenology-cv/checkpoints/checkpoint.pth",
+        db_path="/home/etienne/projects/inat-phenology-cv/data/cv_raw.duckdb",
     )
     configs = Config(
         paths=paths,

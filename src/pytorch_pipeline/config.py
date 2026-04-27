@@ -5,7 +5,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from .dataset import build_datasets
-from .model import build_model
+from .model import build_model, get_backbone
 
 
 @dataclass
@@ -34,16 +34,26 @@ class DataLoadersParams:
 class PathsParams:
     root: str
     checkpoint_path: str
+    db_path: str
+
+
+@dataclass
+class SamplesParams:
+    observations_col: str = "observation_id"
+    photo_id_col: str = "photo_id"
+    label_col: str = "controlled_value_id"
 
 
 @dataclass
 class Config:
     paths: PathsParams
+    samples_params: SamplesParams = field(default_factory=SamplesParams)
     training_params: TrainingParams = field(default_factory=TrainingParams)
     optimizer_params: OptimizerParams = field(default_factory=OptimizerParams)
     model_params: ModelParams = field(default_factory=ModelParams)
     dataloaders_params: DataLoadersParams = field(default_factory=DataLoadersParams)
     model: nn.Module = field(init=False)
+    backbone: nn.Module = field(init=False)
     criterion: nn.Module = nn.BCEWithLogitsLoss()
     optimizer_class: type = optim.Adam
     optimizer: optim.Optimizer = field(init=False)
@@ -52,17 +62,20 @@ class Config:
     test_loader: DataLoader = field(init=False)
 
     def __post_init__(self):
-        self._build_dataloaders()
+        self.backbone = get_backbone()
         self.model = build_model(
             self.model_params.head_inputs, self.model_params.dropout_prob
         )
         self.optimizer = self.optimizer_class(
             self.model.parameters(), lr=self.optimizer_params.learning_rate
         )
+        self._build_dataloaders()
 
     def _build_dataloaders(self):
         train_set, val_set, test_set = build_datasets(
-            self.paths.root, model_configs=self.model.default_cfg
+            paths=self.paths,
+            samples_params=self.samples_params,
+            model_configs=self.backbone.default_cfg,
         )
         self.train_loader = DataLoader(
             train_set, batch_size=self.dataloaders_params.batch_size, shuffle=True

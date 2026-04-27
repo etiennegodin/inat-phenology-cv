@@ -2,8 +2,12 @@ import timm
 from torch import nn
 
 
+def get_backbone():
+    return timm.create_model("efficientnet_b0", num_classes=0)
+
+
 def build_model(head_inputs: int = 256, dropout_prob: float = 0.5) -> nn.Module:
-    backbone = timm.create_model("efficientnet_b0", pretrained=True, num_classes=0)
+    backbone = get_backbone()
     for p in backbone.parameters():
         p.requires_grad = False
 
