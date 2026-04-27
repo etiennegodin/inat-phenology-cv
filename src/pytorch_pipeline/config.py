@@ -31,8 +31,14 @@ class DataLoadersParams:
 
 
 @dataclass
-class Config:
+class PathsParams:
     root: str
+    checkpoint_path: str
+
+
+@dataclass
+class Config:
+    paths: PathsParams
     training_params: TrainingParams = field(default_factory=TrainingParams)
     optimizer_params: OptimizerParams = field(default_factory=OptimizerParams)
     model_params: ModelParams = field(default_factory=ModelParams)
@@ -55,7 +61,7 @@ class Config:
         )
 
     def _build_dataloaders(self):
-        train_set, val_set, test_set = build_datasets(self.root)
+        train_set, val_set, test_set = build_datasets(self.paths.root)
         self.train_loader = DataLoader(
             train_set, batch_size=self.dataloaders_params.batch_size, shuffle=True
         )
