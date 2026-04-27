@@ -3,6 +3,7 @@ import os
 
 from .config import Config, PathsParams, TrainingParams
 from .train import train
+from .utils import clean_data
 
 
 def main():
@@ -25,6 +26,8 @@ def main():
         paths=paths,
         training_params=training_params,
     )
+
+    clean_data(paths.root)
 
     train(
         model=configs.model,
