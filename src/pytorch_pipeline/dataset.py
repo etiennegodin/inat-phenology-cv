@@ -1,4 +1,5 @@
 import pandas as pd
+import torch
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
@@ -6,7 +7,7 @@ from torchvision import transforms
 
 from .utils import get_df_from_table
 
-LABEL_MAPPING = {13: 1, 21: 0}
+LABEL_MAPPING = {13: 1.0, 21: 0.0}
 
 
 class PhenologyDataset(Dataset):
@@ -24,7 +25,7 @@ class PhenologyDataset(Dataset):
         sample = Image.open(path).convert("RGB")
         if self.transform is not None:
             sample = self.transform(sample)
-        return sample, target
+        return sample, torch.tensor(target, dtype=torch.float32)
 
     def _format_df(self, df: pd.DataFrame) -> pd.DataFrame:
         return df[["path", self.samples_params.label_col]].reset_index(drop=True)
@@ -102,7 +103,6 @@ def build_datasets(
     train_df, val_df, test_df = split_dataset(
         df, idx_col=samples_params.observations_col, label_col=samples_params.label_col
     )
-    print(train_df)
     base_transforms = build_base_transforms(
         **{k: model_configs[k] for k in ("input_size", "mean", "std")}
     )
