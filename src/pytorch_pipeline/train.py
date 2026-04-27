@@ -110,7 +110,7 @@ def train(
         print(
             f"Epoch {epoch}: train={train_loss:.3f} val={val_loss:.3f} "
             f"gap={gap:.3f} accuracy={float(metrics['accuracy']):.3f} "
-            f" roc ={float(metrics['roc']):.3f} time ={elapsed:.3f}s"
+            f" roc={float(metrics['roc']):.3f} time={elapsed:.3f}s"
         )
 
         if val_loss < best_loss:
