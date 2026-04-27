@@ -33,7 +33,7 @@ def get_split_idx(root: str) -> tuple[list, list, list]:
         idx, labels, test_size=0.40, random_state=42, stratify=labels
     )
     val_idx, test_idx, val_labels, test_labels = train_test_split(
-        temp_idx, temp_labels, test_size=0.75, random_state=42, stratify=temp_labels
+        temp_idx, temp_labels, test_size=0.5, random_state=42, stratify=temp_labels
     )
     return (train_idx, val_idx, test_idx)
 
