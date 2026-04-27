@@ -47,13 +47,11 @@ class Config:
 
     def __post_init__(self):
         self._build_dataloaders()
-
-        self.optimizer = self.optimizer_class(
-            self.model.parameters(), lr=self.optimizer_params.learning_rate
-        )
-
         self.model = build_model(
             self.model_params.head_inputs, self.model_params.dropout_prob
+        )
+        self.optimizer = self.optimizer_class(
+            self.model.parameters(), lr=self.optimizer_params.learning_rate
         )
 
     def _build_dataloaders(self):
