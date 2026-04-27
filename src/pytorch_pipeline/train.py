@@ -95,7 +95,9 @@ def train(
         if val_loss < best_loss:
             best_loss = val_loss
             # Save only if better
-            torch.save(model.state_dict(), "checkpoints/model.pth")
+            save_checkpoint(
+                epoch=epoch, model=model, optimizer=optimizer, best_val_loss=best_loss
+            )
             patience_counter = 0
         else:
             patience_counter += 1
@@ -105,6 +107,20 @@ def train(
 
     metrics = evaluate(model=model, dataloader=val_loader, criterion=criterion)
     train_report(metrics=metrics)
+
+
+def save_checkpoint(
+    epoch: int, model: nn.Module, optimizer: optim.Optimizer, best_val_loss: float
+) -> None:
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "best_val_loss": best_val_loss,
+        },
+        "checkpoints/model.pth",
+    )
 
 
 def train_report(metrics: dict):
