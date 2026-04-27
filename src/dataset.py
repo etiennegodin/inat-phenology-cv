@@ -38,7 +38,7 @@ def get_split_idx(root: str) -> tuple[list, list, list]:
     return (train_idx, val_idx, test_idx)
 
 
-def build_datasets(root: str):
+def build_datasets(root: str) -> tuple[Subset, Subset, Subset]:
     train_idx, val_idx, test_idx = get_split_idx(root=root)
 
     train_dataset = ImageFolder(root, transform=train_transform)
