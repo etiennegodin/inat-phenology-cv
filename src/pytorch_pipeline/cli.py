@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from .config import Config
+from .config import Config, TrainingParams
 from .train import train
 
 
@@ -15,10 +15,11 @@ def main():
 
     os.makedirs("checkpoints", exist_ok=True)
 
+    training_params = TrainingParams(epochs=args.epochs, patience=3)
+
     configs = Config(
         root="/home/etienne/projects/inat-phenology-cv/data/photos",
-        epochs=args.epochs,
-        learning_rate=args.learning_rate,
+        training_params=training_params,
     )
 
     train(
@@ -27,5 +28,5 @@ def main():
         val_loader=configs.val_loader,
         optimizer=configs.optimizer,
         criterion=configs.criterion,
-        epochs=configs.epochs,
+        **configs.modules_params_to_dict("training_params"),
     )
