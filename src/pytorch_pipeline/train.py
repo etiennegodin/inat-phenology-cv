@@ -1,5 +1,4 @@
 import time
-from typing import Union
 
 import pandas as pd
 import torch
@@ -82,17 +81,13 @@ def train(
             model,
             optimizer,
         )
-        if best_loss is None:
-            best_loss = 1e10
-        if start_epoch is None:
-            start_epoch = 0
     else:
         # Fresh run
         best_loss = 1e10
-        start_epoch = 0
+        start_epoch = None
 
     for epoch in range(epochs):
-        if epoch <= start_epoch:
+        if start_epoch is not None and epoch <= start_epoch:
             print(f"Skipping epoch {epoch}")
             continue
         start = time.time()
@@ -157,7 +152,7 @@ def load_checkpoint(
     checkpoint_path: str,
     model: nn.Module,
     optimizer: optim.Optimizer,
-) -> tuple[nn.Module, optim.Optimizer, Union[int, None], Union[float, None]]:
+) -> tuple[nn.Module, optim.Optimizer, int, float]:
     print(f"Reloading session at: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path)
     checkpoint: dict
