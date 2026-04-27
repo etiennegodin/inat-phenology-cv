@@ -4,9 +4,10 @@ from torchvision.models import ResNet50_Weights, resnet50
 
 def build_model() -> nn.Module:
     model = resnet50(weights=ResNet50_Weights.DEFAULT)
+    in_features = model.fc.in_features
     for p in model.parameters():
         p.requires_grad = False
-    model.fc = nn.Linear(2048, 1)
+    model.fc = nn.Linear(in_features, 1)
     return model
 
 

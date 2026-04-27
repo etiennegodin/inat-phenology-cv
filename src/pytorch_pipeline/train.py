@@ -1,4 +1,7 @@
 import torch
+import torch.optim as optim
+from torch import nn
+from torch.utils.data import DataLoader
 
 
 def train_one_epoch(model, dataloader, optimizer, criterion):
@@ -28,7 +31,14 @@ def evaluate(model, dataloader, criterion):
     return total_loss / len(dataloader)
 
 
-def train(model, train_loader, val_loader, optimizer, criterion, epochs):
+def train(
+    model: nn.Module,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    optimizer: optim.Optimizer,
+    criterion: nn.Module,
+    epochs: int,
+) -> nn.Module:
     for epoch in range(epochs):
         train_loss = train_one_epoch(
             model=model,
@@ -38,3 +48,5 @@ def train(model, train_loader, val_loader, optimizer, criterion, epochs):
         )
         val_loss = evaluate(model=model, dataloader=val_loader, criterion=criterion)
         print(f"Epoch {epoch}: train={train_loss:.3f} val={val_loss:.3f}")
+
+    torch.save(model.state_dict(), "checkpoints/model.pth")

@@ -27,7 +27,7 @@ dev = [
 ]
 
 [project.scripts]   # <-- entry point CLI
-inat_pipe = "inat_pipeline.cli:main"
+torch_train = "pytorch_pipeline.cli:main"
 
 [tool.ruff]
 line-length = 88

@@ -1,9 +1,14 @@
 name: inat_cv
 channels:
+  - pytorch
+  - nvidia
   - conda-forge
   - defaults
 dependencies:
   - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
   - pip
   - pandas
   - seaborn
@@ -13,8 +18,4 @@ dependencies:
   - mlflow
   - ipykernel          # Required for VS Code Jupyter to work correctly
   - pip:
-    - --index-url https://download.pytorch.org/whl/cu118
-    - torch
-    - torchvision
-    - torchaudio
     - -e ".[dev]"      # Your local dev installation

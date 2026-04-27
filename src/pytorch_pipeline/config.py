@@ -1,15 +1,15 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
 
-from .src.dataset import build_datasets
-from .src.model import build_model
+from .dataset import build_datasets
+from .model import build_model
 
 
 @dataclass
-class configs:
+class Config:
     root: str
     model: nn.Module = field(default_factory=build_model)
     criterion: nn.Module = nn.BCEWithLogitsLoss()
@@ -33,3 +33,6 @@ class configs:
         self.optimizer = self.optimizer_class(
             self.model.parameters(), lr=self.learning_rate, momentum=self.momentum
         )
+
+    def to_dict(self):
+        return asdict(self)
