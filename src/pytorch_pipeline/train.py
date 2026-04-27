@@ -1,4 +1,5 @@
 import time
+from typing import Union
 
 import pandas as pd
 import torch
@@ -69,11 +70,31 @@ def train(
     optimizer: optim.Optimizer,
     criterion: nn.Module,
     epochs: int,
-    patience: int = 3,
+    patience: int,
+    reload: bool,
+    checkpoint_path: str,
 ):
-    best_loss = 1e10
     patience_counter = 0
+    if reload:
+        # Reload previous run
+        model, optimizer, start_epoch, best_loss = load_checkpoint(
+            checkpoint_path,
+            model,
+            optimizer,
+        )
+        if best_loss is None:
+            best_loss = 1e10
+        if start_epoch is None:
+            start_epoch = 0
+    else:
+        # Fresh run
+        best_loss = 1e10
+        start_epoch = 0
+
     for epoch in range(epochs):
+        if epoch <= start_epoch:
+            print(f"Skipping epoch {epoch}")
+            continue
         start = time.time()
         train_loss = train_one_epoch(
             model=model,
@@ -96,7 +117,11 @@ def train(
             best_loss = val_loss
             # Save only if better
             save_checkpoint(
-                epoch=epoch, model=model, optimizer=optimizer, best_val_loss=best_loss
+                checkpoint_path,
+                epoch=epoch,
+                model=model,
+                optimizer=optimizer,
+                best_val_loss=best_loss,
             )
             patience_counter = 0
         else:
@@ -110,8 +135,13 @@ def train(
 
 
 def save_checkpoint(
-    epoch: int, model: nn.Module, optimizer: optim.Optimizer, best_val_loss: float
+    checkpoint_path: str,
+    epoch: int,
+    model: nn.Module,
+    optimizer: optim.Optimizer,
+    best_val_loss: float,
 ) -> None:
+    print(f"Saving checkpoint for epoch {epoch} with loss of {best_val_loss:.3f}")
     torch.save(
         {
             "epoch": epoch,
@@ -119,8 +149,23 @@ def save_checkpoint(
             "optimizer_state_dict": optimizer.state_dict(),
             "best_val_loss": best_val_loss,
         },
-        "checkpoints/model.pth",
+        checkpoint_path,
     )
+
+
+def load_checkpoint(
+    checkpoint_path: str,
+    model: nn.Module,
+    optimizer: optim.Optimizer,
+) -> tuple[nn.Module, optim.Optimizer, Union[int, None], Union[float, None]]:
+    print(f"Reloading session at: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path)
+    checkpoint: dict
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    start_epoch = checkpoint.get("epoch", 0)
+    best_val_loss = checkpoint.get("best_val_loss", 1e10)
+    return model, optimizer, start_epoch, best_val_loss
 
 
 def train_report(metrics: dict):
