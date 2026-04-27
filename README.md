@@ -8,9 +8,9 @@ Vision model enrichment source for inat-obs-scorer
 - Custom head: Linear(2048→256) → ReLU → Dropout(0.5) → Linear(256→1)
 - Single photo per observations
 - BCEWithLogitsLoss, Adam
-- 736 images, 60/20/20 stratified split, early stopping (patience=3), best checkpoint saving
+- 3473 images, 60/20/20 stratified split, early stopping (patience=3), best checkpoint saving
 - evaluate() returns loss, accuracy, confusion matrix, ROC-AUC
-- ~80% val accuracy, ~0.90 roc_auc
+- ~826% val accuracy, ~0.914 roc_auc
 
 ### 🔲 v0.2 — Multi-label classification
 
