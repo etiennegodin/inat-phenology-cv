@@ -4,23 +4,29 @@ from torch.utils.data import Subset
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
-base_transforms = [
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-]
 
-train_transform = transforms.Compose(
-    [
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(15),
-        transforms.RandomPerspective(0.2),
-        transforms.RandomAutocontrast(),
+def build_base_transforms(input_size: tuple, mean: tuple, std: tuple):
+    return [
+        transforms.Resize((input_size[1], input_size[2])),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std),
     ]
-    + base_transforms
-)
 
-val_transform = transforms.Compose(base_transforms)
+
+def build_transforms(
+    base_transforms: list,
+) -> tuple[transforms.Compose, transforms.Compose]:
+    train_transform = transforms.Compose(
+        [
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(15),
+            transforms.RandomPerspective(0.2),
+            transforms.RandomAutocontrast(),
+        ]
+        + base_transforms
+    )
+    val_transform = transforms.Compose(base_transforms)
+    return train_transform, val_transform
 
 
 def get_split_idx(root: str) -> tuple[list, list, list]:
@@ -38,8 +44,14 @@ def get_split_idx(root: str) -> tuple[list, list, list]:
     return (train_idx, val_idx, test_idx)
 
 
-def build_datasets(root: str) -> tuple[Subset, Subset, Subset]:
+def build_datasets(root: str, model_configs: dict) -> tuple[Subset, Subset, Subset]:
     train_idx, val_idx, test_idx = get_split_idx(root=root)
+
+    base_transforms = build_base_transforms(
+        **{k: model_configs[k] for k in ("input_size", "mean", "std")}
+    )
+
+    train_transform, val_transform = build_transforms(base_transforms)
 
     train_dataset = ImageFolder(root, transform=train_transform)
     val_dataset = ImageFolder(root, transform=val_transform)
@@ -48,7 +60,3 @@ def build_datasets(root: str) -> tuple[Subset, Subset, Subset]:
     val_subset = Subset(val_dataset, val_idx)
     test_subset = Subset(val_dataset, test_idx)  # same transforms as val
     return train_subset, val_subset, test_subset
-
-
-if __name__ == "__main__":
-    build_datasets("/home/etienne/projects/inat-phenology-cv/data/photos")

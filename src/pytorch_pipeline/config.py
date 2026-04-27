@@ -61,7 +61,9 @@ class Config:
         )
 
     def _build_dataloaders(self):
-        train_set, val_set, test_set = build_datasets(self.paths.root)
+        train_set, val_set, test_set = build_datasets(
+            self.paths.root, model_configs=self.model.default_cfg
+        )
         self.train_loader = DataLoader(
             train_set, batch_size=self.dataloaders_params.batch_size, shuffle=True
         )
