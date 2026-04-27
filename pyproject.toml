@@ -12,15 +12,7 @@ description = "Pytorch inat vision"
 authors = [{ name="Etienne Godin", email="etiennegodin@duck.com" }]
 
 dependencies = [
-    "pandas",
-    "numpy",
-    "matplotlib",
-    "plotly",
-    "optuna",
-    "mlflow",
     "tqdm",
-    "duckdb == 1.4.3",
-    "seaborn",
 ]
 
 [project.optional-dependencies]

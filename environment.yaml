@@ -1,16 +1,20 @@
-name: inat_pheno_cv
+name: inat_cv
 channels:
   - conda-forge
-  - pytorch
-  - nvidia
-  - defaults
   - defaults
 dependencies:
-  - python=3.12
-  - pytorch 
-  - torchvision 
-  - torchaudio
-  - pytorch-cuda=12.2
+  - python=3.10
   - pip
+  - pandas
+  - seaborn
+  - matplotlib
+  - duckdb
+  - optuna
+  - mlflow
+  - ipykernel          # Required for VS Code Jupyter to work correctly
   - pip:
-    - -e ".[dev]"
+    - --index-url https://download.pytorch.org/whl/cu118
+    - torch
+    - torchvision
+    - torchaudio
+    - -e ".[dev]"      # Your local dev installation
