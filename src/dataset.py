@@ -4,19 +4,23 @@ from torch.utils.data import Subset
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
+base_transforms = [
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+]
+
 train_transform = transforms.Compose(
     [
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(15),
+        transforms.RandomPerspective(0.2),
+        transforms.RandomAutocontrast(),
     ]
+    + base_transforms
 )
 
-val_transform = transforms.Compose(
-    [
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-    ]
-)
+val_transform = transforms.Compose(base_transforms)
 
 
 def get_split_idx(root: str) -> tuple[list, list, list]:
@@ -26,10 +30,10 @@ def get_split_idx(root: str) -> tuple[list, list, list]:
     idx = np.arange(0, len(full_dataset.samples))
     labels = np.array([item[1] for item in full_dataset.samples])
     train_idx, temp_idx, train_labels, temp_labels = train_test_split(
-        idx, labels, test_size=0.40, random_state=42
+        idx, labels, test_size=0.40, random_state=42, stratify=labels
     )
     val_idx, test_idx, val_labels, test_labels = train_test_split(
-        temp_idx, temp_labels, test_size=0.75, random_state=42
+        temp_idx, temp_labels, test_size=0.75, random_state=42, stratify=temp_labels
     )
     return (train_idx, val_idx, test_idx)
 
@@ -40,11 +44,9 @@ def build_datasets(root: str):
     train_dataset = ImageFolder(root, transform=train_transform)
     val_dataset = ImageFolder(root, transform=val_transform)
 
-    # Then Subset each with the right indices
     train_subset = Subset(train_dataset, train_idx)
     val_subset = Subset(val_dataset, val_idx)
     test_subset = Subset(val_dataset, test_idx)  # same transforms as val
-
     return train_subset, val_subset, test_subset
 
 
