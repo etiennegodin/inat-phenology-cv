@@ -14,10 +14,10 @@ class Config:
     model: nn.Module = field(default_factory=build_model)
     criterion: nn.Module = nn.BCEWithLogitsLoss()
     epochs: int = 3
-    batch_size: int = 4
+    batch_size: int = 16
     learning_rate: float = 0.001
     momentum: float = 0.9
-    optimizer_class: type = optim.SGD
+    optimizer_class: type = optim.Adam
     optimizer: optim.Optimizer = field(init=False)
     train_loader: DataLoader = field(init=False)
     val_loader: DataLoader = field(init=False)
@@ -31,7 +31,7 @@ class Config:
         self.val_loader = DataLoader(val_set, batch_size=self.batch_size)
         self.test_loader = DataLoader(test_set, batch_size=self.batch_size)
         self.optimizer = self.optimizer_class(
-            self.model.parameters(), lr=self.learning_rate, momentum=self.momentum
+            self.model.parameters(), lr=self.learning_rate
         )
 
     def to_dict(self):
