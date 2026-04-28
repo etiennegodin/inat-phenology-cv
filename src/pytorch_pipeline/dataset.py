@@ -6,8 +6,8 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 from .utils import get_df_from_table
-
-LABEL_MAPPING = {13: 1.0, 21: 0.0}
+from .utils.params import PathsParams, SamplesParams
+from .utils.registry import LABEL_MAPPING
 
 
 class PhenologyDataset(Dataset):
@@ -57,8 +57,8 @@ def build_transforms(
 
 def split_dataset(
     df: pd.DataFrame,
-    idx_col: str = "observation_id",
-    label_col: str = "controlled_value_id",
+    idx_col: str,
+    label_col: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     # Collapse to one observation per row
     obs_df = df.drop_duplicates(subset=[idx_col])
@@ -81,7 +81,7 @@ def split_dataset(
     return (train_df, val_df, test_df)
 
 
-def get_samples(paths, samples_params) -> pd.DataFrame:
+def get_samples(paths, samples_params: SamplesParams) -> pd.DataFrame:
     df = get_df_from_table(paths.db_path, "cv_photos")
     df["path"] = (
         paths.root
@@ -96,7 +96,7 @@ def get_samples(paths, samples_params) -> pd.DataFrame:
 
 
 def build_datasets(
-    paths, samples_params, model_configs: dict
+    paths: PathsParams, samples_params: SamplesParams, model_configs: dict
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
     df = get_samples(paths, samples_params)
 
