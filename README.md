@@ -1,6 +1,12 @@
 # inat_phenology_cv
 Vision model enrichment source for inat-obs-scorer
 
+
+## v0.2.1
+
+Baseline on weak supervision with ~11k images
+- roc_auc 0.897
+
 ## Roadmap
 
 ### ✅ v0.1 — Baseline
