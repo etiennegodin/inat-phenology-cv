@@ -3,7 +3,7 @@ from torch import nn
 
 
 def get_backbone():
-    return timm.create_model("efficientnet_b0", num_classes=0)
+    return timm.create_model("efficientnet_b0", num_classes=0, pretrained=True)
 
 
 def build_model(head_inputs: int = 256, dropout_prob: float = 0.5) -> nn.Module:
@@ -22,4 +22,6 @@ def build_model(head_inputs: int = 256, dropout_prob: float = 0.5) -> nn.Module:
 
 
 if __name__ == "__main__":
-    build_model()
+    model = build_model()
+    for name, p in model.named_parameters():
+        print(name, p.requires_grad)
