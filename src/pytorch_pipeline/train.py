@@ -8,17 +8,31 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 
-def train_one_epoch(model, dataloader, optimizer, criterion):
+def train_one_epoch(
+    model: nn.Sequential,
+    dataloader: DataLoader,
+    optimizer: optim.Optimizer,
+    criterion: nn.Module,
+    device: torch.device,
+):
     total_loss = 0
     model.train()
     for images, labels in dataloader:
-        labels = labels.float().unsqueeze(1)
         optimizer.zero_grad()
-        ouputs = model(images)
-        loss = criterion(ouputs, labels)
-        total_loss += loss.item()
+        labels = labels.to(device)
+        predictions = []
+        for obs_images in images:
+            obs_images = obs_images.to(device)
+            embeddings = model[0](obs_images)
+            pooled = embeddings.mean(0)
+            prediction = model[1](pooled)
+            predictions.append(prediction)
+        predictions = torch.stack(predictions).squeeze(1)  # (batch_size,)
+        loss = criterion(predictions, labels)
         loss.backward()
         optimizer.step()
+        total_loss += loss.item()
+
     return total_loss / len(dataloader)
 
 
@@ -63,7 +77,7 @@ def evaluate(model: nn.Module, dataloader: DataLoader, criterion: nn.Module) -> 
 
 
 def train(
-    model: nn.Module,
+    model: nn.Sequential,
     train_loader: DataLoader,
     val_loader: DataLoader,
     optimizer: optim.Optimizer,
@@ -72,6 +86,7 @@ def train(
     patience: int,
     reload: bool,
     checkpoint_path: str,
+    device: torch.device,
 ):
     patience_counter = 0
     if reload:
@@ -96,6 +111,7 @@ def train(
             dataloader=train_loader,
             optimizer=optimizer,
             criterion=criterion,
+            device=device,
         )
         metrics = evaluate(model=model, dataloader=val_loader, criterion=criterion)
         elapsed = time.time() - start
@@ -132,7 +148,7 @@ def train(
 def save_checkpoint(
     checkpoint_path: str,
     epoch: int,
-    model: nn.Module,
+    model: nn.Sequential,
     optimizer: optim.Optimizer,
     best_val_loss: float,
 ) -> None:
@@ -150,9 +166,9 @@ def save_checkpoint(
 
 def load_checkpoint(
     checkpoint_path: str,
-    model: nn.Module,
+    model: nn.Sequential,
     optimizer: optim.Optimizer,
-) -> tuple[nn.Module, optim.Optimizer, int, float]:
+) -> tuple[nn.Sequential, optim.Optimizer, int, float]:
     checkpoint = torch.load(checkpoint_path)
     checkpoint: dict
     model.load_state_dict(checkpoint["model_state_dict"])
