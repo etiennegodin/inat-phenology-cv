@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
 
+from .dataloader import collate_fn
 from .dataset import build_datasets
 from .model import build_model, get_backbone
 from .utils.params import (
@@ -50,13 +51,20 @@ class Config:
             model_configs=self.backbone.default_cfg,
         )
         self.train_loader = DataLoader(
-            train_set, batch_size=self.dataloaders_params.batch_size, shuffle=True
+            train_set,
+            batch_size=self.dataloaders_params.batch_size,
+            shuffle=True,
+            collate_fn=collate_fn,
         )
         self.val_loader = DataLoader(
-            val_set, batch_size=self.dataloaders_params.batch_size
+            val_set,
+            batch_size=self.dataloaders_params.batch_size,
+            collate_fn=collate_fn,
         )
         self.test_loader = DataLoader(
-            test_set, batch_size=self.dataloaders_params.batch_size
+            test_set,
+            batch_size=self.dataloaders_params.batch_size,
+            collate_fn=collate_fn,
         )
 
     def to_dict(self):
