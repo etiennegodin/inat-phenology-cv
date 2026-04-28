@@ -28,6 +28,7 @@ class PathsParams:
     root: str
     checkpoint_path: str
     db_path: str
+    source_db_path: str
 
 
 @dataclass
