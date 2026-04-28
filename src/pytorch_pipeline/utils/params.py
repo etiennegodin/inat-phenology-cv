@@ -33,6 +33,6 @@ class PathsParams:
 
 @dataclass
 class SamplesParams:
-    observations_col: str = "observation_id"
+    obs_id: str = "observation_id"
     photo_id_col: str = "photo_id"
-    label_col: str = "controlled_value_id"
+    label_id: str = "controlled_value_id"

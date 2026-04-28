@@ -11,24 +11,38 @@ from .utils.registry import LABEL_MAPPING
 
 
 class PhenologyDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, transform, samples_params) -> None:
+    def __init__(
+        self, df: pd.DataFrame, transform, samples_params: SamplesParams
+    ) -> None:
         self.transform = transform
         self.samples_params = samples_params
         self.df = self._format_df(df)
+
         super().__init__()
 
     def __len__(self) -> int:
         return len(self.df)
 
     def __getitem__(self, index: int):
-        path, target = self.df.iloc[index]
-        sample = Image.open(path).convert("RGB")
-        if self.transform is not None:
-            sample = self.transform(sample)
-        return sample, torch.tensor(target, dtype=torch.float32)
+        paths, target = self.df.iloc[index]
+        images = []
+        for path in paths:
+            image = Image.open(path).convert("RGB")
+            if self.transform is not None:
+                image = self.transform(image)
+                images.append(image)
+        print(len(images))
+        x = torch.stack(images)
+        print(x.size())
+        quit()
+        return torch.stack(images), torch.tensor(target, dtype=torch.float32)
 
     def _format_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        return df[["path", self.samples_params.label_col]].reset_index(drop=True)
+        return (
+            df.groupby(self.samples_params.obs_id)
+            .agg({"path": list, self.samples_params.label_id: "first"})
+            .reset_index(drop=True)
+        )
 
 
 def build_base_transforms(input_size: tuple, mean: tuple, std: tuple):
@@ -58,17 +72,17 @@ def build_transforms(
 def split_dataset(
     df: pd.DataFrame,
     idx_col: str,
-    label_col: str,
+    label_id: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     # Collapse to one observation per row
     obs_df = df.drop_duplicates(subset=[idx_col])
 
     train_idx, temp_idx, train_labels, temp_labels = train_test_split(
         obs_df[idx_col],
-        obs_df[label_col],
+        obs_df[label_id],
         test_size=0.40,
         random_state=42,
-        stratify=obs_df[label_col],
+        stratify=obs_df[label_id],
     )
 
     val_idx, test_idx, val_labels, test_labels = train_test_split(
@@ -86,12 +100,12 @@ def get_samples(paths, samples_params: SamplesParams) -> pd.DataFrame:
     df["path"] = (
         paths.root
         + "/"
-        + df[samples_params.label_col].astype(str)
+        + df[samples_params.label_id].astype(str)
         + "/"
         + df[samples_params.photo_id_col].astype(str)
         + ".jpg"
     )
-    df[samples_params.label_col] = df[samples_params.label_col].map(LABEL_MAPPING)
+    df[samples_params.label_id] = df[samples_params.label_id].map(LABEL_MAPPING)
     return df
 
 
@@ -101,7 +115,7 @@ def build_datasets(
     df = get_samples(paths, samples_params)
 
     train_df, val_df, test_df = split_dataset(
-        df, idx_col=samples_params.observations_col, label_col=samples_params.label_col
+        df, idx_col=samples_params.obs_id, label_id=samples_params.label_id
     )
     base_transforms = build_base_transforms(
         **{k: model_configs[k] for k in ("input_size", "mean", "std")}

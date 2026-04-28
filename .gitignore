@@ -213,3 +213,5 @@ data/
 .vscode/
 *.ipynb
 checkpoints/
+*.db
+*.sh
