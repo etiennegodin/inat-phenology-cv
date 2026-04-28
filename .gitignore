@@ -215,3 +215,4 @@ data/
 checkpoints/
 *.db
 *.sh
+*.zip

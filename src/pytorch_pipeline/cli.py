@@ -15,6 +15,7 @@ def train_cmd(args, configs: Config):
 
     train(
         model=configs.model,
+        device=configs.device,
         train_loader=configs.train_loader,
         val_loader=configs.val_loader,
         optimizer=configs.optimizer,

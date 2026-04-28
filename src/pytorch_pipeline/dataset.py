@@ -31,10 +31,6 @@ class PhenologyDataset(Dataset):
             if self.transform is not None:
                 image = self.transform(image)
                 images.append(image)
-        print(len(images))
-        x = torch.stack(images)
-        print(x.size())
-        quit()
         return torch.stack(images), torch.tensor(target, dtype=torch.float32)
 
     def _format_df(self, df: pd.DataFrame) -> pd.DataFrame:

@@ -1,5 +1,6 @@
 from dataclasses import asdict, dataclass, field, is_dataclass
 
+import torch
 import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
@@ -25,7 +26,7 @@ class Config:
     optimizer_params: OptimizerParams = field(default_factory=OptimizerParams)
     model_params: ModelParams = field(default_factory=ModelParams)
     dataloaders_params: DataLoadersParams = field(default_factory=DataLoadersParams)
-    model: nn.Module = field(init=False)
+    model: nn.Sequential = field(init=False)
     backbone: nn.Module = field(init=False)
     criterion: nn.Module = nn.BCEWithLogitsLoss()
     optimizer_class: type = optim.Adam
@@ -33,12 +34,14 @@ class Config:
     train_loader: DataLoader = field(init=False)
     val_loader: DataLoader = field(init=False)
     test_loader: DataLoader = field(init=False)
+    device: torch.device = field(init=False)
 
     def __post_init__(self):
         self.backbone = get_backbone()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = build_model(
             self.model_params.head_inputs, self.model_params.dropout_prob
-        )
+        ).to(self.device)
         self.optimizer = self.optimizer_class(
             self.model.parameters(), lr=self.optimizer_params.learning_rate
         )
