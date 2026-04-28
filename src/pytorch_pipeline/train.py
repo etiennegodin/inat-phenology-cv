@@ -27,7 +27,7 @@ def train_one_epoch(
             pooled = embeddings.mean(0)
             prediction = model[1](pooled)
             predictions.append(prediction)
-        predictions = torch.stack(predictions).squeeze(1)  # (batch_size,)
+        predictions = torch.stack(predictions).squeeze(1)
         loss = criterion(predictions, labels)
         loss.backward()
         optimizer.step()
@@ -36,7 +36,12 @@ def train_one_epoch(
     return total_loss / len(dataloader)
 
 
-def evaluate(model: nn.Module, dataloader: DataLoader, criterion: nn.Module) -> dict:
+def evaluate(
+    model: nn.Sequential,
+    dataloader: DataLoader,
+    criterion: nn.Module,
+    device: torch.device,
+) -> dict:
     total_loss = 0
     correct = 0
     total = 0
@@ -46,12 +51,19 @@ def evaluate(model: nn.Module, dataloader: DataLoader, criterion: nn.Module) -> 
     model.eval()
     with torch.no_grad():
         for images, labels in dataloader:
-            labels = labels.float().unsqueeze(1)
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+            labels = labels.to(device)
+            predictions = []
+            for obs_images in images:
+                obs_images = obs_images.to(device)
+                embeddings = model[0](obs_images)
+                pooled = embeddings.mean(0)
+                prediction = model[1](pooled)
+                predictions.append(prediction)
+            predictions = torch.stack(predictions).squeeze(1)
+            loss = criterion(predictions, labels)
             total_loss += loss.item()
 
-            preds_raw = torch.sigmoid(outputs)
+            preds_raw = torch.sigmoid(predictions)
             preds = (preds_raw > 0.5).float()
 
             correct += (preds == labels).sum().item()
@@ -113,7 +125,9 @@ def train(
             criterion=criterion,
             device=device,
         )
-        metrics = evaluate(model=model, dataloader=val_loader, criterion=criterion)
+        metrics = evaluate(
+            model=model, dataloader=val_loader, criterion=criterion, device=device
+        )
         elapsed = time.time() - start
 
         val_loss = metrics["loss"]
@@ -141,7 +155,9 @@ def train(
                 print("Early stopping")
                 break
 
-    metrics = evaluate(model=model, dataloader=val_loader, criterion=criterion)
+    metrics = evaluate(
+        model=model, dataloader=val_loader, criterion=criterion, device=device
+    )
     train_report(metrics=metrics)
 
 
