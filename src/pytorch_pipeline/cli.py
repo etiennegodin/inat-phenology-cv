@@ -3,6 +3,7 @@ import os
 import sys
 
 from .config import Config, PathsParams, TrainingParams
+from .status import status
 from .train import train
 from .utils import clean_data, update_dataset
 
@@ -31,7 +32,7 @@ def update_cmd(args, configs: Config):
 
 
 def status_cmd(args, configs: Config):
-    pass
+    status(configs)
 
 
 def create_parser() -> argparse.ArgumentParser:
