@@ -10,6 +10,7 @@ def main():
 
     parser = argparse.ArgumentParser(prog="torch_train")
     parser.add_argument("--epochs", "-n", type=int, default=10)
+    parser.add_argument("--patience", "-p", type=int, default=3)
     parser.add_argument("--learning-rate", "-lr", type=float, default=0.001)
     parser.add_argument("--reload", "-r", action="store_true")
 
@@ -17,7 +18,7 @@ def main():
 
     os.makedirs("checkpoints", exist_ok=True)
 
-    training_params = TrainingParams(epochs=args.epochs, patience=3)
+    training_params = TrainingParams(epochs=args.epochs, patience=args.patience)
     paths = PathsParams(
         root="/home/etienne/projects/inat-phenology-cv/data/photos",
         checkpoint_path="/home/etienne/projects/inat-phenology-cv/checkpoints/checkpoint.pth",

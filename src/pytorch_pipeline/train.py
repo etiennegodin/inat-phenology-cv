@@ -153,13 +153,14 @@ def load_checkpoint(
     model: nn.Module,
     optimizer: optim.Optimizer,
 ) -> tuple[nn.Module, optim.Optimizer, int, float]:
-    print(f"Reloading session at: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path)
     checkpoint: dict
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     start_epoch = checkpoint.get("epoch", 0)
     best_val_loss = checkpoint.get("best_val_loss", 1e10)
+    print(f"Reloading session at: {checkpoint_path}")
+    print(f"Previous epoch= {start_epoch} previous_loss={best_val_loss}")
     return model, optimizer, start_epoch, best_val_loss
 
 
