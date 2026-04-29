@@ -3,6 +3,12 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class MlFlowParams:
+    run_name: str = "temp"
+    experiment_name: str = "cv_inat"
+
+
+@dataclass
 class TrainingParams:
     epochs: int = 3
     patience: int = 3

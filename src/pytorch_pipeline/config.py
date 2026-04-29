@@ -10,6 +10,7 @@ from .dataset import build_datasets
 from .model import build_model, get_backbone
 from .utils.params import (
     DataLoadersParams,
+    MlFlowParams,
     ModelParams,
     OptimizerParams,
     PathsParams,
@@ -21,6 +22,7 @@ from .utils.params import (
 @dataclass
 class Config:
     paths: PathsParams
+    ml_flow_params: MlFlowParams = field(default_factory=MlFlowParams)
     samples_params: SamplesParams = field(default_factory=SamplesParams)
     training_params: TrainingParams = field(default_factory=TrainingParams)
     optimizer_params: OptimizerParams = field(default_factory=OptimizerParams)

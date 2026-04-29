@@ -1,6 +1,9 @@
+import logging
 import os
 
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 
 def clean_data(image_dir: str):
@@ -11,5 +14,5 @@ def clean_data(image_dir: str):
                 with Image.open(path) as img:
                     img.verify()
             except Exception:
-                print(f"Deleting corrupted image: {path}")
+                logger.info(f"Deleting corrupted image: {path}")
                 os.remove(path)

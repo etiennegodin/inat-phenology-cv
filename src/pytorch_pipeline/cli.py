@@ -1,20 +1,23 @@
 import argparse
+import logging
 import os
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .config import Config, PathsParams, TrainingParams
+from .config import Config, MlFlowParams, PathsParams, TrainingParams
 from .status import status
 from .train import train
-from .utils import clean_data, update_dataset
+from .utils import clean_data, init_logger, update_dataset
 
 
 def train_cmd(args, configs: Config):
 
     training_params = TrainingParams(epochs=args.epochs, patience=args.patience)
     configs.training_params = training_params
-
+    ml_flow = MlFlowParams("1")
+    configs.ml_flow_params = ml_flow
     train(
         model=configs.model,
         device=configs.device,
@@ -24,6 +27,7 @@ def train_cmd(args, configs: Config):
         criterion=configs.criterion,
         reload=args.reload,
         checkpoint_path=configs.paths.checkpoint_path,
+        run_name=configs.ml_flow_params.run_name,
         **configs.modules_params_to_dict("training_params"),
     )
 
@@ -70,6 +74,10 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
+    # Setup logging
+    log_path = Path.cwd() / "log.log"
+    logger = init_logger(log_path, logging.INFO)
+
     # Set up paths
     paths = PathsParams(root=os.environ.get("INAT_DATA_ROOT", ""))
 
@@ -89,5 +97,6 @@ def main():
         sys.exit(130)
     except Exception as e:
         # logger.exception("Unexpected error")
+        logger.error(e)
         print(f"Unexpected error: {e}")
         sys.exit(1)

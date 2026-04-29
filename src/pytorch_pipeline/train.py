@@ -1,5 +1,8 @@
+import logging
+import os
 import time
 
+import mlflow
 import pandas as pd
 import torch
 import torch.optim as optim
@@ -7,8 +10,22 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 from torch import nn
 from torch.utils.data import DataLoader
 
+from .utils.decorators import mlflow_track
+
+logger = logging.getLogger(__name__)
+
+
+def log_pytorch_state_dict(model):
+    # 1. Save locally
+    torch.save(model.state_dict(), "model_state.pth")
+    # 2. Upload to MLflow
+    mlflow.log_artifact("model_state.pth")
+    # 3. Cleanup
+    os.remove("model_state.pth")
+
 
 def train_one_epoch(
+    epoch: int,
     model: nn.Sequential,
     dataloader: DataLoader,
     optimizer: optim.Optimizer,
@@ -33,7 +50,11 @@ def train_one_epoch(
         optimizer.step()
         total_loss += loss.item()
 
-    return total_loss / len(dataloader)
+    epoch_loss = total_loss / len(dataloader)
+    # MLflow 'step' tells it which epoch this is for the graph
+    mlflow.log_metric("train_loss", epoch_loss, step=epoch)
+
+    return epoch_loss
 
 
 def evaluate(
@@ -41,6 +62,7 @@ def evaluate(
     dataloader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
+    epoch: int | None = None,
 ) -> dict:
     total_loss = 0
     correct = 0
@@ -77,17 +99,27 @@ def evaluate(
     all_labels = torch.cat(all_labels).detach().cpu().numpy()
     all_preds_raw = torch.cat(all_preds_raw).detach().cpu().numpy()
 
+    # Metrics
+    val_loss = total_loss / len(dataloader)
     cm = confusion_matrix(all_labels, all_preds)
-    roc_auc = roc_auc_score(all_labels, all_preds_raw)
+    roc_auc = float(roc_auc_score(all_labels, all_preds_raw))
+
     metrics = {
         "loss": total_loss / len(dataloader),
         "accuracy": accuracy,
         "cm": cm,
         "roc": roc_auc,
     }
+
+    mlflow.log_metric("val_loss", val_loss, step=epoch)
+    mlflow.log_metric("val_accuracy", accuracy, step=epoch)
+    mlflow.log_metric("val_roc", roc_auc, step=epoch)
+    mlflow.log_metric("val_accuracy", accuracy, step=epoch)
+
     return metrics
 
 
+@mlflow_track(log_pytorch_state_dict)
 def train(
     model: nn.Sequential,
     train_loader: DataLoader,
@@ -99,6 +131,7 @@ def train(
     reload: bool,
     checkpoint_path: str,
     device: torch.device,
+    run_name: str = "temp",
 ):
     patience_counter = 0
     if reload:
@@ -115,10 +148,11 @@ def train(
 
     for epoch in range(epochs):
         if start_epoch is not None and epoch <= start_epoch:
-            print(f"Skipping epoch {epoch}")
+            logger.info(f"Skipping epoch {epoch}")
             continue
         start = time.time()
         train_loss = train_one_epoch(
+            epoch,
             model=model,
             dataloader=train_loader,
             optimizer=optimizer,
@@ -132,7 +166,7 @@ def train(
 
         val_loss = metrics["loss"]
         gap = val_loss - train_loss
-        print(
+        logger.info(
             f"Epoch {epoch}: train={train_loss:.3f} val={val_loss:.3f} "
             f"gap={gap:.3f} accuracy={float(metrics['accuracy']):.3f} "
             f" roc={float(metrics['roc']):.3f} time={elapsed:.3f}s"
@@ -152,13 +186,12 @@ def train(
         else:
             patience_counter += 1
             if patience_counter >= patience:
-                print("Early stopping")
+                logger.info("Early stopping")
                 break
 
-    metrics = evaluate(
-        model=model, dataloader=val_loader, criterion=criterion, device=device
-    )
-    train_report(metrics=metrics)
+    # train_report(metrics=metrics)
+
+    return model, checkpoint_path
 
 
 def save_checkpoint(
@@ -168,7 +201,7 @@ def save_checkpoint(
     optimizer: optim.Optimizer,
     best_val_loss: float,
 ) -> None:
-    print(f"Saving checkpoint for epoch {epoch} with loss of {best_val_loss:.3f}")
+    logger.info(f"Saving checkpoint for epoch {epoch} with loss of {best_val_loss:.3f}")
     torch.save(
         {
             "epoch": epoch,
@@ -191,8 +224,8 @@ def load_checkpoint(
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     start_epoch = checkpoint.get("epoch", 0)
     best_val_loss = checkpoint.get("best_val_loss", 1e10)
-    print(f"Reloading session at: {checkpoint_path}")
-    print(f"Previous epoch= {start_epoch} previous_loss={best_val_loss}")
+    logger.info(f"Reloading session at: {checkpoint_path}")
+    logger.info(f"Previous epoch= {start_epoch} previous_loss={best_val_loss}")
     return model, optimizer, start_epoch, best_val_loss
 
 
