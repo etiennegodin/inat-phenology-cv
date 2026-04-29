@@ -5,8 +5,18 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from torch import nn
 
-from .config import Config, MlFlowParams, PathsParams, TrainingParams
+from .config import (
+    Config,
+    MlFlowParams,
+    PathsParams,
+    TrainingParams,
+    build_pipeline_dataloaders,
+    build_pipeline_model,
+    build_pipeline_optimizer,
+    get_device,
+)
 from .status import status
 from .train import train
 from .utils import clean_data, init_logger, update_dataset
@@ -14,23 +24,30 @@ from .utils import clean_data, init_logger, update_dataset
 
 def train_cmd(args, configs: Config):
 
-    training_params = TrainingParams(epochs=args.epochs, patience=args.patience)
+    training_params = TrainingParams(
+        epochs=args.epochs, patience=args.patience, reload=args.reload
+    )
     configs.training_params = training_params
     ml_flow = MlFlowParams("1")
     configs.ml_flow_params = ml_flow
     configs.test = args.test
 
+    device = get_device()
+    model = build_pipeline_model(configs.model_params, device)
+    optimizer = build_pipeline_optimizer(model, configs.optimizer_params)
+    train_loader, val_loader, _ = build_pipeline_dataloaders(configs, model[0])
+    criterion = nn.BCEWithLogitsLoss()
+
     train(
-        model=configs.model,
-        device=configs.device,
-        train_loader=configs.train_loader,
-        val_loader=configs.val_loader,
-        optimizer=configs.optimizer,
-        criterion=configs.criterion,
-        reload=args.reload,
+        model=model,
+        device=device,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        criterion=criterion,
         checkpoint_path=configs.paths.checkpoint_path,
-        run_name=configs.ml_flow_params.run_name,
-        **configs.modules_params_to_dict("training_params"),
+        training_params=configs.training_params,
+        mlflow_params=configs.ml_flow_params,
     )
 
 
@@ -80,7 +97,7 @@ def main():
     # Setup logging
     log_path = Path.cwd() / "log.log"
     logger = init_logger(log_path, logging.INFO)
-
+    logger.info("Start")
     # Set up paths
     paths = PathsParams(root=os.environ.get("INAT_DATA_ROOT", ""))
 
@@ -98,8 +115,7 @@ def main():
     except KeyboardInterrupt:
         print("\nInterrupted by user")
         sys.exit(130)
-    except Exception as e:
-        # logger.exception("Unexpected error")
-        logger.error(e)
-        print(f"Unexpected error: {e}")
-        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

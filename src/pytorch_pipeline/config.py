@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import asdict, dataclass, field
 
 import torch
 import torch.optim as optim
@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, Subset
 
 from .dataloader import collate_fn
 from .dataset import build_datasets
-from .model import build_model, get_backbone
+from .model import build_model
 from .utils.params import (
     DataLoadersParams,
     MlFlowParams,
@@ -28,71 +28,64 @@ class Config:
     optimizer_params: OptimizerParams = field(default_factory=OptimizerParams)
     model_params: ModelParams = field(default_factory=ModelParams)
     dataloaders_params: DataLoadersParams = field(default_factory=DataLoadersParams)
-    model: nn.Sequential = field(init=False)
-    backbone: nn.Module = field(init=False)
-    criterion: nn.Module = nn.BCEWithLogitsLoss()
-    optimizer_class: type = optim.Adam
-    optimizer: optim.Optimizer = field(init=False)
-    train_loader: DataLoader = field(init=False)
-    val_loader: DataLoader = field(init=False)
-    test_loader: DataLoader = field(init=False)
-    device: torch.device = field(init=False)
     test: bool = False
-
-    def __post_init__(self):
-        self.backbone = get_backbone()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = build_model(
-            self.model_params.head_inputs, self.model_params.dropout_prob
-        ).to(self.device)
-        self.optimizer = self.optimizer_class(
-            [
-                {
-                    "params": [
-                        p for p in self.model[0].parameters() if p.requires_grad
-                    ],
-                    "lr": 1e-4,
-                },
-                {
-                    "params": self.model[1].parameters(),
-                    "lr": self.optimizer_params.learning_rate,
-                },
-            ]
-        )
-        self._build_dataloaders()
-
-    def _build_dataloaders(self):
-        train_set, val_set, test_set = build_datasets(
-            paths=self.paths,
-            samples_params=self.samples_params,
-            model_configs=self.backbone.default_cfg,
-        )
-
-        if self.test:
-            train_set = Subset(train_set, range(500))
-
-        self.train_loader = DataLoader(
-            train_set,
-            batch_size=self.dataloaders_params.batch_size,
-            shuffle=True,
-            collate_fn=collate_fn,
-        )
-        self.val_loader = DataLoader(
-            val_set,
-            batch_size=self.dataloaders_params.batch_size,
-            collate_fn=collate_fn,
-        )
-        self.test_loader = DataLoader(
-            test_set,
-            batch_size=self.dataloaders_params.batch_size,
-            collate_fn=collate_fn,
-        )
 
     def to_dict(self):
         return asdict(self)
 
-    def modules_params_to_dict(self, module_name: str) -> dict:
-        module_obj = getattr(self, module_name, None)
-        if module_obj is not None and is_dataclass(module_obj):
-            return asdict(module_obj)
-        return {}  # Or raise an error/return None
+
+def get_device() -> torch.device:
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def build_pipeline_model(params: ModelParams, device: torch.device) -> nn.Sequential:
+    model = build_model(params.head_inputs, params.dropout_prob).to(device)
+    return model
+
+
+def build_pipeline_optimizer(
+    model: nn.Sequential, params: OptimizerParams
+) -> optim.Optimizer:
+    return optim.Adam(
+        [
+            {
+                "params": [p for p in model[0].parameters() if p.requires_grad],
+                "lr": 1e-4,
+            },
+            {
+                "params": model[1].parameters(),
+                "lr": params.learning_rate,
+            },
+        ]
+    )
+
+
+def build_pipeline_dataloaders(
+    config: Config, backbone: nn.Module
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    train_set, val_set, test_set = build_datasets(
+        paths=config.paths,
+        samples_params=config.samples_params,
+        model_configs=backbone.default_cfg,
+    )
+
+    if config.test:
+        train_set = Subset(train_set, range(min(500, len(train_set))))
+
+    train_loader = DataLoader(
+        train_set,
+        batch_size=config.dataloaders_params.batch_size,
+        shuffle=True,
+        collate_fn=collate_fn,
+    )
+    val_loader = DataLoader(
+        val_set,
+        batch_size=config.dataloaders_params.batch_size,
+        collate_fn=collate_fn,
+    )
+    test_loader = DataLoader(
+        test_set,
+        batch_size=config.dataloaders_params.batch_size,
+        collate_fn=collate_fn,
+    )
+    return train_loader, val_loader, test_loader

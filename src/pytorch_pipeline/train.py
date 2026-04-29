@@ -11,6 +11,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from .utils.decorators import mlflow_track
+from .utils.params import MlFlowParams, TrainingParams
 
 logger = logging.getLogger(__name__)
 
@@ -126,15 +127,13 @@ def train(
     val_loader: DataLoader,
     optimizer: optim.Optimizer,
     criterion: nn.Module,
-    epochs: int,
-    patience: int,
-    reload: bool,
+    training_params: TrainingParams,
+    mlflow_params: MlFlowParams,
     checkpoint_path: str,
     device: torch.device,
-    run_name: str = "temp",
 ):
     patience_counter = 0
-    if reload:
+    if training_params.reload:
         # Reload previous run
         model, optimizer, start_epoch, best_loss = load_checkpoint(
             checkpoint_path,
@@ -146,7 +145,7 @@ def train(
         best_loss = 1e10
         start_epoch = None
 
-    for epoch in range(epochs):
+    for epoch in range(training_params.epochs):
         if start_epoch is not None and epoch <= start_epoch:
             logger.info(f"Skipping epoch {epoch}")
             continue
@@ -185,7 +184,7 @@ def train(
             patience_counter = 0
         else:
             patience_counter += 1
-            if patience_counter >= patience:
+            if patience_counter >= training_params.patience:
                 logger.info("Early stopping")
                 break
 

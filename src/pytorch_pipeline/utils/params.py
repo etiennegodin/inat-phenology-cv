@@ -12,6 +12,7 @@ class MlFlowParams:
 class TrainingParams:
     epochs: int = 3
     patience: int = 3
+    reload: bool = False
 
 
 @dataclass
