@@ -2,6 +2,8 @@ import argparse
 import os
 import sys
 
+from dotenv import load_dotenv
+
 from .config import Config, PathsParams, TrainingParams
 from .status import status
 from .train import train
@@ -64,18 +66,12 @@ def add_train_args(parser: argparse.ArgumentParser):
 
 
 def main():
-
+    load_dotenv()
     parser = create_parser()
     args = parser.parse_args()
 
     # Set up paths
-    paths = PathsParams(
-        root=os.environ.get(
-            "INAT_DATA_ROOT", "/home/etienne/projects/inat-phenology-cv/data"
-        )
-    )
-
-    os.makedirs("checkpoints", exist_ok=True)
+    paths = PathsParams(root=os.environ.get("INAT_DATA_ROOT", ""))
 
     # Set up pipeline configs
     configs = Config(
