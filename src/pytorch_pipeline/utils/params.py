@@ -36,7 +36,7 @@ class PathsParams:
 
         self.image_dir = os.path.join(self.root, "images")
         self.db_path = os.path.join(self.root, "cv_raw.duckdb")
-        self.source_db_path = os.path.join(self.root, "checkpoints/checkpoint.pth")
+        self.checkpoint_path = os.path.join(self.root, "checkpoints/checkpoint.pth")
 
 
 @dataclass

@@ -3,10 +3,10 @@ import os
 from PIL import Image
 
 
-def clean_data(root: str):
-    for root, dirs, files in os.walk(root):
+def clean_data(image_dir: str):
+    for image_dir, dirs, files in os.walk(image_dir):
         for file in files:
-            path = os.path.join(root, file)
+            path = os.path.join(image_dir, file)
             try:
                 with Image.open(path) as img:
                     img.verify()

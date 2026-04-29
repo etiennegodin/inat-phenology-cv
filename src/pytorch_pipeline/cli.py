@@ -28,7 +28,7 @@ def train_cmd(args, configs: Config):
 
 def update_cmd(args, configs: Config):
     # Clean and update dataset
-    clean_data(configs.paths.root)
+    clean_data(configs.paths.image_dir)
     update_dataset(configs.paths)
 
 
@@ -71,7 +71,7 @@ def main():
     # Set up paths
     paths = PathsParams(
         root=os.environ.get(
-            "INAT_DATA_ROOT", "/home/you/projects/inat-phenology-cv/data"
+            "INAT_DATA_ROOT", "/home/etienne/projects/inat-phenology-cv/data"
         )
     )
 

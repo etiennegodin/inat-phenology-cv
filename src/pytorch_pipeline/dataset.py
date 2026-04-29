@@ -94,7 +94,7 @@ def split_dataset(
 def get_samples(paths, samples_params: SamplesParams) -> pd.DataFrame:
     df = get_df_from_table(paths.db_path, "cv_photos")
     df["path"] = (
-        paths.root
+        paths.image_dir
         + "/"
         + df[samples_params.label_id].astype(str)
         + "/"
