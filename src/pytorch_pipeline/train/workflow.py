@@ -9,7 +9,7 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 from torch import nn
 from torch.utils.data import DataLoader
 
-from ..utils.params import MlFlowParams, TrainingParams
+from ..utils.params import TrainingParams
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +40,10 @@ def train_one_epoch(
         optimizer.step()
         total_loss += loss.item()
 
-    epoch_loss = total_loss / len(dataloader)
     # MLflow 'step' tells it which epoch this is for the graph
-    mlflow.log_metric("train_loss", epoch_loss, step=epoch)
+    mlflow.log_metric("train_loss", total_loss / len(dataloader), step=epoch)
 
-    return epoch_loss
+    return total_loss / len(dataloader)
 
 
 def evaluate(
@@ -52,7 +51,7 @@ def evaluate(
     dataloader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
-    epoch: int | None = None,
+    epoch: int,
 ) -> dict:
     total_loss = 0
     correct = 0
@@ -118,7 +117,6 @@ def execute(
     criterion: nn.Module,
     checkpoint_path: str,
     training_params: TrainingParams,
-    mlflow_params: MlFlowParams,
 ):
     patience_counter = 0
     if training_params.reload:
@@ -135,7 +133,7 @@ def execute(
 
     for epoch in range(training_params.epochs):
         if start_epoch is not None and epoch <= start_epoch:
-            logger.info(f"Skipping epoch {epoch}")
+            print(f"Skipping epoch {epoch}")
             continue
         start = time.time()
         train_loss = train_one_epoch(
@@ -146,14 +144,19 @@ def execute(
             criterion=criterion,
             device=device,
         )
+
         metrics = evaluate(
-            model=model, dataloader=val_loader, criterion=criterion, device=device
+            model=model,
+            dataloader=val_loader,
+            criterion=criterion,
+            device=device,
+            epoch=epoch,
         )
         elapsed = time.time() - start
 
         val_loss = metrics["loss"]
         gap = val_loss - train_loss
-        logger.info(
+        print(
             f"Epoch {epoch}: train={train_loss:.3f} val={val_loss:.3f} "
             f"gap={gap:.3f} accuracy={float(metrics['accuracy']):.3f} "
             f" roc={float(metrics['roc']):.3f} time={elapsed:.3f}s"
@@ -173,10 +176,8 @@ def execute(
         else:
             patience_counter += 1
             if patience_counter >= training_params.patience:
-                logger.info("Early stopping")
+                print("Early stopping")
                 break
-
-    # train_report(metrics=metrics)
 
     return model, checkpoint_path
 
@@ -188,7 +189,7 @@ def save_checkpoint(
     optimizer: optim.Optimizer,
     best_val_loss: float,
 ) -> None:
-    logger.info(f"Saving checkpoint for epoch {epoch} with loss of {best_val_loss:.3f}")
+    print(f"Saving checkpoint for epoch {epoch} with loss of {best_val_loss:.3f}")
     torch.save(
         {
             "epoch": epoch,
@@ -211,8 +212,8 @@ def load_checkpoint(
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     start_epoch = checkpoint.get("epoch", 0)
     best_val_loss = checkpoint.get("best_val_loss", 1e10)
-    logger.info(f"Reloading session at: {checkpoint_path}")
-    logger.info(f"Previous epoch= {start_epoch} previous_loss={best_val_loss}")
+    print(f"Reloading session at: {checkpoint_path}")
+    print(f"Previous epoch= {start_epoch} previous_loss={best_val_loss}")
     return model, optimizer, start_epoch, best_val_loss
 
 

@@ -46,7 +46,10 @@ def build_pipeline_dataloaders(
     )
 
     if config.training_params.test:
-        train_set = Subset(train_set, range(min(500, len(train_set))))
+        n = 100
+        train_set = Subset(train_set, range(min(n, len(train_set))))
+        val_set = Subset(val_set, range(min(n, len(val_set))))
+        test_set = Subset(test_set, range(min(n, len(test_set))))
 
     train_loader = DataLoader(
         train_set,

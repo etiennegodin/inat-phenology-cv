@@ -213,6 +213,7 @@ data/
 .vscode/
 checkpoints/
 notebooks/temp/*.ipynb
+mlruns/
 
 *.db
 *.sh

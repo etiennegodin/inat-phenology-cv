@@ -3,12 +3,6 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class MlFlowParams:
-    run_name: str = "temp"
-    experiment_name: str = "cv_inat"
-
-
-@dataclass
 class TrainingParams:
     epochs: int = 3
     patience: int = 3
@@ -33,6 +27,7 @@ class PathsParams:
     root: str
     checkpoint_path: str = field(init=False)
     db_path: str = field(init=False)
+    ml_flow_db: str = field(init=False)
     # source_db_path: str = field(init=False)
     image_dir: str = field(init=False)
 
@@ -43,6 +38,7 @@ class PathsParams:
         )
         self.db_path = os.path.join(self.root, "cv_raw.duckdb")
         self.checkpoint_path = os.path.join(self.root, "checkpoints/checkpoint.pth")
+        self.ml_flow_db = os.path.join(self.root, "mlflow.db")
 
 
 @dataclass
