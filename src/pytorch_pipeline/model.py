@@ -1,6 +1,8 @@
 import timm
 from torch import nn
 
+from .utils.registry import EFFICIENT_NET_LAST_BLOCK
+
 
 def get_backbone():
     return timm.create_model("efficientnet_b0", num_classes=0, pretrained=True)
@@ -8,8 +10,14 @@ def get_backbone():
 
 def build_model(head_inputs: int = 256, dropout_prob: float = 0.5) -> nn.Sequential:
     backbone = get_backbone()
+
     for p in backbone.parameters():
         p.requires_grad = False
+
+    # Unfreeze last block
+    for name, p in backbone.named_parameters():
+        if name.startswith(tuple(EFFICIENT_NET_LAST_BLOCK)):
+            p.requires_grad = True
 
     head = nn.Sequential(
         nn.Linear(backbone.num_features, head_inputs),

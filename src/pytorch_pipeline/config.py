@@ -43,7 +43,18 @@ class Config:
             self.model_params.head_inputs, self.model_params.dropout_prob
         ).to(self.device)
         self.optimizer = self.optimizer_class(
-            self.model.parameters(), lr=self.optimizer_params.learning_rate
+            [
+                {
+                    "params": [
+                        p for p in self.model[0].parameters() if p.requires_grad
+                    ],
+                    "lr": 1e-4,
+                },
+                {
+                    "params": self.model[1].parameters(),
+                    "lr": self.optimizer_params.learning_rate,
+                },
+            ]
         )
         self._build_dataloaders()
 
