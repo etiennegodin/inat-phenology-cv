@@ -18,6 +18,8 @@ def train_cmd(args, configs: Config):
     configs.training_params = training_params
     ml_flow = MlFlowParams("1")
     configs.ml_flow_params = ml_flow
+    configs.test = args.test
+
     train(
         model=configs.model,
         device=configs.device,
@@ -67,6 +69,7 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--patience", "-p", type=int, default=3)
     parser.add_argument("--learning-rate", "-lr", type=float, default=0.001)
     parser.add_argument("--reload", "-r", action="store_true")
+    parser.add_argument("--test", "-t", action="store_true")
 
 
 def main():
