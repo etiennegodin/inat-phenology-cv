@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -26,9 +27,16 @@ class DataLoadersParams:
 @dataclass
 class PathsParams:
     root: str
-    checkpoint_path: str
-    db_path: str
-    source_db_path: str
+    checkpoint_path: str = field(init=False)
+    db_path: str = field(init=False)
+    source_db_path: str = field(init=False)
+    image_dir: str = field(init=False)
+
+    def __post_init__(self):
+
+        self.image_dir = os.path.join(self.root, "images")
+        self.db_path = os.path.join(self.root, "cv_raw.duckdb")
+        self.source_db_path = os.path.join(self.root, "checkpoints/checkpoint.pth")
 
 
 @dataclass

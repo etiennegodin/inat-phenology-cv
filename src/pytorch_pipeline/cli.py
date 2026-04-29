@@ -70,10 +70,9 @@ def main():
 
     # Set up paths
     paths = PathsParams(
-        root="/home/etienne/projects/inat-phenology-cv/data/photos",
-        checkpoint_path="/home/etienne/projects/inat-phenology-cv/checkpoints/checkpoint.pth",
-        db_path="/home/etienne/projects/inat-phenology-cv/data/cv_raw.duckdb",
-        source_db_path="/home/etienne/projects/inatML/data/inat_raw.duckdb",
+        root=os.environ.get(
+            "INAT_DATA_ROOT", "/home/you/projects/inat-phenology-cv/data"
+        )
     )
 
     os.makedirs("checkpoints", exist_ok=True)

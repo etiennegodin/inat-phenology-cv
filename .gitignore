@@ -211,8 +211,10 @@ __marimo__/
 
 data/
 .vscode/
-*.ipynb
 checkpoints/
+notebooks/temp/*.ipynb
+
 *.db
 *.sh
 *.zip
+.env
