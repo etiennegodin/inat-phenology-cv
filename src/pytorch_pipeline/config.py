@@ -3,7 +3,7 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from .dataloader import collate_fn
 from .dataset import build_datasets
@@ -35,6 +35,7 @@ class Config:
     val_loader: DataLoader = field(init=False)
     test_loader: DataLoader = field(init=False)
     device: torch.device = field(init=False)
+    test: bool = False
 
     def __post_init__(self):
         self.backbone = get_backbone()
@@ -64,6 +65,10 @@ class Config:
             samples_params=self.samples_params,
             model_configs=self.backbone.default_cfg,
         )
+
+        if self.test:
+            train_set = Subset(train_set, range(500))
+
         self.train_loader = DataLoader(
             train_set,
             batch_size=self.dataloaders_params.batch_size,

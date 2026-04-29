@@ -14,6 +14,7 @@ def train_cmd(args, configs: Config):
 
     training_params = TrainingParams(epochs=args.epochs, patience=args.patience)
     configs.training_params = training_params
+    configs.test = args.test
 
     train(
         model=configs.model,
@@ -63,6 +64,7 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--patience", "-p", type=int, default=3)
     parser.add_argument("--learning-rate", "-lr", type=float, default=0.001)
     parser.add_argument("--reload", "-r", action="store_true")
+    parser.add_argument("--test", "-t", action="store_true")
 
 
 def main():
