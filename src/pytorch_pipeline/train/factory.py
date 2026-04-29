@@ -1,37 +1,13 @@
-from dataclasses import asdict, dataclass, field
-
 import torch
 import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader, Subset
 
+from ..utils import Config
+from ..utils.params import ModelParams, TrainingParams
 from .dataloader import collate_fn
 from .dataset import build_datasets
 from .model import build_model
-from .utils.params import (
-    DataLoadersParams,
-    MlFlowParams,
-    ModelParams,
-    OptimizerParams,
-    PathsParams,
-    SamplesParams,
-    TrainingParams,
-)
-
-
-@dataclass
-class Config:
-    paths: PathsParams
-    ml_flow_params: MlFlowParams = field(default_factory=MlFlowParams)
-    samples_params: SamplesParams = field(default_factory=SamplesParams)
-    training_params: TrainingParams = field(default_factory=TrainingParams)
-    optimizer_params: OptimizerParams = field(default_factory=OptimizerParams)
-    model_params: ModelParams = field(default_factory=ModelParams)
-    dataloaders_params: DataLoadersParams = field(default_factory=DataLoadersParams)
-    test: bool = False
-
-    def to_dict(self):
-        return asdict(self)
 
 
 def get_device() -> torch.device:
@@ -44,7 +20,7 @@ def build_pipeline_model(params: ModelParams, device: torch.device) -> nn.Sequen
 
 
 def build_pipeline_optimizer(
-    model: nn.Sequential, params: OptimizerParams
+    model: nn.Sequential, params: TrainingParams
 ) -> optim.Optimizer:
     return optim.Adam(
         [
@@ -69,7 +45,7 @@ def build_pipeline_dataloaders(
         model_configs=backbone.default_cfg,
     )
 
-    if config.test:
+    if config.training_params.test:
         train_set = Subset(train_set, range(min(500, len(train_set))))
 
     train_loader = DataLoader(

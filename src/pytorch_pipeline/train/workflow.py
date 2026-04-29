@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 
 import mlflow
@@ -10,19 +9,9 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 from torch import nn
 from torch.utils.data import DataLoader
 
-from .utils.decorators import mlflow_track
-from .utils.params import MlFlowParams, TrainingParams
+from ..utils.params import MlFlowParams, TrainingParams
 
 logger = logging.getLogger(__name__)
-
-
-def log_pytorch_state_dict(model):
-    # 1. Save locally
-    torch.save(model.state_dict(), "model_state.pth")
-    # 2. Upload to MLflow
-    mlflow.log_artifact("model_state.pth")
-    # 3. Cleanup
-    os.remove("model_state.pth")
 
 
 def train_one_epoch(
@@ -120,17 +109,16 @@ def evaluate(
     return metrics
 
 
-@mlflow_track(log_pytorch_state_dict)
-def train(
+def execute(
+    device: torch.device,
     model: nn.Sequential,
     train_loader: DataLoader,
     val_loader: DataLoader,
     optimizer: optim.Optimizer,
     criterion: nn.Module,
+    checkpoint_path: str,
     training_params: TrainingParams,
     mlflow_params: MlFlowParams,
-    checkpoint_path: str,
-    device: torch.device,
 ):
     patience_counter = 0
     if training_params.reload:

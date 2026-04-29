@@ -7,40 +7,46 @@ from pathlib import Path
 from dotenv import load_dotenv
 from torch import nn
 
-from .config import (
-    Config,
-    MlFlowParams,
-    PathsParams,
-    TrainingParams,
+from .status import status
+from .train import execute
+from .train.factory import (
     build_pipeline_dataloaders,
     build_pipeline_model,
     build_pipeline_optimizer,
     get_device,
 )
-from .status import status
-from .train import train
-from .utils import clean_data, init_logger, update_dataset
+from .utils import Config, clean_data, init_logger, update_dataset
+from .utils.params import (
+    MlFlowParams,
+    PathsParams,
+    TrainingParams,
+)
 
 
 def train_cmd(args, configs: Config):
 
     training_params = TrainingParams(
-        epochs=args.epochs, patience=args.patience, reload=args.reload
+        epochs=args.epochs,
+        patience=args.patience,
+        reload=args.reload,
+        test=args.test,
+        learning_rate=args.learning_rate,
     )
+
+    ml_flow_params = MlFlowParams("1")
+
     configs.training_params = training_params
-    ml_flow = MlFlowParams("1")
-    configs.ml_flow_params = ml_flow
-    configs.test = args.test
+    configs.ml_flow_params = ml_flow_params
 
     device = get_device()
     model = build_pipeline_model(configs.model_params, device)
-    optimizer = build_pipeline_optimizer(model, configs.optimizer_params)
+    optimizer = build_pipeline_optimizer(model, configs.training_params)
     train_loader, val_loader, _ = build_pipeline_dataloaders(configs, model[0])
     criterion = nn.BCEWithLogitsLoss()
 
-    train(
-        model=model,
+    execute(
         device=device,
+        model=model,
         train_loader=train_loader,
         val_loader=val_loader,
         optimizer=optimizer,

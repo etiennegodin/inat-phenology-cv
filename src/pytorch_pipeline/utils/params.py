@@ -13,10 +13,7 @@ class TrainingParams:
     epochs: int = 3
     patience: int = 3
     reload: bool = False
-
-
-@dataclass
-class OptimizerParams:
+    test: bool = False
     learning_rate: float = 0.001
 
 

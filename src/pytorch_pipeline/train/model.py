@@ -1,7 +1,7 @@
 import timm
 from torch import nn
 
-from .utils.registry import EFFICIENT_NET_LAST_BLOCK
+from ..utils.registry import EFFICIENT_NET_LAST_BLOCK
 
 
 def get_backbone():

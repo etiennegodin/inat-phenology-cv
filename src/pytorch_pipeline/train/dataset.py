@@ -5,9 +5,9 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-from .utils import get_df_from_table
-from .utils.params import PathsParams, SamplesParams
-from .utils.registry import LABEL_MAPPING
+from ..utils import get_df_from_table
+from ..utils.params import PathsParams, SamplesParams
+from ..utils.registry import LABEL_MAPPING
 
 
 class PhenologyDataset(Dataset):
