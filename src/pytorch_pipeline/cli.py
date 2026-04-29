@@ -85,9 +85,9 @@ def main():
             sys.exit(exit_code)
 
     except KeyboardInterrupt:
-        print("\n[yellow]Interrupted by user[/yellow]")
+        print("\nInterrupted by user")
         sys.exit(130)
     except Exception as e:
         # logger.exception("Unexpected error")
-        print(f"[red]Unexpected error: {e}[/red]")
+        print(f"Unexpected error: {e}")
         sys.exit(1)

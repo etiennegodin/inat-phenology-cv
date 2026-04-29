@@ -73,9 +73,9 @@ def evaluate(
             all_preds_raw.append(preds_raw)
 
     accuracy = correct / total
-    all_preds = torch.cat(all_preds)
-    all_labels = torch.cat(all_labels)
-    all_preds_raw = torch.cat(all_preds_raw)
+    all_preds = torch.cat(all_preds).detach().cpu().numpy()
+    all_labels = torch.cat(all_labels).detach().cpu().numpy()
+    all_preds_raw = torch.cat(all_preds_raw).detach().cpu().numpy()
 
     cm = confusion_matrix(all_labels, all_preds)
     roc_auc = roc_auc_score(all_labels, all_preds_raw)
