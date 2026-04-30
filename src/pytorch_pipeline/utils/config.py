@@ -15,7 +15,7 @@ class Config:
     training_params: TrainingParams = field(init=False)
     samples_params: SamplesParams = field(default_factory=SamplesParams)
     model_params: ModelParams = field(default_factory=ModelParams)
-    dataloaders_params: DataLoadersParams = field(default_factory=DataLoadersParams)
+    dataloaders_params: DataLoadersParams = field(init=False)
 
     def to_dict(self):
         return asdict(self)

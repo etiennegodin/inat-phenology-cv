@@ -6,7 +6,7 @@ from pathlib import Path
 
 import mlflow
 from dotenv import load_dotenv
-from torch import nn
+from torch import cuda, nn
 
 from .status import status
 from .train import execute
@@ -17,10 +17,7 @@ from .train.factory import (
     get_device,
 )
 from .utils import Config, clean_data, init_logger, update_dataset
-from .utils.params import (
-    PathsParams,
-    TrainingParams,
-)
+from .utils.params import DataLoadersParams, PathsParams, TrainingParams
 
 
 def train_cmd(args, configs: Config):
@@ -34,7 +31,18 @@ def train_cmd(args, configs: Config):
         head_lr=args.head_lr,
     )
 
+    if cuda.is_available():
+        dataloader_params = DataLoadersParams(
+            batch_size=32, num_workers=2, pin_memory=True, persistent_workers=True
+        )
+    else:
+        dataloader_params = DataLoadersParams(
+            batch_size=16, num_workers=0, pin_memory=False, persistent_workers=False
+        )
+
     configs.training_params = training_params
+    configs.dataloaders_params = dataloader_params
+
     mlflow.set_tracking_uri(f"sqlite:///{configs.paths.ml_flow_db}")
 
     device = get_device()
@@ -111,6 +119,7 @@ def main():
     # Setup logging
     log_path = Path.cwd() / "log.log"
     logger = init_logger(log_path, logging.INFO)
+    logger.info("Starting")
     # Set up paths
     paths = PathsParams(root=os.environ.get("INAT_DATA_ROOT", ""))
 
@@ -120,16 +129,18 @@ def main():
     )
 
     # Execute command
-    try:
-        if hasattr(args, "func"):
-            exit_code = args.func(args, configs)
-            sys.exit(exit_code)
 
+    if hasattr(args, "func"):
+        exit_code = args.func(args, configs)
+        sys.exit(exit_code)
+    """
     except KeyboardInterrupt:
         print("\nInterrupted by user")
         sys.exit(130)
     except Exception as e:
+        print(f'Unexpected error {e}')
         logger.error(e)
+    """
 
 
 if __name__ == "__main__":
