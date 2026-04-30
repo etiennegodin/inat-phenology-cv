@@ -17,21 +17,21 @@ from .train.factory import (
     build_pipeline_optimizer,
     get_device,
 )
+from .train.peristence import load_checkpoint
 from .utils import Config, clean_data, init_logger, update_dataset
-from .utils.params import DataLoadersParams, PathsParams, TrainingParams
+from .utils.params import (
+    DataLoadersParams,
+    OptimizerParams,
+    PathsParams,
+    TrainingParams,
+)
 
 
 def train_cmd(args, configs: Config):
 
-    training_params = TrainingParams(
-        epochs=args.epochs,
-        patience=args.patience,
-        reload=args.reload,
-        test=args.test,
-        backbone_lr=args.backbone_lr,
-        head_lr=args.head_lr,
-    )
+    mlflow.set_tracking_uri(f"sqlite:///{configs.paths.ml_flow_db}")
 
+    # Initialise Data loaders params
     if cuda.is_available():
         dataloader_params = DataLoadersParams(
             batch_size=32, num_workers=2, pin_memory=True, persistent_workers=True
@@ -40,20 +40,45 @@ def train_cmd(args, configs: Config):
         dataloader_params = DataLoadersParams(
             batch_size=16, num_workers=0, pin_memory=False, persistent_workers=False
         )
-
-    configs.training_params = training_params
     configs.dataloaders_params = dataloader_params
 
-    mlflow.set_tracking_uri(f"sqlite:///{configs.paths.ml_flow_db}")
+    # Intialize otpim params
+    optim_params = OptimizerParams(
+        backbone_lr=args.backbone_lr,
+        head_lr=args.head_lr,
+    )
+    configs.optim_params = optim_params
 
+    # Initialise train modules
     device = get_device()
     model = build_pipeline_model(configs.model_params, device)
-    optimizer = build_pipeline_optimizer(model, configs.training_params)
+    optimizer = build_pipeline_optimizer(model, optim_params)
     train_loader, val_loader, _ = build_pipeline_dataloaders(configs, model[0])
     criterion = nn.BCEWithLogitsLoss()
 
+    # Reinstate model and optimizer state if reload
+    if args.reload:
+        model, optimizer, start_epoch, eval_metrics, previous_run_id = load_checkpoint(
+            configs.paths.checkpoint_path, model=model, optimizer=optimizer
+        )
+        best_loss = eval_metrics["val_loss"]
+    else:
+        start_epoch = None
+        best_loss = 1e10
+        previous_run_id = None
+
+    training_params = TrainingParams(
+        epochs=args.epochs,
+        patience=args.patience,
+        start_epoch=start_epoch,
+        best_loss=best_loss,
+    )
+
+    # Set config params
+    configs.training_params = training_params
+
     mlflow.set_experiment("cv_inat")
-    with mlflow.start_run(run_name="run") as parent_run:
+    with mlflow.start_run(run_id=previous_run_id) as parent_run:
         parent_run_id = parent_run.info.run_id
         print(f"\n{'=' * 60}")
         print(f"MLflow Run ID: {parent_run_id}")
@@ -132,6 +157,7 @@ def main():
     # Set up pipeline configs
     configs = Config(
         paths=paths,
+        test=args.test,
     )
 
     # Execute command

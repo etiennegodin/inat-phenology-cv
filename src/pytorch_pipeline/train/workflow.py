@@ -1,25 +1,30 @@
+from __future__ import annotations
+
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import mlflow
-import pandas as pd
 import torch
-import torch.optim as optim
 from torch.amp import autocast_mode, grad_scaler
-from torch.utils.data import DataLoader
 
-from ..utils.params import TrainingParams
 from .metrics import get_metrics, log_best_artifacts
+from .peristence import load_checkpoint, save_checkpoint
+
+if TYPE_CHECKING:
+    from torch import Tensor, device, nn
+    from torch.optim import Optimizer
+    from torch.utils.data import DataLoader
+
+    from ..utils.params import TrainingParams
+
 
 logger = logging.getLogger(__name__)
 
 scaler = grad_scaler.GradScaler()
 
 
-def forward_pass(
-    model: torch.nn.Sequential, images: list[torch.Tensor], device
-) -> torch.Tensor:
+def forward_pass(model: nn.Sequential, images: list[Tensor], device: device) -> Tensor:
 
     indices = []
 
@@ -27,14 +32,14 @@ def forward_pass(
     for t in images:
         indices.append(t.size()[0])
 
-    # Concatenate all images in one torch.Tensor
+    # Concatenate all images in one Tensor
     stacked = torch.cat(images)
 
     # Transfer to device
     stacked = stacked.to(device)
 
     pooled = []
-    # Run backbone on stacked torch.Tensor
+    # Run backbone on stacked Tensor
     embeddings = model[0](stacked)
     # Split embedding per observation
     chunks = torch.split(embeddings, indices)
@@ -43,24 +48,24 @@ def forward_pass(
     for c in chunks:
         pooled.append(c.mean(0))
 
-    # Stack back in one torch.Tensor
+    # Stack back in one Tensor
     pooled = torch.stack(pooled)
     return model[1](pooled).squeeze(1)
 
 
 def train_one_epoch(
     epoch: int,
-    model: torch.nn.Sequential,
+    model: nn.Sequential,
     dataloader: DataLoader,
-    optimizer: optim.Optimizer,
-    criterion: torch.nn.Module,
-    device: torch.device,
+    optimizer: Optimizer,
+    criterion: nn.Module,
+    device: device,
 ):
     total_loss = 0
     model.train()
 
     for images, labels in dataloader:
-        labels: torch.Tensor
+        labels: Tensor
 
         optimizer.zero_grad()
 
@@ -89,10 +94,10 @@ def train_one_epoch(
 
 
 def evaluate(
-    model: torch.nn.Sequential,
+    model: nn.Sequential,
     dataloader: DataLoader,
-    criterion: torch.nn.Module,
-    device: torch.device,
+    criterion: nn.Module,
+    device: device,
     epoch: int,
 ) -> dict[str, Any]:
     total_loss = 0
@@ -104,7 +109,7 @@ def evaluate(
     model.eval()
     with torch.no_grad():
         for images, labels in dataloader:
-            labels: torch.Tensor
+            labels: Tensor
             # Run foward prop and backprop
             if device.type == "cuda":
                 with autocast_mode.autocast(device_type=device.type):
@@ -142,32 +147,23 @@ def evaluate(
 
 
 def execute(
-    device: torch.device,
+    device: device,
     model: torch.nn.Sequential,
     train_loader: DataLoader,
     val_loader: DataLoader,
-    optimizer: optim.Optimizer,
-    criterion: torch.nn.Module,
+    optimizer: Optimizer,
+    criterion: nn.Module,
     checkpoint_path: str,
     training_params: TrainingParams,
 ):
 
     patience_counter = 0
-    if training_params.reload:
-        # Reload previous run
-        model, optimizer, start_epoch, eval_metrics = load_checkpoint(
-            checkpoint_path,
-            model,
-            optimizer,
-        )
-        best_loss = eval_metrics["val_loss"]
-    else:
-        # Fresh run
-        best_loss = 1e10
-        start_epoch = None
 
     for epoch in range(training_params.epochs):
-        if start_epoch is not None and epoch <= start_epoch:
+        if (
+            training_params.start_epoch is not None
+            and epoch <= training_params.start_epoch
+        ):
             print(f"Skipping epoch {epoch}")
             continue
         start = time.time()
@@ -203,8 +199,7 @@ def execute(
                 f" {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f}GB"
             )
 
-        if val_loss < best_loss:
-            best_loss = val_loss
+        if val_loss < training_params.best_loss:
             # Save only if better
             save_checkpoint(
                 checkpoint_path,
@@ -221,59 +216,6 @@ def execute(
                 break
 
     # Reload best model
-    model, optimizer, start_epoch, eval_metrics = load_checkpoint(
-        checkpoint_path, model=model, optimizer=optimizer
-    )
-    log_best_artifacts(eval_metrics)
+    checkpoint = load_checkpoint(checkpoint_path, model=model, optimizer=optimizer)
+    log_best_artifacts(checkpoint[3])
     return model
-
-
-def save_checkpoint(
-    checkpoint_path: str,
-    epoch: int,
-    model: torch.nn.Sequential,
-    optimizer: optim.Optimizer,
-    eval_metrics: dict,
-) -> None:
-    checkpoint = {
-        "epoch": epoch,
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "eval_metrics": eval_metrics,
-    }
-    print(
-        f"Saving checkpoint for epoch {epoch} "
-        f"with loss of {eval_metrics['val_loss']:.3f}"
-    )
-
-    torch.save(
-        checkpoint,
-        checkpoint_path,
-    )
-    mlflow.log_artifact(
-        checkpoint_path,
-    )
-
-
-def load_checkpoint(
-    checkpoint_path: str,
-    model: torch.nn.Sequential,
-    optimizer: optim.Optimizer,
-) -> tuple[torch.nn.Sequential, optim.Optimizer, int, dict]:
-    checkpoint = torch.load(checkpoint_path)
-    checkpoint: dict
-    model.load_state_dict(checkpoint["model_state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    start_epoch = checkpoint.get("epoch", 0)
-    eval_metrics = checkpoint.get("eval_metrics", {})
-
-    print(f"Reloading session at: {checkpoint_path}")
-    print(f"Previous epoch= {start_epoch} previous_loss={eval_metrics['val_loss']}")
-
-    return model, optimizer, start_epoch, eval_metrics
-
-
-def train_report(eval_metrics: dict):
-    labels = ["flowering", "non_flowering"]
-    df_cm = pd.DataFrame(eval_metrics["cm"], index=labels, columns=labels)
-    print(df_cm)

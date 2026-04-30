@@ -6,8 +6,12 @@ from dataclasses import dataclass, field
 class TrainingParams:
     epochs: int
     patience: int
-    reload: bool
-    test: bool
+    start_epoch: int | None
+    best_loss: float = 1e10
+
+
+@dataclass
+class OptimizerParams:
     backbone_lr: float
     head_lr: float
 

@@ -1,13 +1,20 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import torch
-import torch.optim as optim
-from torch import nn
+from torch import optim as optim
 from torch.utils.data import DataLoader, Subset
 
-from ..utils import Config
-from ..utils.params import ModelParams, TrainingParams
 from .dataloader import collate_fn
 from .dataset import build_datasets
 from .model import build_model
+
+if TYPE_CHECKING:
+    from torch import nn, optim
+
+    from ..utils import Config
+    from ..utils.params import ModelParams, OptimizerParams
 
 
 def get_device() -> torch.device:
@@ -20,7 +27,7 @@ def build_pipeline_model(params: ModelParams, device: torch.device) -> nn.Sequen
 
 
 def build_pipeline_optimizer(
-    model: nn.Sequential, params: TrainingParams
+    model: nn.Sequential, params: OptimizerParams
 ) -> optim.Optimizer:
     return optim.Adam(
         [
@@ -45,7 +52,7 @@ def build_pipeline_dataloaders(
         model_configs=backbone.default_cfg,
     )
 
-    if config.training_params.test:
+    if config.test:
         n = 100
         train_set = Subset(train_set, range(min(n, len(train_set))))
         val_set = Subset(val_set, range(min(n, len(val_set))))

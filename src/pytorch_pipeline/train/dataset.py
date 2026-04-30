@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pandas as pd
 import torch
 from PIL import Image
@@ -6,8 +10,10 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 from ..utils import get_df_from_table
-from ..utils.params import PathsParams, SamplesParams
 from ..utils.registry import LABEL_MAPPING
+
+if TYPE_CHECKING:
+    from ..utils.params import PathsParams, SamplesParams
 
 
 class PhenologyDataset(Dataset):
