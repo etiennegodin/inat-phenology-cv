@@ -5,7 +5,6 @@ import mlflow
 import pandas as pd
 import torch
 import torch.optim as optim
-from mlflow.pytorch import log_model
 from sklearn.metrics import confusion_matrix, roc_auc_score
 from torch import nn
 from torch.amp import autocast_mode, grad_scaler
@@ -228,12 +227,9 @@ def execute(
                 print("Early stopping")
                 break
 
+    # Reload best model
     checkpoint = load_checkpoint(checkpoint_path, model=model, optimizer=optimizer)
-    log_model(checkpoint[0], "cv_inat")
-
-    model_uri = f"runs:/{mlflow.active_run().info.run_id}/cv_inat"
-    mlflow.register_model(model_uri, "cv_inat")
-    return checkpoint[0], checkpoint_path
+    return checkpoint[0]
 
 
 def save_checkpoint(

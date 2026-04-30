@@ -6,6 +6,7 @@ from pathlib import Path
 
 import mlflow
 from dotenv import load_dotenv
+from mlflow import pytorch
 from torch import cuda, nn
 
 from .status import status
@@ -60,7 +61,7 @@ def train_cmd(args, configs: Config):
 
         mlflow.log_dict(configs.to_dict(), "configs.json")
 
-        execute(
+        best_model = execute(
             device=device,
             model=model,
             train_loader=train_loader,
@@ -70,6 +71,11 @@ def train_cmd(args, configs: Config):
             checkpoint_path=configs.paths.checkpoint_path,
             training_params=configs.training_params,
         )
+
+        # Log and register best model
+        pytorch.log_model(best_model, "cv_inat")
+        model_uri = f"runs:/{parent_run_id}/cv_inat"
+        mlflow.register_model(model_uri, "cv_inat")
 
 
 def update_cmd(args, configs: Config):
