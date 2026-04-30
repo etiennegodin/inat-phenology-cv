@@ -1,80 +1,80 @@
 import logging
 import time
+from typing import Any
 
 import mlflow
 import pandas as pd
 import torch
 import torch.optim as optim
-from sklearn.metrics import confusion_matrix, roc_auc_score
-from torch import nn
 from torch.amp import autocast_mode, grad_scaler
 from torch.utils.data import DataLoader
 
 from ..utils.params import TrainingParams
+from .metrics import get_metrics, log_best_artifacts
 
 logger = logging.getLogger(__name__)
 
 scaler = grad_scaler.GradScaler()
 
 
+def forward_pass(
+    model: torch.nn.Sequential, images: list[torch.Tensor], device
+) -> torch.Tensor:
+
+    indices = []
+
+    # Get indices for split
+    for t in images:
+        indices.append(t.size()[0])
+
+    # Concatenate all images in one torch.Tensor
+    stacked = torch.cat(images)
+
+    # Transfer to device
+    stacked = stacked.to(device)
+
+    pooled = []
+    # Run backbone on stacked torch.Tensor
+    embeddings = model[0](stacked)
+    # Split embedding per observation
+    chunks = torch.split(embeddings, indices)
+
+    # Append observation pool
+    for c in chunks:
+        pooled.append(c.mean(0))
+
+    # Stack back in one torch.Tensor
+    pooled = torch.stack(pooled)
+    return model[1](pooled).squeeze(1)
+
+
 def train_one_epoch(
     epoch: int,
-    model: nn.Sequential,
+    model: torch.nn.Sequential,
     dataloader: DataLoader,
     optimizer: optim.Optimizer,
-    criterion: nn.Module,
+    criterion: torch.nn.Module,
     device: torch.device,
 ):
-
     total_loss = 0
     model.train()
 
-    def foward_prop(
-        tensor: torch.Tensor,
-        labels: torch.Tensor,
-        indices: list,
-    ):
-        pooled = []
-        # Run backbone on stacked tensor
-        embeddings = model[0](tensor)
-        # Split embedding per observation
-        chunks = torch.split(embeddings, indices)
-
-        # Append observation pool
-        for c in chunks:
-            pooled.append(c.mean(0))
-
-        # Stack back in one tensor
-        pooled = torch.stack(pooled)
-        predictions = model[1](pooled).squeeze(1)
-        return criterion(predictions, labels)
-
     for images, labels in dataloader:
         labels: torch.Tensor
-        indices = []
 
         optimizer.zero_grad()
-
-        # Get indices for split
-        for t in images:
-            indices.append(t.size()[0])
-
-        # Concatenate all images in one tensor
-        stacked = torch.cat(images)
-
-        # Transfer to device
-        labels = labels.to(device)
-        stacked = stacked.to(device)
 
         # Run foward prop and backprop
         if device.type == "cuda":
             with autocast_mode.autocast(device_type=device.type):
-                loss = foward_prop(stacked, labels, indices)
+                predictions = forward_pass(model, images, device)
+                loss = criterion(predictions, labels)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
         else:
-            loss = foward_prop(stacked, labels, indices)
+            predictions = forward_pass(model, images, device)
+            loss = criterion(predictions, labels)
             loss.backward()
             optimizer.step()
 
@@ -89,12 +89,12 @@ def train_one_epoch(
 
 
 def evaluate(
-    model: nn.Sequential,
+    model: torch.nn.Sequential,
     dataloader: DataLoader,
-    criterion: nn.Module,
+    criterion: torch.nn.Module,
     device: torch.device,
     epoch: int,
-) -> dict:
+) -> dict[str, Any]:
     total_loss = 0
     correct = 0
     total = 0
@@ -104,15 +104,14 @@ def evaluate(
     model.eval()
     with torch.no_grad():
         for images, labels in dataloader:
-            labels = labels.to(device)
-            predictions = []
-            for obs_images in images:
-                obs_images = obs_images.to(device)
-                embeddings = model[0](obs_images)
-                pooled = embeddings.mean(0)
-                prediction = model[1](pooled)
-                predictions.append(prediction)
-            predictions = torch.stack(predictions).squeeze(1)
+            labels: torch.Tensor
+            # Run foward prop and backprop
+            if device.type == "cuda":
+                with autocast_mode.autocast(device_type=device.type):
+                    predictions = forward_pass(model, images, device)
+            else:
+                predictions = forward_pass(model, images, device)
+
             loss = criterion(predictions, labels)
             total_loss += loss.item()
 
@@ -125,38 +124,30 @@ def evaluate(
             all_labels.append(labels)
             all_preds_raw.append(preds_raw)
 
-    accuracy = correct / total
+    # Convert back to numpy arrays for metrics
     all_preds = torch.cat(all_preds).detach().cpu().numpy()
     all_labels = torch.cat(all_labels).detach().cpu().numpy()
     all_preds_raw = torch.cat(all_preds_raw).detach().cpu().numpy()
 
-    # Metrics
-    val_loss = total_loss / len(dataloader)
-    cm = confusion_matrix(all_labels, all_preds)
-    roc_auc = float(roc_auc_score(all_labels, all_preds_raw))
-
-    metrics = {
-        "loss": total_loss / len(dataloader),
-        "accuracy": accuracy,
-        "cm": cm,
-        "roc": roc_auc,
+    base_metrics = {
+        "val_accuracy": correct / total,
+        "val_loss": total_loss / len(dataloader),
     }
+    mlflow.log_metrics(base_metrics, step=epoch)
 
-    mlflow.log_metric("val_loss", val_loss, step=epoch)
-    mlflow.log_metric("val_accuracy", accuracy, step=epoch)
-    mlflow.log_metric("val_roc", roc_auc, step=epoch)
-    mlflow.log_metric("val_accuracy", accuracy, step=epoch)
-
-    return metrics
+    eval_metrics = get_metrics(all_preds, all_labels, all_preds_raw)
+    mlflow.log_metric("val_roc_auc", eval_metrics["val_roc_auc"], step=epoch)
+    eval_metrics.update(base_metrics)
+    return eval_metrics
 
 
 def execute(
     device: torch.device,
-    model: nn.Sequential,
+    model: torch.nn.Sequential,
     train_loader: DataLoader,
     val_loader: DataLoader,
     optimizer: optim.Optimizer,
-    criterion: nn.Module,
+    criterion: torch.nn.Module,
     checkpoint_path: str,
     training_params: TrainingParams,
 ):
@@ -164,11 +155,12 @@ def execute(
     patience_counter = 0
     if training_params.reload:
         # Reload previous run
-        model, optimizer, start_epoch, best_loss = load_checkpoint(
+        model, optimizer, start_epoch, eval_metrics = load_checkpoint(
             checkpoint_path,
             model,
             optimizer,
         )
+        best_loss = eval_metrics["val_loss"]
     else:
         # Fresh run
         best_loss = 1e10
@@ -188,7 +180,7 @@ def execute(
             device=device,
         )
 
-        metrics = evaluate(
+        eval_metrics = evaluate(
             model=model,
             dataloader=val_loader,
             criterion=criterion,
@@ -196,13 +188,14 @@ def execute(
             epoch=epoch,
         )
         elapsed = time.time() - start
-
-        val_loss = metrics["loss"]
+        val_loss = eval_metrics["val_loss"]
         gap = val_loss - train_loss
+        mlflow.log_metric("loss_gap", gap, step=epoch)
+
         print(
-            f"Epoch {epoch}: train={train_loss:.3f} val={val_loss:.3f} "
-            f"gap={gap:.3f} accuracy={float(metrics['accuracy']):.3f} "
-            f" roc={float(metrics['roc']):.3f} time={elapsed:.3f}s"
+            f"Epoch {epoch}: train={train_loss:.3f} val={eval_metrics['val_loss']:.3f} "
+            f"gap={gap:.3f} accuracy={float(eval_metrics['val_accuracy']):.3f} "
+            f" roc={float(eval_metrics['val_roc_auc']):.3f} time={elapsed:.3f}s"
         )
         if device.type == "cuda":
             print(
@@ -218,7 +211,7 @@ def execute(
                 epoch=epoch,
                 model=model,
                 optimizer=optimizer,
-                best_val_loss=best_loss,
+                eval_metrics=eval_metrics,
             )
             patience_counter = 0
         else:
@@ -228,25 +221,33 @@ def execute(
                 break
 
     # Reload best model
-    checkpoint = load_checkpoint(checkpoint_path, model=model, optimizer=optimizer)
-    return checkpoint[0]
+    model, optimizer, start_epoch, eval_metrics = load_checkpoint(
+        checkpoint_path, model=model, optimizer=optimizer
+    )
+    log_best_artifacts(eval_metrics)
+    return model
 
 
 def save_checkpoint(
     checkpoint_path: str,
     epoch: int,
-    model: nn.Sequential,
+    model: torch.nn.Sequential,
     optimizer: optim.Optimizer,
-    best_val_loss: float,
+    eval_metrics: dict,
 ) -> None:
-    print(f"Saving checkpoint for epoch {epoch} with loss of {best_val_loss:.3f}")
+    checkpoint = {
+        "epoch": epoch,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "eval_metrics": eval_metrics,
+    }
+    print(
+        f"Saving checkpoint for epoch {epoch} "
+        f"with loss of {eval_metrics['val_loss']:.3f}"
+    )
+
     torch.save(
-        {
-            "epoch": epoch,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "best_val_loss": best_val_loss,
-        },
+        checkpoint,
         checkpoint_path,
     )
     mlflow.log_artifact(
@@ -256,21 +257,23 @@ def save_checkpoint(
 
 def load_checkpoint(
     checkpoint_path: str,
-    model: nn.Sequential,
+    model: torch.nn.Sequential,
     optimizer: optim.Optimizer,
-) -> tuple[nn.Sequential, optim.Optimizer, int, float]:
+) -> tuple[torch.nn.Sequential, optim.Optimizer, int, dict]:
     checkpoint = torch.load(checkpoint_path)
     checkpoint: dict
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     start_epoch = checkpoint.get("epoch", 0)
-    best_val_loss = checkpoint.get("best_val_loss", 1e10)
+    eval_metrics = checkpoint.get("eval_metrics", {})
+
     print(f"Reloading session at: {checkpoint_path}")
-    print(f"Previous epoch= {start_epoch} previous_loss={best_val_loss}")
-    return model, optimizer, start_epoch, best_val_loss
+    print(f"Previous epoch= {start_epoch} previous_loss={eval_metrics['val_loss']}")
+
+    return model, optimizer, start_epoch, eval_metrics
 
 
-def train_report(metrics: dict):
+def train_report(eval_metrics: dict):
     labels = ["flowering", "non_flowering"]
-    df_cm = pd.DataFrame(metrics["cm"], index=labels, columns=labels)
+    df_cm = pd.DataFrame(eval_metrics["cm"], index=labels, columns=labels)
     print(df_cm)
