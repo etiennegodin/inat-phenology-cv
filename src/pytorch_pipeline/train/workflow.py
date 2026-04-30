@@ -218,4 +218,4 @@ def execute(
     # Reload best model
     checkpoint = load_checkpoint(checkpoint_path, model=model, optimizer=optimizer)
     log_best_artifacts(checkpoint[3])
-    return model
+    return checkpoint[0]
