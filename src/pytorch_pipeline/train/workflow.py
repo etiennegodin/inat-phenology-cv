@@ -40,10 +40,12 @@ def train_one_epoch(
         optimizer.step()
         total_loss += loss.item()
 
-    # MLflow 'step' tells it which epoch this is for the graph
-    mlflow.log_metric("train_loss", total_loss / len(dataloader), step=epoch)
+    train_loss = total_loss / len(dataloader)
 
-    return total_loss / len(dataloader)
+    # MLflow 'step' tells it which epoch this is for the graph
+    mlflow.log_metric("train_loss", train_loss, step=epoch)
+
+    return train_loss
 
 
 def evaluate(
