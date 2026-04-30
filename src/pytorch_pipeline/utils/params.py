@@ -4,11 +4,12 @@ from dataclasses import dataclass, field
 
 @dataclass
 class TrainingParams:
-    epochs: int = 3
-    patience: int = 3
-    reload: bool = False
-    test: bool = False
-    learning_rate: float = 0.001
+    epochs: int
+    patience: int
+    reload: bool
+    test: bool
+    backbone_lr: float
+    head_lr: float
 
 
 @dataclass

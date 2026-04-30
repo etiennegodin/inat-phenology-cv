@@ -30,7 +30,8 @@ def train_cmd(args, configs: Config):
         patience=args.patience,
         reload=args.reload,
         test=args.test,
-        learning_rate=args.learning_rate,
+        backbone_lr=args.backbone_lr,
+        head_lr=args.head_lr,
     )
 
     configs.training_params = training_params
@@ -96,9 +97,10 @@ def create_parser() -> argparse.ArgumentParser:
 def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--epochs", "-n", type=int, default=10)
     parser.add_argument("--patience", "-p", type=int, default=3)
-    parser.add_argument("--learning-rate", "-lr", type=float, default=0.001)
-    parser.add_argument("--reload", "-r", action="store_true")
-    parser.add_argument("--test", "-t", action="store_true")
+    parser.add_argument("--head-lr", "-hlr", type=float, default=0.001)
+    parser.add_argument("--backbone-lr", "-blr", type=float, default=0.00001)
+    parser.add_argument("--reload", "-r", action="store_true", default=False)
+    parser.add_argument("--test", "-t", action="store_true", default=False)
 
 
 def main():

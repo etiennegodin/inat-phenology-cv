@@ -26,11 +26,11 @@ def build_pipeline_optimizer(
         [
             {
                 "params": [p for p in model[0].parameters() if p.requires_grad],
-                "lr": 1e-4,
+                "lr": params.backbone_lr,
             },
             {
                 "params": model[1].parameters(),
-                "lr": params.learning_rate,
+                "lr": params.head_lr,
             },
         ]
     )
