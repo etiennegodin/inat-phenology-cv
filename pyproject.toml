@@ -13,7 +13,8 @@ authors = [{ name="Etienne Godin", email="etiennegodin@duck.com" }]
 
 dependencies = [
     "tqdm",
-    "python-dotenv"
+    "python-dotenv",
+    "mlflow"
 
 ]
 
