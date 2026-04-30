@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any, Union
 import mlflow
 import torch
 
+from .metrics import log_best_artifacts
+
 if TYPE_CHECKING:
     import torch
     from torch.optim import Optimizer
@@ -36,6 +38,8 @@ def save_checkpoint(
     mlflow.log_artifact(
         checkpoint_path,
     )
+
+    log_best_artifacts(eval_metrics)
 
 
 def load_checkpoint(
