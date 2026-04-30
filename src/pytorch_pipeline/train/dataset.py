@@ -82,7 +82,7 @@ def split_dataset(
     )
 
     val_idx, test_idx, val_labels, test_labels = train_test_split(
-        temp_idx, temp_labels, test_size=0.5, random_state=42, stratify=temp_labels
+        temp_idx, temp_labels, test_size=0.75, random_state=42, stratify=temp_labels
     )
     train_df = df[df[idx_col].isin(train_idx)]
     val_df = df[df[idx_col].isin(val_idx)]
