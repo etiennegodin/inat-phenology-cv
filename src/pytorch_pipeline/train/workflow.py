@@ -158,6 +158,7 @@ def execute(
 ):
 
     patience_counter = 0
+    best_loss = training_params.best_loss
 
     for epoch in range(training_params.epochs):
         if (
@@ -199,7 +200,8 @@ def execute(
                 f" {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f}GB"
             )
 
-        if val_loss < training_params.best_loss:
+        if val_loss < best_loss:
+            best_loss = val_loss
             # Save only if better
             save_checkpoint(
                 checkpoint_path,
