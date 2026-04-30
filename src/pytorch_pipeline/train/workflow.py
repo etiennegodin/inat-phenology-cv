@@ -7,11 +7,14 @@ import torch
 import torch.optim as optim
 from sklearn.metrics import confusion_matrix, roc_auc_score
 from torch import nn
+from torch.amp import autocast_mode, grad_scaler
 from torch.utils.data import DataLoader
 
 from ..utils.params import TrainingParams
 
 logger = logging.getLogger(__name__)
+
+scaler = grad_scaler.GradScaler()
 
 
 def train_one_epoch(
@@ -22,22 +25,59 @@ def train_one_epoch(
     criterion: nn.Module,
     device: torch.device,
 ):
+
     total_loss = 0
     model.train()
+
+    def foward_prop(
+        tensor: torch.Tensor,
+        labels: torch.Tensor,
+        indices: list,
+    ):
+        pooled = []
+        # Run backbone on stacked tensor
+        embeddings = model[0](tensor)
+        # Split embedding per observation
+        chunks = torch.split(embeddings, indices)
+
+        # Append observation pool
+        for c in chunks:
+            pooled.append(c.mean(0))
+
+        # Stack back in one tensor
+        pooled = torch.stack(pooled)
+        predictions = model[1](pooled).squeeze(1)
+        return criterion(predictions, labels)
+
     for images, labels in dataloader:
+        labels: torch.Tensor
+        indices = []
+
         optimizer.zero_grad()
+
+        # Get indices for split
+        for t in images:
+            indices.append(t.size()[0])
+
+        # Concatenate all images in one tensor
+        stacked = torch.cat(images)
+
+        # Transfer to device
         labels = labels.to(device)
-        predictions = []
-        for obs_images in images:
-            obs_images = obs_images.to(device)
-            embeddings = model[0](obs_images)
-            pooled = embeddings.mean(0)
-            prediction = model[1](pooled)
-            predictions.append(prediction)
-        predictions = torch.stack(predictions).squeeze(1)
-        loss = criterion(predictions, labels)
-        loss.backward()
-        optimizer.step()
+        stacked = stacked.to(device)
+
+        # Run foward prop and backprop
+        if device.type == "cuda":
+            with autocast_mode.autocast(device_type=device.type):
+                loss = foward_prop(stacked, labels, indices)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss = foward_prop(stacked, labels, indices)
+            loss.backward()
+            optimizer.step()
+
         total_loss += loss.item()
 
     train_loss = total_loss / len(dataloader)
@@ -163,6 +203,11 @@ def execute(
             f"gap={gap:.3f} accuracy={float(metrics['accuracy']):.3f} "
             f" roc={float(metrics['roc']):.3f} time={elapsed:.3f}s"
         )
+        if device.type == "cuda":
+            print(
+                f"GPU memory: {torch.cuda.memory_allocated() / 1e9:.2f}GB /"
+                f" {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f}GB"
+            )
 
         if val_loss < best_loss:
             best_loss = val_loss
