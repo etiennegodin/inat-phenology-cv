@@ -19,10 +19,12 @@ if TYPE_CHECKING:
 
 
 def get_device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    d = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Running on {d}")
+    return torch.device(d)
 
 
-def build_pipeline_model() -> nn.Module:
+def build_pipeline_model(device: torch.device) -> nn.Module:
     """Instantiate model and unfreezes backbone last params
 
     Returns:
@@ -38,6 +40,7 @@ def build_pipeline_model() -> nn.Module:
         if name.startswith(tuple(EFFICIENT_NET_LAST_BLOCK)):
             p.requires_grad = True
 
+    model.to(device)
     return model
 
 

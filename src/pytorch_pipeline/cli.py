@@ -52,7 +52,7 @@ def train_cmd(args, configs: Config):
 
     # Initialise train modules
     device = get_device()
-    model = build_pipeline_model()
+    model = build_pipeline_model(device)
     optimizer = build_pipeline_optimizer(model, optim_params)
     train_loader, val_loader, _ = build_pipeline_dataloaders(configs, model)
     criterion = nn.BCEWithLogitsLoss()
@@ -78,7 +78,7 @@ def train_cmd(args, configs: Config):
     # Set config params
     configs.training_params = training_params
 
-    mlflow.set_experiment("cv_inat")
+    mlflow.set_experiment("cv_inat_v0.3")
     with mlflow.start_run(run_id=previous_run_id) as parent_run:
         parent_run_id = parent_run.info.run_id
         print(f"\n{'=' * 60}")

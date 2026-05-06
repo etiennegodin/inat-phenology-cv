@@ -38,6 +38,7 @@ def train_one_epoch(
     for images, labels in dataloader:
         labels: Tensor
         images = [t.to(device) for t in images]
+        labels = labels.to(device)
 
         optimizer.zero_grad()
 
@@ -83,6 +84,7 @@ def evaluate(
         for images, labels in dataloader:
             labels: Tensor
             images = [t.to(device) for t in images]
+            labels = labels.to(device)
 
             # Run foward prop and backprop
             if device.type == "cuda":
@@ -168,6 +170,7 @@ def execute(
             f"gap={gap:.3f} accuracy={float(eval_metrics['val_accuracy']):.3f} "
             f" roc={float(eval_metrics['val_roc_auc']):.3f} time={elapsed:.3f}s"
         )
+
         if device.type == "cuda":
             print(
                 f"GPU memory: {torch.cuda.memory_allocated() / 1e9:.2f}GB /"
