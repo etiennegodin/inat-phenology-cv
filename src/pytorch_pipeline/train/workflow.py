@@ -24,38 +24,9 @@ logger = logging.getLogger(__name__)
 scaler = grad_scaler.GradScaler()
 
 
-def forward_pass(model: nn.Sequential, images: list[Tensor], device: device) -> Tensor:
-
-    indices = []
-
-    # Get indices for split
-    for t in images:
-        indices.append(t.size()[0])
-
-    # Concatenate all images in one Tensor
-    stacked = torch.cat(images)
-
-    # Transfer to device
-    stacked = stacked.to(device)
-
-    pooled = []
-    # Run backbone on stacked Tensor
-    embeddings = model[0](stacked)
-    # Split embedding per observation
-    chunks = torch.split(embeddings, indices)
-
-    # Append observation pool
-    for c in chunks:
-        pooled.append(c.mean(0))
-
-    # Stack back in one Tensor
-    pooled = torch.stack(pooled)
-    return model[1](pooled).squeeze(1)
-
-
 def train_one_epoch(
     epoch: int,
-    model: nn.Sequential,
+    model: nn.Module,
     dataloader: DataLoader,
     optimizer: Optimizer,
     criterion: nn.Module,
@@ -66,19 +37,20 @@ def train_one_epoch(
 
     for images, labels in dataloader:
         labels: Tensor
+        images = [t.to(device) for t in images]
 
         optimizer.zero_grad()
 
         # Run foward prop and backprop
         if device.type == "cuda":
             with autocast_mode.autocast(device_type=device.type):
-                predictions = forward_pass(model, images, device)
+                predictions, weights = model(images)
                 loss = criterion(predictions, labels)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
         else:
-            predictions = forward_pass(model, images, device)
+            predictions, weights = model(images)
             loss = criterion(predictions, labels)
             loss.backward()
             optimizer.step()
@@ -94,7 +66,7 @@ def train_one_epoch(
 
 
 def evaluate(
-    model: nn.Sequential,
+    model: nn.Module,
     dataloader: DataLoader,
     criterion: nn.Module,
     device: device,
@@ -110,12 +82,14 @@ def evaluate(
     with torch.no_grad():
         for images, labels in dataloader:
             labels: Tensor
+            images = [t.to(device) for t in images]
+
             # Run foward prop and backprop
             if device.type == "cuda":
                 with autocast_mode.autocast(device_type=device.type):
-                    predictions = forward_pass(model, images, device)
+                    predictions, weights = model(images)
             else:
-                predictions = forward_pass(model, images, device)
+                predictions, weights = model(images)
 
             loss = criterion(predictions, labels)
             total_loss += loss.item()

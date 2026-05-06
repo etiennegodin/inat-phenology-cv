@@ -46,7 +46,7 @@ def load_checkpoint(
     checkpoint_path: str,
     model: torch.nn.Module,
     optimizer: Optimizer,
-) -> tuple[torch.nn.Sequential, Optimizer, int, dict[str, Any], Union[str, None]]:
+) -> tuple[torch.nn.Module, Optimizer, int, dict[str, Any], Union[str, None]]:
     checkpoint = torch.load(checkpoint_path)
     checkpoint: dict
     model.load_state_dict(checkpoint["model_state_dict"])
