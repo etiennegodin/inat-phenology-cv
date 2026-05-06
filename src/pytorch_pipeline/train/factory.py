@@ -6,37 +6,56 @@ import torch
 from torch import optim as optim
 from torch.utils.data import DataLoader, Subset
 
+from ..utils.registry import EFFICIENT_NET_LAST_BLOCK
 from .dataloader import collate_fn
 from .dataset import build_datasets
-from .model import build_model
+from .model import PhenologyModel
 
 if TYPE_CHECKING:
     from torch import nn, optim
 
     from ..utils import Config
-    from ..utils.params import ModelParams, OptimizerParams
+    from ..utils.params import OptimizerParams
 
 
 def get_device() -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def build_pipeline_model(params: ModelParams, device: torch.device) -> nn.Sequential:
-    model = build_model(params.head_inputs, params.dropout_prob).to(device)
+def build_pipeline_model() -> nn.Module:
+    """Instantiate model and unfreezes backbone last params
+
+    Returns:
+        nn.Module: _description_
+    """
+    model = PhenologyModel()
+
+    for p in model.backbone.parameters():
+        p.requires_grad = False
+
+    # Unfreeze last block
+    for name, p in model.backbone.named_parameters():
+        if name.startswith(tuple(EFFICIENT_NET_LAST_BLOCK)):
+            p.requires_grad = True
+
     return model
 
 
 def build_pipeline_optimizer(
-    model: nn.Sequential, params: OptimizerParams
+    model: nn.Module, params: OptimizerParams
 ) -> optim.Optimizer:
     return optim.Adam(
         [
             {
-                "params": [p for p in model[0].parameters() if p.requires_grad],
+                "params": [p for p in model.backbone.parameters() if p.requires_grad],
                 "lr": params.backbone_lr,
             },
             {
-                "params": model[1].parameters(),
+                "params": model.attention.parameters(),
+                "lr": params.attention_lr,
+            },
+            {
+                "params": model.head.parameters(),
                 "lr": params.head_lr,
             },
         ]
@@ -44,12 +63,12 @@ def build_pipeline_optimizer(
 
 
 def build_pipeline_dataloaders(
-    config: Config, backbone: nn.Module
+    config: Config, model: nn.Module
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     train_set, val_set, test_set = build_datasets(
         paths=config.paths,
         samples_params=config.samples_params,
-        model_configs=backbone.default_cfg,
+        model_configs=model.backbone.default_cfg,
     )
 
     if config.test:

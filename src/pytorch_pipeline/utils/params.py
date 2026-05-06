@@ -13,6 +13,7 @@ class TrainingParams:
 @dataclass
 class OptimizerParams:
     backbone_lr: float
+    attention_lr: float
     head_lr: float
 
 

@@ -148,7 +148,7 @@ def evaluate(
 
 def execute(
     device: device,
-    model: torch.nn.Sequential,
+    model: torch.nn.Module,
     train_loader: DataLoader,
     val_loader: DataLoader,
     optimizer: Optimizer,

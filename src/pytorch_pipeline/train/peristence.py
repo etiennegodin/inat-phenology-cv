@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 def save_checkpoint(
     checkpoint_path: str,
     epoch: int,
-    model: torch.nn.Sequential,
+    model: torch.nn.Module,
     optimizer: Optimizer,
     eval_metrics: dict,
 ) -> None:
@@ -44,7 +44,7 @@ def save_checkpoint(
 
 def load_checkpoint(
     checkpoint_path: str,
-    model: torch.nn.Sequential,
+    model: torch.nn.Module,
     optimizer: Optimizer,
 ) -> tuple[torch.nn.Sequential, Optimizer, int, dict[str, Any], Union[str, None]]:
     checkpoint = torch.load(checkpoint_path)

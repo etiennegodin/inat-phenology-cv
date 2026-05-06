@@ -5,8 +5,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..utils.registry import EFFICIENT_NET_LAST_BLOCK
-
 if TYPE_CHECKING:
     from torch import nn
 
@@ -79,34 +77,3 @@ class PhenologyModel(nn.Module):
 
 def get_backbone():
     return timm.create_model("efficientnet_b0", num_classes=0, pretrained=True)
-
-
-def build_head(num_features: int):
-    return nn.Sequential(
-        nn.Linear(num_features, 256),
-        nn.ReLU(),
-        nn.Dropout(0.5),
-        nn.Linear(256, 1),
-    )
-
-
-def build_model(head_inputs: int = 256, dropout_prob: float = 0.5) -> nn.Sequential:
-    backbone = get_backbone()
-
-    for p in backbone.parameters():
-        p.requires_grad = False
-
-    # Unfreeze last block
-    for name, p in backbone.named_parameters():
-        if name.startswith(tuple(EFFICIENT_NET_LAST_BLOCK)):
-            p.requires_grad = True
-
-    head = build_head(backbone.num_features)
-    model = nn.Sequential(backbone, head)
-    return model
-
-
-if __name__ == "__main__":
-    model = build_model()
-    for name, p in model.named_parameters():
-        print(name, p.requires_grad)
