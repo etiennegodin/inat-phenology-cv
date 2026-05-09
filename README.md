@@ -33,7 +33,7 @@ non_flowering | 	2766| 	7130| 	2.58|
 - evaluate() returns loss, accuracy, confusion matrix, ROC-AUC
 - ~80% val accuracy, ~0.90 roc_auc
 
-### ✅ v0.2 — Multi-label classification
+### ✅ v0.2 — Multi-image classification
 
 - Backbone swap
 - Data expansion, multiple photos per observations
@@ -41,7 +41,10 @@ non_flowering | 	2766| 	7130| 	2.58|
 - Level 2 multi-image: observation-level mean pooling
 - MlFlow tracking setup
 
-### 🔲 v0.3 — Multiple Instance Learning
+### ✅  v0.3 — Multiple Instance Learning
 
 - Attention-based MIL
+
+### 🔲 v0.4 — Multi-label classification
+
 - Multi-label classification expanding to full Flowers+Fruits phenology
