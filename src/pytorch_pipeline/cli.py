@@ -10,7 +10,7 @@ from mlflow import pytorch
 from torch import cuda, nn
 
 from .status import status
-from .train import execute
+from .train import test, workflow
 from .train.factory import (
     build_pipeline_dataloaders,
     build_pipeline_model,
@@ -87,7 +87,7 @@ def train_cmd(args, configs: Config):
 
         mlflow.log_dict(configs.to_dict(), "configs.json")
 
-        best_model = execute(
+        best_model = workflow.execute(
             device=device,
             model=model,
             train_loader=train_loader,
@@ -102,6 +102,35 @@ def train_cmd(args, configs: Config):
         pytorch.log_model(best_model, "cv_inat")
         model_uri = f"runs:/{parent_run_id}/cv_inat"
         mlflow.register_model(model_uri, "cv_inat")
+
+
+def test_cmd(args, configs: Config):
+
+    # Initialise Data loaders params
+    if cuda.is_available():
+        dataloader_params = DataLoadersParams(
+            batch_size=32, num_workers=2, pin_memory=True, persistent_workers=True
+        )
+    else:
+        dataloader_params = DataLoadersParams(
+            batch_size=16, num_workers=0, pin_memory=False, persistent_workers=False
+        )
+    configs.dataloaders_params = dataloader_params
+
+    device = get_device()
+    model = build_pipeline_model(device)
+    criterion = nn.BCEWithLogitsLoss()
+
+    # Dummy optimiser
+    optimizer = build_pipeline_optimizer(model, OptimizerParams())
+
+    # Tes loaders
+    loaders = build_pipeline_dataloaders(configs, model)
+    model, optimizer, start_epoch, eval_metrics, previous_run_id = load_checkpoint(
+        configs.paths.checkpoint_path, model=model, optimizer=optimizer
+    )
+
+    test.execute(device, model, loaders[2], criterion)
 
 
 def update_cmd(args, configs: Config):
@@ -123,6 +152,12 @@ def create_parser() -> argparse.ArgumentParser:
     train_parser = subparsers.add_parser("train", help="Train model")
     add_train_args(train_parser)
     train_parser.set_defaults(func=train_cmd)
+
+    # Test command
+    test_parser = subparsers.add_parser("test", help="Test model")
+    # add_train_args(train_parser)
+    test_parser.set_defaults(func=test_cmd)
+    test_parser.add_argument("--test", "-t", action="store_true", default=False)
 
     # Update command
     update_parser = subparsers.add_parser("update", help="Update source dataset")
