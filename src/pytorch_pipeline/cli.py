@@ -137,8 +137,8 @@ def create_parser() -> argparse.ArgumentParser:
 def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--epochs", "-n", type=int, default=10)
     parser.add_argument("--patience", "-p", type=int, default=3)
-    parser.add_argument("--head-lr", "-hlr", type=float, default=0.001)
-    parser.add_argument("--attention-lr", "-alr", type=float, default=0.001)
+    parser.add_argument("--head-lr", "-hlr", type=float, default=0.0001)
+    parser.add_argument("--attention-lr", "-alr", type=float, default=0.0001)
     parser.add_argument("--backbone-lr", "-blr", type=float, default=0.00001)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
     parser.add_argument("--test", "-t", action="store_true", default=False)
