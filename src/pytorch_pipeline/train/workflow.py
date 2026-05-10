@@ -172,7 +172,7 @@ def execute(
             f"time={elapsed:.3f}s"
         )
 
-        if device.type == "cuda":
+        if device.type == "cuda" and epoch == 0:
             print(
                 f"GPU memory: {torch.cuda.memory_allocated() / 1e9:.2f}GB /"
                 f" {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f}GB"
