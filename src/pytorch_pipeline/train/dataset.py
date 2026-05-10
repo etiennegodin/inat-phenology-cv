@@ -91,7 +91,7 @@ def split_dataset(
 def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
     df = get_df_from_table(paths.db_path, "cv_photos2")
     df["path"] = paths.image_dir + "/" + df[params.photo_idx_col].astype(str) + ".jpg"
-    return df.sort_values(by=params.idx_col, ascending=True, axis=0)
+    return df
 
 
 def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
@@ -103,7 +103,7 @@ def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
     # Keep photos only from sampled observations
     df = df[df[params.idx_col].isin(test_idx[params.idx_col])]
     print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
-    print(f"{test_idx.shape[0]} observations with {df.shape[0]} images")
+    print(f"{test_idx.shape[0]} observations with {df.shape[0]} annotations")
     return df
 
 

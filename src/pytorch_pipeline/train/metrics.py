@@ -18,7 +18,7 @@ def log_metrics(all_preds, all_labels, all_preds_raw, epoch: int) -> dict[str, A
     fig, ax = plt.subplots(figsize=(8, 6))
     for i in range(all_preds.shape[1]):
         # Metrics
-        fpr, tpr, thresholds = roc_curve(all_labels[i], all_preds_raw[i])
+        fpr, tpr, thresholds = roc_curve(all_labels[:, i], all_preds_raw[:, i])
         roc_auc = auc(fpr, tpr)
         roc_aucs[i] = roc_auc
         roc_display = RocCurveDisplay(
