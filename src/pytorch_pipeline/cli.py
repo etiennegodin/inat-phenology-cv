@@ -29,6 +29,8 @@ from .utils.params import (
 
 
 def train_cmd(args, configs: Config):
+    # Set test
+    configs.test = args.test
 
     mlflow.set_tracking_uri(f"sqlite:///{configs.paths.ml_flow_db}")
 
@@ -174,7 +176,6 @@ def create_parser() -> argparse.ArgumentParser:
     test_parser = subparsers.add_parser("test", help="Test model")
     # add_train_args(train_parser)
     test_parser.set_defaults(func=test_cmd)
-    test_parser.add_argument("--test", "-t", action="store_true", default=False)
 
     # Update command
     update_parser = subparsers.add_parser("update", help="Update source dataset")
@@ -211,7 +212,6 @@ def main():
     # Set up pipeline configs
     configs = Config(
         paths=paths,
-        test=args.test,
     )
 
     # Execute command
