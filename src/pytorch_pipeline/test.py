@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch.amp import autocast_mode
 
-from .train.metrics import get_metrics
+from .train.metrics import log_metrics
 
 if TYPE_CHECKING:
     from torch import Tensor, device, nn
@@ -56,7 +56,7 @@ def execute(
     all_labels = torch.cat(all_labels).detach().cpu().numpy()
     all_preds_raw = torch.cat(all_preds_raw).detach().cpu().numpy()
 
-    eval_metrics = get_metrics(all_preds, all_labels, all_preds_raw)
+    eval_metrics = log_metrics(all_preds, all_labels, all_preds_raw)
 
     print(
         f"accuracy={float(correct / total):.3f} "

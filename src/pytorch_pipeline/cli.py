@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from mlflow import pytorch
 from torch import cuda, nn
 
-from . import test, train
+from . import train
 from .status import status
 from .train.dataloader import build_pipeline_dataloaders
 from .train.dataset import build_datasets
@@ -122,6 +122,7 @@ def train_cmd(args, configs: Config):
 
 
 def test_cmd(args, configs: Config):
+    """
 
     # Initialise Data loaders params
     if cuda.is_available():
@@ -154,6 +155,7 @@ def test_cmd(args, configs: Config):
     )
 
     test.execute(device, model, loaders[2], criterion)
+    """
 
 
 def update_cmd(args, configs: Config):
