@@ -111,7 +111,6 @@ def evaluate(
     all_preds_raw = torch.cat(all_preds_raw).detach().cpu().numpy()
 
     base_metrics = {
-        "val_accuracy": correct / total,
         "val_loss": total_loss / len(dataloader),
     }
     if mlflow.active_run():
@@ -167,7 +166,7 @@ def execute(
 
         print(
             f"Epoch {epoch}: train={train_loss:.3f} val={eval_metrics['val_loss']:.3f} "
-            f"gap={gap:.3f} accuracy={float(eval_metrics['val_accuracy']):.3f} "
+            f"gap={gap:.3f} "
             f"roc_auc_macro={float(eval_metrics['val_roc_auc_macro']):.3f} "
             f"time={elapsed:.3f}s"
         )
