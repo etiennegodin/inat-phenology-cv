@@ -14,7 +14,7 @@ from .params import (
 class Config:
     paths: PathsParams
     samples_params: SamplesParams = field(default_factory=SamplesParams)
-    model_params: ModelParams = field(default_factory=ModelParams)
+    model_params: ModelParams = field(init=False)
     training_params: TrainingParams = field(init=False)
     dataloaders_params: DataLoadersParams = field(init=False)
     optim_params: OptimizerParams = field(init=False)

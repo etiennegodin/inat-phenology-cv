@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from torch import nn, optim
 
     from ..utils import Config
-    from ..utils.params import OptimizerParams
+    from ..utils.params import ModelParams, OptimizerParams
 
 
 def get_device() -> torch.device:
@@ -24,14 +24,13 @@ def get_device() -> torch.device:
     return torch.device(d)
 
 
-def build_pipeline_model(device: torch.device) -> nn.Module:
+def build_pipeline_model(device: torch.device, model_params: ModelParams) -> nn.Module:
     """Instantiate model and unfreezes backbone last params
 
     Returns:
         nn.Module: _description_
     """
-    model = PhenologyModel()
-
+    model = PhenologyModel(model_params)
     for p in model.backbone.parameters():
         p.requires_grad = False
 

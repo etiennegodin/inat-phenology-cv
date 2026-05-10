@@ -21,6 +21,7 @@ from .train.peristence import load_checkpoint
 from .utils import Config, clean_data, init_logger, update_dataset
 from .utils.params import (
     DataLoadersParams,
+    ModelParams,
     OptimizerParams,
     PathsParams,
     TrainingParams,
@@ -50,9 +51,19 @@ def train_cmd(args, configs: Config):
     )
     configs.optim_params = optim_params
 
+    model_params = ModelParams(
+        head_neurons=256,
+        head_outputs=1,
+        head_dropout_prob=0.5,
+        attention_dim=0,
+        attention_neurons=128,
+    )
+
+    configs.model_params = model_params
+
     # Initialise train modules
     device = get_device()
-    model = build_pipeline_model(device)
+    model = build_pipeline_model(device, model_params)
     optimizer = build_pipeline_optimizer(model, optim_params)
     train_loader, val_loader, _ = build_pipeline_dataloaders(configs, model)
     criterion = nn.BCEWithLogitsLoss()
@@ -116,9 +127,15 @@ def test_cmd(args, configs: Config):
             batch_size=16, num_workers=0, pin_memory=False, persistent_workers=False
         )
     configs.dataloaders_params = dataloader_params
-
+    model_params = ModelParams(
+        head_neurons=256,
+        head_outputs=1,
+        head_dropout_prob=0.5,
+        attention_dim=0,
+        attention_neurons=128,
+    )
     device = get_device()
-    model = build_pipeline_model(device)
+    model = build_pipeline_model(device, model_params)
     criterion = nn.BCEWithLogitsLoss()
 
     # Dummy optimiser

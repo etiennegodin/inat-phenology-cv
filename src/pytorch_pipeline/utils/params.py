@@ -19,8 +19,11 @@ class OptimizerParams:
 
 @dataclass
 class ModelParams:
-    head_inputs: int = 256
-    dropout_prob: float = 0.5
+    head_neurons: int
+    head_outputs: int
+    head_dropout_prob: float
+    attention_dim: int
+    attention_neurons: int
 
 
 @dataclass

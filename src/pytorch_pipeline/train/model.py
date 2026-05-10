@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 import timm
@@ -8,28 +10,41 @@ from torch import nn
 if TYPE_CHECKING:
     from torch import nn
 
+    from ..utils.params import ModelParams
+
 
 class AttentionPooling(nn.Module):
-    def __init__(self, in_features: int, *args, **kwargs) -> None:
+    def __init__(
+        self, in_features: int, neurons: int, dimension: int, *args, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
-        self.V = nn.Linear(in_features, 128)
-        self.w = nn.Linear(128, 1)
+        self.V = nn.Linear(in_features, neurons)
+        self.w = nn.Linear(neurons, 1)
+        self.dim = dimension
 
     def forward(self, chunk):
         # chunk: (n_images, in_features)
         scores = self.w(torch.tanh(self.V(chunk)))
-        weights = F.softmax(scores, dim=0)
-        pooled = (weights * chunk).sum(dim=0)
+        weights = F.softmax(scores, dim=self.dim)
+        pooled = (weights * chunk).sum(dim=self.dim)
         return pooled, weights
 
 
 class ClassifierHead(nn.Module):
-    def __init__(self, in_features: int, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        in_features: int,
+        neurons: int,
+        outputs: int,
+        dropout_rate: float,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
-        self.V = nn.Linear(in_features, 256)
+        self.V = nn.Linear(in_features, neurons)
         self.r = nn.ReLU()
-        self.d = nn.Dropout(0.5)
-        self.w = nn.Linear(256, 1)
+        self.d = nn.Dropout(dropout_rate)
+        self.w = nn.Linear(neurons, outputs)
 
     def forward(self, x):
         w1 = self.r(self.V(x))
@@ -38,11 +53,18 @@ class ClassifierHead(nn.Module):
 
 
 class PhenologyModel(nn.Module):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, params: ModelParams, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.backbone = get_backbone()
-        self.attention = AttentionPooling(self.backbone.num_features)
-        self.head = ClassifierHead(self.backbone.num_features)
+        self.attention = AttentionPooling(
+            self.backbone.num_features, params.attention_neurons, params.attention_dim
+        )
+        self.head = ClassifierHead(
+            self.backbone.num_features,
+            params.head_neurons,
+            params.head_outputs,
+            params.head_dropout_prob,
+        )
 
     def forward(self, x):
         indices = []
