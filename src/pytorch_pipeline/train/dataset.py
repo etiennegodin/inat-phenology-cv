@@ -95,13 +95,16 @@ def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
 
 
 def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
-    print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
+
     # Collapse to obs level
     test_df = df.drop_duplicates(subset=[params.idx_col])
     # Sample obs id from fraction
     test_idx = test_df.sample(frac=params.testing_frac)
     # Keep photos only from sampled observations
-    return df[df[params.idx_col].isin(test_idx[params.idx_col])]
+    df = df[df[params.idx_col].isin(test_idx[params.idx_col])]
+    print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
+    print(f"{test_idx.shape[0]} observations with {df.shape[0]} images")
+    return df
 
 
 def build_datasets(
