@@ -1,38 +1,47 @@
-from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
 import mlflow
+import numpy as np
 from sklearn.metrics import (
-    ConfusionMatrixDisplay,
     RocCurveDisplay,
     auc,
-    classification_report,
-    confusion_matrix,
     roc_curve,
 )
 
+from ..utils.registry import LABEL_MAPPING
 
-def get_metrics(all_preds, all_labels, all_preds_raw) -> dict[str, Any]:
-    # Metrics
-    fpr, tpr, thresholds = roc_curve(all_labels, all_preds_raw)
-    roc_auc = auc(fpr, tpr)
-    roc_display = RocCurveDisplay(
-        fpr=fpr,
-        tpr=tpr,
-        roc_auc=roc_auc,
-    )
-    cm = confusion_matrix(all_labels, all_preds)
-    cm_display = ConfusionMatrixDisplay(cm)
-    cf = classification_report(all_labels, all_preds)
+
+def log_metrics(all_preds, all_labels, all_preds_raw, epoch: int) -> dict[str, Any]:
+
+    roc_aucs = np.arange(3, dtype=np.float32)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for i in range(all_preds.shape[1]):
+        # Metrics
+        fpr, tpr, thresholds = roc_curve(all_labels[i], all_preds_raw[i])
+        roc_auc = auc(fpr, tpr)
+        roc_aucs[i] = roc_auc
+        roc_display = RocCurveDisplay(
+            fpr=fpr, tpr=tpr, roc_auc=roc_auc, name=LABEL_MAPPING[i]
+        )
+        roc_display.plot(ax=ax)
+
+    ax.set_title("Multi-label ROC Curves")
+    plt.legend()
 
     eval_metrics = {
-        "val_roc_auc": roc_auc,
-        "cm": cm,
-        "cm_display": cm_display,
-        "cf": cf,
-        "roc_display": roc_display,
+        "val_roc_auc_macro": roc_aucs.mean(axis=0),
+        "val_roc_auc_label0": roc_aucs[0],
+        "val_roc_auc_label1": roc_aucs[1],
+        "val_roc_auc_label2": roc_aucs[2],
     }
+
+    # Log metrics
+    if mlflow.active_run():
+        mlflow.log_metrics(eval_metrics, step=epoch)
+
+    # Update with display object
+    eval_metrics.update({"roc_fig": fig, "roc_ax": ax})
 
     return eval_metrics
 
@@ -42,23 +51,5 @@ def log_best_artifacts(eval_metrics: dict) -> None:
     mlflow.log_metric("best_val_loss", eval_metrics["val_loss"])
 
     # Roc plot
-    roc_display = eval_metrics["roc_display"]
-    roc_display.plot()
-    roc_fig = roc_display.figure_
+    roc_fig = eval_metrics["roc_fig"]
     mlflow.log_figure(roc_fig, "roc.png")
-
-    # Confusion matrix plot
-    plt.figure()
-    plt.title("Confusion matrix")
-    plt.set_cmap("inferno")
-    cm_display = eval_metrics["cm_display"]
-    cm_display.plot()
-    cm_fig = cm_display.figure_
-    plt.close()
-    mlflow.log_figure(cm_fig, "confusion_matrix.png")
-
-    # CLassification_report
-    with open("classification_report.txt", "w") as f:
-        f.write(eval_metrics["cf"])
-    mlflow.log_artifact("classification_report.txt")
-    Path("classification_report.txt").unlink()

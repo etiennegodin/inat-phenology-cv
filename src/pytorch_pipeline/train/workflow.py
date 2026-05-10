@@ -8,7 +8,7 @@ import mlflow
 import torch
 from torch.amp import autocast_mode, grad_scaler
 
-from .metrics import get_metrics, log_best_artifacts
+from .metrics import log_best_artifacts, log_metrics
 from .peristence import load_checkpoint, save_checkpoint
 
 if TYPE_CHECKING:
@@ -117,9 +117,7 @@ def evaluate(
     if mlflow.active_run():
         mlflow.log_metrics(base_metrics, step=epoch)
 
-    eval_metrics = get_metrics(all_preds, all_labels, all_preds_raw)
-    if mlflow.active_run():
-        mlflow.log_metric("val_roc_auc", eval_metrics["val_roc_auc"], step=epoch)
+    eval_metrics = log_metrics(all_preds, all_labels, all_preds_raw, epoch)
     eval_metrics.update(base_metrics)
     return eval_metrics
 
@@ -170,7 +168,8 @@ def execute(
         print(
             f"Epoch {epoch}: train={train_loss:.3f} val={eval_metrics['val_loss']:.3f} "
             f"gap={gap:.3f} accuracy={float(eval_metrics['val_accuracy']):.3f} "
-            f" roc={float(eval_metrics['val_roc_auc']):.3f} time={elapsed:.3f}s"
+            f"roc_auc_macro={float(eval_metrics['val_roc_auc_macro']):.3f} "
+            f"time={elapsed:.3f}s"
         )
 
         if device.type == "cuda":
