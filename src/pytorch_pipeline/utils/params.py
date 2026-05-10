@@ -55,13 +55,13 @@ class PathsParams:
 
 @dataclass
 class DatasetParams:
-    size: int | None = None
     train_frac: float = 0.8
     val_frac: float = 0.1
     test_frac: float = 0.1
     idx_col: str = "observation_id"
     photo_idx_col: str = "photo_id"
     label_col: str = "label"
+    testing_frac: float = 0.33
 
     def __post_init__(self):
         assert (self.train_frac + self.val_frac + self.test_frac) == 1

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 
 if TYPE_CHECKING:
     from torch.utils.data import Dataset
@@ -27,12 +27,6 @@ def build_pipeline_dataloaders(
     train_set = datasets[0]
     val_set = datasets[1]
     test_set = datasets[2]
-
-    if config.test:
-        n = 100
-        train_set = Subset(train_set, range(min(n, len(train_set))))
-        val_set = Subset(val_set, range(min(n, len(val_set))))
-        test_set = Subset(test_set, range(min(n, len(test_set))))
 
     train_loader = DataLoader(
         train_set,

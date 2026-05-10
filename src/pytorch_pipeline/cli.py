@@ -22,6 +22,7 @@ from .train.peristence import load_checkpoint
 from .utils import Config, clean_data, get_pos_weights, init_logger, update_dataset
 from .utils.params import (
     DataLoadersParams,
+    DatasetParams,
     ModelParams,
     OptimizerParams,
     PathsParams,
@@ -34,6 +35,10 @@ def train_cmd(args, configs: Config):
     configs.test = args.test
 
     mlflow.set_tracking_uri(f"sqlite:///{configs.paths.ml_flow_db}")
+
+    # Intialise dataset params
+    dataset_params = DatasetParams(testing_frac=args.test_frac)
+    configs.dataset_params = dataset_params
 
     # Initialise Data loaders params
     if cuda.is_available():
@@ -201,6 +206,13 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--backbone-lr", "-blr", type=float, default=0.00001)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
     parser.add_argument("--test", "-t", action="store_true", default=False)
+    parser.add_argument(
+        "--test_frac",
+        "-tf",
+        help="Fraction of intial dataset to keep for testing",
+        type=float,
+        default=0.33,
+    )
 
 
 def main():

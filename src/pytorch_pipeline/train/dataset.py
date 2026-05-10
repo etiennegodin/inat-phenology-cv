@@ -88,19 +88,33 @@ def split_dataset(
     return (train_df, val_df, test_df)
 
 
-def get_samples(paths, dataset_params: DatasetParams) -> pd.DataFrame:
+def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
     df = get_df_from_table(paths.db_path, "cv_photos2")
-    df["path"] = (
-        paths.image_dir + "/" + df[dataset_params.photo_idx_col].astype(str) + ".jpg"
-    )
-    return df
+    df["path"] = paths.image_dir + "/" + df[params.photo_idx_col].astype(str) + ".jpg"
+    return df.sort_values(by=params.idx_col, ascending=True, axis=0)
+
+
+def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
+    print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
+    # Collapse to obs level
+    test_df = df.drop_duplicates(subset=[params.idx_col])
+    # Sample obs id from fraction
+    test_idx = test_df.sample(frac=params.testing_frac)
+    # Keep photos only from sampled observations
+    return df[df[params.idx_col].isin(test_idx[params.idx_col])]
 
 
 def build_datasets(
     config: Config, model_configs: dict
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
     df = get_samples(config.paths, config.dataset_params)
+
+    # Reduce data set size if testing
+    if config.test:
+        df = reduce_dataset(df, config.dataset_params)
+
     train_df, val_df, test_df = split_dataset(df, config.dataset_params)
+
     base_transforms = build_base_transforms(
         **{k: model_configs[k] for k in ("input_size", "mean", "std")}
     )
