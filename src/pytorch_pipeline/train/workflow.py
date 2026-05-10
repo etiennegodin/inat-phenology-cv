@@ -114,10 +114,12 @@ def evaluate(
         "val_accuracy": correct / total,
         "val_loss": total_loss / len(dataloader),
     }
-    mlflow.log_metrics(base_metrics, step=epoch)
+    if mlflow.active_run():
+        mlflow.log_metrics(base_metrics, step=epoch)
 
     eval_metrics = get_metrics(all_preds, all_labels, all_preds_raw)
-    mlflow.log_metric("val_roc_auc", eval_metrics["val_roc_auc"], step=epoch)
+    if mlflow.active_run():
+        mlflow.log_metric("val_roc_auc", eval_metrics["val_roc_auc"], step=epoch)
     eval_metrics.update(base_metrics)
     return eval_metrics
 

@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 from mlflow import pytorch
 from torch import cuda, nn
 
+from . import test, train
 from .status import status
-from .train import test, workflow
 from .train.factory import (
     build_pipeline_dataloaders,
     build_pipeline_model,
@@ -87,7 +87,7 @@ def train_cmd(args, configs: Config):
 
         mlflow.log_dict(configs.to_dict(), "configs.json")
 
-        best_model = workflow.execute(
+        best_model = train.execute(
             device=device,
             model=model,
             train_loader=train_loader,
