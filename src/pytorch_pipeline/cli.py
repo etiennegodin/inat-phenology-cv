@@ -12,13 +12,14 @@ from torch import cuda, nn
 from . import test, train
 from .status import status
 from .train.factory import (
+    build_datasets,
     build_pipeline_dataloaders,
     build_pipeline_model,
     build_pipeline_optimizer,
     get_device,
 )
 from .train.peristence import load_checkpoint
-from .utils import Config, clean_data, init_logger, update_dataset
+from .utils import Config, clean_data, get_pos_weights, init_logger, update_dataset
 from .utils.params import (
     DataLoadersParams,
     ModelParams,
@@ -55,7 +56,7 @@ def train_cmd(args, configs: Config):
 
     model_params = ModelParams(
         head_neurons=256,
-        head_outputs=1,
+        head_outputs=3,
         head_dropout_prob=0.5,
         attention_dim=0,
         attention_neurons=128,
@@ -67,8 +68,11 @@ def train_cmd(args, configs: Config):
     device = get_device()
     model = build_pipeline_model(device, model_params)
     optimizer = build_pipeline_optimizer(model, optim_params)
-    train_loader, val_loader, _ = build_pipeline_dataloaders(configs, model)
-    criterion = nn.BCEWithLogitsLoss()
+    datasets = build_datasets(configs, model.backbone.default_cfg)
+    train_loader, val_loader, _ = build_pipeline_dataloaders(datasets, configs)
+
+    pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
 
     # Reinstate model and optimizer state if reload
     if args.reload:

@@ -5,23 +5,22 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import torch
 from PIL import Image
-from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 from torchvision import transforms
 
 from ..utils import get_df_from_table
-from ..utils.registry import LABEL_MAPPING
 
 if TYPE_CHECKING:
-    from ..utils.params import PathsParams, SamplesParams
+    from ..utils.config import Config
+    from ..utils.params import DatasetParams
 
 
 class PhenologyDataset(Dataset):
     def __init__(
-        self, df: pd.DataFrame, transform, samples_params: SamplesParams
+        self, df: pd.DataFrame, transform, dataset_params: DatasetParams
     ) -> None:
         self.transform = transform
-        self.samples_params = samples_params
+        self.dataset_params = dataset_params
         self.df = self._format_df(df)
 
         super().__init__()
@@ -41,8 +40,8 @@ class PhenologyDataset(Dataset):
 
     def _format_df(self, df: pd.DataFrame) -> pd.DataFrame:
         return (
-            df.groupby(self.samples_params.obs_id)
-            .agg({"path": list, self.samples_params.label_id: "first"})
+            df.groupby(self.dataset_params.idx_col)
+            .agg({"path": list, self.dataset_params.label_col: "first"})
             .reset_index(drop=True)
         )
 
@@ -72,60 +71,43 @@ def build_transforms(
 
 
 def split_dataset(
-    df: pd.DataFrame,
-    idx_col: str,
-    label_id: str,
+    df: pd.DataFrame, params: DatasetParams
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+
     # Collapse to one observation per row
-    obs_df = df.drop_duplicates(subset=[idx_col])
-
-    train_idx, temp_idx, train_labels, temp_labels = train_test_split(
-        obs_df[idx_col],
-        obs_df[label_id],
-        test_size=0.40,
-        random_state=42,
-        stratify=obs_df[label_id],
+    obs_df = df.drop_duplicates(subset=[params.idx_col])
+    train_idx = obs_df.sample(frac=params.train_frac)
+    val_idx = obs_df.drop(train_idx.index).sample(
+        frac=params.val_frac / (1 - params.train_frac)
     )
+    test_idx = obs_df.drop(train_idx.index).drop(val_idx.index)
 
-    val_idx, test_idx, val_labels, test_labels = train_test_split(
-        temp_idx, temp_labels, test_size=0.75, random_state=42, stratify=temp_labels
-    )
-    train_df = df[df[idx_col].isin(train_idx)]
-    val_df = df[df[idx_col].isin(val_idx)]
-    test_df = df[df[idx_col].isin(test_idx)]
-
+    train_df = df[df[params.idx_col].isin(train_idx[params.idx_col])]
+    val_df = df[df[params.idx_col].isin(val_idx[params.idx_col])]
+    test_df = df[df[params.idx_col].isin(test_idx[params.idx_col])]
     return (train_df, val_df, test_df)
 
 
-def get_samples(paths, samples_params: SamplesParams) -> pd.DataFrame:
-    df = get_df_from_table(paths.db_path, "cv_photos")
+def get_samples(paths, dataset_params: DatasetParams) -> pd.DataFrame:
+    df = get_df_from_table(paths.db_path, "cv_photos2")
     df["path"] = (
-        paths.image_dir
-        + "/"
-        + df[samples_params.label_id].astype(str)
-        + "/"
-        + df[samples_params.photo_id_col].astype(str)
-        + ".jpg"
+        paths.image_dir + "/" + df[dataset_params.photo_idx_col].astype(str) + ".jpg"
     )
-    df[samples_params.label_id] = df[samples_params.label_id].map(LABEL_MAPPING)
     return df
 
 
 def build_datasets(
-    paths: PathsParams, samples_params: SamplesParams, model_configs: dict
+    config: Config, model_configs: dict
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
-    df = get_samples(paths, samples_params)
-
-    train_df, val_df, test_df = split_dataset(
-        df, idx_col=samples_params.obs_id, label_id=samples_params.label_id
-    )
+    df = get_samples(config.paths, config.dataset_params)
+    train_df, val_df, test_df = split_dataset(df, config.dataset_params)
     base_transforms = build_base_transforms(
         **{k: model_configs[k] for k in ("input_size", "mean", "std")}
     )
     train_transform, val_transform = build_transforms(base_transforms)
 
-    train_set = PhenologyDataset(train_df, train_transform, samples_params)
-    val_set = PhenologyDataset(val_df, val_transform, samples_params)
-    test_set = PhenologyDataset(test_df, val_transform, samples_params)
+    train_set = PhenologyDataset(train_df, train_transform, config.dataset_params)
+    val_set = PhenologyDataset(val_df, val_transform, config.dataset_params)
+    test_set = PhenologyDataset(test_df, val_transform, config.dataset_params)
 
     return train_set, val_set, test_set

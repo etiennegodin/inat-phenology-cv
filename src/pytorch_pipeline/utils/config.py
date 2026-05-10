@@ -2,10 +2,10 @@ from dataclasses import asdict, dataclass, field
 
 from .params import (
     DataLoadersParams,
+    DatasetParams,
     ModelParams,
     OptimizerParams,
     PathsParams,
-    SamplesParams,
     TrainingParams,
 )
 
@@ -13,7 +13,7 @@ from .params import (
 @dataclass
 class Config:
     paths: PathsParams
-    samples_params: SamplesParams = field(default_factory=SamplesParams)
+    dataset_params: DatasetParams = field(default_factory=DatasetParams)
     model_params: ModelParams = field(init=False)
     training_params: TrainingParams = field(init=False)
     dataloaders_params: DataLoadersParams = field(init=False)

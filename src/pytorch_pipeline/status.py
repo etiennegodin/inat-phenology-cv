@@ -3,5 +3,5 @@ from .utils.config import Config
 
 
 def status(configs: Config):
-    df = get_samples(configs.paths, configs.samples_params)
+    df = get_samples(configs.paths, configs.dataset_params)
     print(f"Dataset size={df.shape[0]}")

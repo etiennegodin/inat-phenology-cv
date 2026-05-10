@@ -40,7 +40,7 @@ class PathsParams:
     checkpoint_path: str = field(init=False)
     db_path: str = field(init=False)
     ml_flow_db: str = field(init=False)
-    # source_db_path: str = field(init=False)
+    source_db_path: str = "/home/etienne/projects/inatML/data/inat_raw.duckdb"
     image_dir: str = field(init=False)
 
     def __post_init__(self):
@@ -54,7 +54,14 @@ class PathsParams:
 
 
 @dataclass
-class SamplesParams:
-    obs_id: str = "observation_id"
-    photo_id_col: str = "photo_id"
-    label_id: str = "controlled_value_id"
+class DatasetParams:
+    size: int | None = None
+    train_frac: float = 0.8
+    val_frac: float = 0.1
+    test_frac: float = 0.1
+    idx_col: str = "observation_id"
+    photo_idx_col: str = "photo_id"
+    label_col: str = "label"
+
+    def __post_init__(self):
+        assert (self.train_frac + self.val_frac + self.test_frac) == 1
