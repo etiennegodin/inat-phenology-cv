@@ -18,7 +18,7 @@ from .train.factory import (
     build_pipeline_optimizer,
     get_device,
 )
-from .train.peristence import load_checkpoint
+from .train.persistence import load_checkpoint
 from .utils import Config, clean_data, get_pos_weights, init_logger, update_dataset
 from .utils.params import (
     DataLoadersParams,
