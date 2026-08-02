@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any
 
 import open_clip
 import timm
@@ -21,6 +21,7 @@ class Backbone(ABC):
     def __init__(self) -> None:
         # Dummy pass to get backbone output dimensions
         with torch.no_grad():
+            self.encoder.eval()
             dummy_input_shape = self.get_dummy_input_shape()
             dummy_input = torch.zeros(1, *dummy_input_shape)
             self.output_dim = self.encode(dummy_input).shape[-1]
@@ -37,7 +38,7 @@ class Backbone(ABC):
         pass
 
     @abstractmethod
-    def get_trainable_blocks(self) -> Iterable[nn.Module]:
+    def get_trainable_blocks(self) -> list[nn.Module]:
         """Returns block from shallow to deeper"""
         pass
 
@@ -49,7 +50,7 @@ class Backbone(ABC):
 
 class EfficientNetBackbone(Backbone):
     def __init__(self, *args, **kwargs) -> None:
-        self.encoder = timm.create_model(
+        self.encoder: nn.Module = timm.create_model(
             "efficientnet_b0", num_classes=0, pretrained=True
         )
         super().__init__()
@@ -80,7 +81,7 @@ class EfficientNetBackbone(Backbone):
         val_transform = transforms.Compose(base_transforms)
         return train_transform, val_transform
 
-    def get_trainable_blocks(self) -> nn.Sequential:
+    def get_trainable_blocks(self):
         return self.encoder.blocks
 
     def get_dummy_input_shape(self) -> tuple[int, int, int]:
@@ -108,8 +109,8 @@ class BioClipBackbone(Backbone):
     def get_transforms(self) -> tuple[transforms.Compose, transforms.Compose]:
         return self.train_transform, self.val_transform
 
-    def get_trainable_blocks(self) -> Iterator[nn.Module]:
-        return self.encoder.modules()
+    def get_trainable_blocks(self) -> nn.ModuleList:
+        return self.encoder.transformer.resblocks
 
     def get_dummy_input_shape(self) -> tuple[int, int, int]:
         img_size: tuple = tuple(self.encoder.image_size)
