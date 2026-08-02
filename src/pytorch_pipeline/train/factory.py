@@ -30,14 +30,21 @@ def build_pipeline_model(
         nn.Module: _description_
     """
     model = PhenologyModel(model_params)
+    blocks = model.backbone.get_trainable_blocks()
 
     # Freeze backbone
-    for block in model.backbone.get_trainable_blocks():
+    for block in blocks:
         freeze(block)
 
     # Unfreeze last block
-    for block in model.backbone.get_trainable_blocks()[-model_params.last_blocks :]:
-        unfreeze(block)
+    if model_params.last_blocks > 0:
+        for block in blocks[-model_params.last_blocks :]:
+            unfreeze(block)
+
+    # Show which blocks i trainable
+    for i, block in enumerate(blocks):
+        trainable = any(p.requires_grad for p in block.parameters())
+        print(f"Block {i}: trainable={trainable}")
 
     model.to(device)
     return model
