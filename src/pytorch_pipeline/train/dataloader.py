@@ -35,11 +35,11 @@ def build_pipeline_dataloaders(
         max_images=config.dataloaders_params.max_images,
     )
     val_sampler = MaxImagesBatchSampler(
-        train_set.bag_sizes,
+        val_set.bag_sizes,
         max_images=config.dataloaders_params.max_images,
     )
     test_sampler = MaxImagesBatchSampler(
-        train_set.bag_sizes,
+        test_set.bag_sizes,
         max_images=config.dataloaders_params.max_images,
     )
 
