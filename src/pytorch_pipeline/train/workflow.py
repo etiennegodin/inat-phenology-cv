@@ -163,9 +163,9 @@ def execute(
         # to stay in sync with start_epoch — revisit after Optuna is working end-to-end
         scheduler.step()
         current_lr = scheduler.get_last_lr()  # list, one value per param group
-        mlflow.log_metric("lr_backbone", current_lr[0], step=epoch)
-        mlflow.log_metric("lr_attention", current_lr[1], step=epoch)
-        mlflow.log_metric("lr_head", current_lr[2], step=epoch)
+        mlflow.log_metric("lr_backbone", float(current_lr[0]), step=epoch)
+        mlflow.log_metric("lr_attention", float(current_lr[1]), step=epoch)
+        mlflow.log_metric("lr_head", float(current_lr[2]), step=epoch)
 
         eval_metrics = evaluate(
             model=model,

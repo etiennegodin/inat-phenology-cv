@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 
 @dataclass
@@ -9,11 +9,17 @@ class TrainingParams:
     start_epoch: int | None
     best_loss: float = 1e10
 
+    def to_dict(self):
+        return asdict(self)
+
 
 @dataclass
 class SchedulerParams:
     warmup_epochs: int = 3
     total_epoch: int = 10
+
+    def to_dict(self):
+        return asdict(self)
 
 
 @dataclass
@@ -28,6 +34,9 @@ class OptimizerParams:
         self.attention_lr = self.base_lr
         self.head_lr = self.base_lr
 
+    def to_dict(self):
+        return asdict(self)
+
 
 @dataclass
 class ModelParams:
@@ -39,6 +48,9 @@ class ModelParams:
     attention_neurons: int
     last_blocks: int = 1
 
+    def to_dict(self):
+        return asdict(self)
+
 
 @dataclass
 class DataLoadersParams:
@@ -46,6 +58,9 @@ class DataLoadersParams:
     num_workers: int = 2
     pin_memory: bool = False
     persistent_workers: bool = False
+
+    def to_dict(self):
+        return asdict(self)
 
 
 @dataclass
@@ -66,6 +81,9 @@ class PathsParams:
         self.checkpoint_path = os.path.join(self.root, "checkpoints/checkpoint.pth")
         self.ml_flow_db = os.path.join(self.root, "mlflow.db")
 
+    def to_dict(self):
+        return asdict(self)
+
 
 @dataclass
 class DatasetParams:
@@ -79,3 +97,6 @@ class DatasetParams:
 
     def __post_init__(self):
         assert (self.train_frac + self.val_frac + self.test_frac) == 1
+
+    def to_dict(self):
+        return asdict(self)
