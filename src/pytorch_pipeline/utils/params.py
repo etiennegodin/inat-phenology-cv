@@ -12,9 +12,15 @@ class TrainingParams:
 
 @dataclass
 class OptimizerParams:
-    backbone_lr: float = 1e-3
-    attention_lr: float = 1e-3
-    head_lr: float = 1e-3
+    base_lr: float = 1e-3
+    backbone_lr: float = field(init=False)
+    attention_lr: float = field(init=False)
+    head_lr: float = field(init=False)
+
+    def __post_init__(self):
+        self.backbone_lr = self.base_lr / 10
+        self.attention_lr = self.base_lr
+        self.head_lr = self.base_lr
 
 
 @dataclass

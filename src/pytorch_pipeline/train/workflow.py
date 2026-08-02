@@ -9,7 +9,7 @@ import torch
 from torch.amp import autocast_mode, grad_scaler
 
 from .metrics import log_best_artifacts, log_metrics
-from .peristence import load_checkpoint, save_checkpoint
+from .persistence import load_checkpoint, save_checkpoint
 
 if TYPE_CHECKING:
     from torch import Tensor, device, nn
