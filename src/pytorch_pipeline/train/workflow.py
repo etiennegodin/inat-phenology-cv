@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from torch.utils.data import DataLoader
 
     from ..utils.params import TrainingParams
+    from .model import PhenologyModel
 
 
 logger = logging.getLogger(__name__)
@@ -26,12 +27,13 @@ scaler = grad_scaler.GradScaler()
 
 def train_one_epoch(
     epoch: int,
-    model: nn.Module,
+    model: PhenologyModel,
     dataloader: DataLoader,
     optimizer: Optimizer,
     criterion: nn.Module,
     device: device,
 ):
+    logger.debug(f"Start train one epoch {epoch}")
     total_loss = 0
     model.train()
 
@@ -51,7 +53,9 @@ def train_one_epoch(
             scaler.step(optimizer)
             scaler.update()
         else:
+            logger.info("start prediction")
             predictions, weights = model(images)
+            logger.info("predictions")
             loss = criterion(predictions, labels)
             loss.backward()
             optimizer.step()
@@ -67,7 +71,7 @@ def train_one_epoch(
 
 
 def evaluate(
-    model: nn.Module,
+    model: PhenologyModel,
     dataloader: DataLoader,
     criterion: nn.Module,
     device: device,
@@ -123,7 +127,7 @@ def evaluate(
 
 def execute(
     device: device,
-    model: torch.nn.Module,
+    model: PhenologyModel,
     train_loader: DataLoader,
     val_loader: DataLoader,
     optimizer: Optimizer,

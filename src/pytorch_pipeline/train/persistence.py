@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     import torch
     from torch.optim import Optimizer
 
+    from .model import PhenologyModel
+
 
 def save_checkpoint(
     checkpoint_path: str,
@@ -44,9 +46,9 @@ def save_checkpoint(
 
 def load_checkpoint(
     checkpoint_path: str,
-    model: torch.nn.Module,
+    model: PhenologyModel,
     optimizer: Optimizer,
-) -> tuple[torch.nn.Module, Optimizer, int, dict[str, Any], Union[str, None]]:
+) -> tuple[PhenologyModel, Optimizer, int, dict[str, Any], Union[str, None]]:
     checkpoint = torch.load(checkpoint_path)
     checkpoint: dict
     model.load_state_dict(checkpoint["model_state_dict"])
