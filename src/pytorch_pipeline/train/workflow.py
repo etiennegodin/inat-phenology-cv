@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 scaler = grad_scaler.GradScaler()
 
 
+def mem(msg):
+    print(
+        msg,
+        torch.cuda.memory_allocated() / 1024**2,
+        torch.cuda.memory_reserved() / 1024**2,
+    )
+
+
 def train_one_epoch(
     epoch: int,
     model: PhenologyModel,
@@ -42,7 +50,7 @@ def train_one_epoch(
         images = [t.to(device) for t in images]
         labels = labels.to(device)
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         # Run foward prop and backprop
         if device.type == "cuda":
