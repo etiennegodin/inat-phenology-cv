@@ -55,6 +55,7 @@ class ModelParams:
 @dataclass
 class DataLoadersParams:
     batch_size: int = 32
+    max_images: int = 32
     num_workers: int = 2
     pin_memory: bool = False
     persistent_workers: bool = False

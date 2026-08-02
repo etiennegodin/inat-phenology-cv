@@ -19,11 +19,13 @@ class PhenologyDataset(Dataset):
     def __init__(
         self, df: pd.DataFrame, transform, dataset_params: DatasetParams
     ) -> None:
+        super().__init__()
         self.transform = transform
         self.dataset_params = dataset_params
         self.df = self._format_df(df)
 
-        super().__init__()
+        # Create list of photo count per observation
+        self.bag_sizes = self.df["path"].str.len().to_list()
 
     def __len__(self) -> int:
         return len(self.df)

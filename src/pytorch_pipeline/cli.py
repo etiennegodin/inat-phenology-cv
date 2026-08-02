@@ -46,12 +46,12 @@ def train_cmd(args, configs: Config):
     # // Dataloaders params
     if cuda.is_available():
         dataloader_params = DataLoadersParams(
-            batch_size=256, num_workers=2, pin_memory=True, persistent_workers=True
+            num_workers=4, pin_memory=True, persistent_workers=False
         )
         configs.cuda = True
     else:
         dataloader_params = DataLoadersParams(
-            batch_size=16, num_workers=0, pin_memory=False, persistent_workers=False
+            num_workers=0, pin_memory=False, persistent_workers=False
         )
     configs.dataloaders_params = dataloader_params
 
@@ -119,7 +119,13 @@ def train_cmd(args, configs: Config):
         print(f"{'=' * 60}\n")
 
         mlflow.log_dict(configs.to_dict(), "configs.json")
-        mlflow.log_params(configs.to_dict())
+        mlflow.log_params(model_params.to_dict())
+        mlflow.log_params(training_params.to_dict())
+        mlflow.log_params(dataset_params.to_dict())
+        mlflow.log_params(dataloader_params.to_dict())
+        mlflow.log_params(optim_params.to_dict())
+        mlflow.log_params(scheduler_params.to_dict())
+
         best_model = train.execute(
             device=device,
             model=model,
