@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 import open_clip
 import timm
 import torch
+from open_clip import transformer
 from torch import Tensor, nn
 from torchvision import transforms
 
@@ -36,7 +37,7 @@ class Backbone(ABC):
         pass
 
     @abstractmethod
-    def get_trainable_blocks(self) -> nn.Sequential:
+    def get_trainable_blocks(self) -> Iterable[nn.Module]:
         """Returns block from shallow to deeper"""
         pass
 
@@ -91,11 +92,28 @@ class BioClipBackbone(Backbone):
         self.model, self.train_transform, self.val_transform = (
             open_clip.create_model_and_transforms("hf-hub:imageomics/bioclip")
         )
-        self.encoder = self.model.visual  # image tower only
+
+        self.train_transform: transforms.Compose
+        self.val_transform: transforms.Compose
+
+        self.encoder: transformer.VisionTransformer = (
+            self.model.visual
+        )  # image tower only
+
         super().__init__()
+
+    def encode(self, input: Tensor) -> Tensor:
+        return self.encoder(input)
 
     def get_transforms(self) -> tuple[transforms.Compose, transforms.Compose]:
         return self.train_transform, self.val_transform
 
+    def get_trainable_blocks(self) -> Iterator[nn.Module]:
+        return self.encoder.modules()
 
-BACKBONE_REGISTRY = {"efficientnet": EfficientNetBackbone}
+    def get_dummy_input_shape(self) -> tuple[int, int, int]:
+        img_size: tuple = tuple(self.encoder.image_size)
+        return 3, *img_size
+
+
+BACKBONE_REGISTRY = {"efficientnet": EfficientNetBackbone, "bioclip": BioClipBackbone}
