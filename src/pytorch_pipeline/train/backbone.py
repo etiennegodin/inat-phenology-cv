@@ -14,18 +14,21 @@ if TYPE_CHECKING:
     pass
 
 
-class Backbone(ABC):
+class Backbone(nn.Module, ABC):
     encoder: Any
     output_dim: int
 
     def __init__(self) -> None:
+        super().__init__()
+
+    def set_output_dim(self):
+        """Single forward pass with a dummy input to get expected output shape"""
         # Dummy pass to get backbone output dimensions
         with torch.no_grad():
             self.encoder.eval()
             dummy_input_shape = self.get_dummy_input_shape()
             dummy_input = torch.zeros(1, *dummy_input_shape)
             self.output_dim = self.encode(dummy_input).shape[-1]
-        super().__init__()
 
     @abstractmethod
     def encode(self, input: Tensor) -> Tensor:
@@ -50,10 +53,11 @@ class Backbone(ABC):
 
 class EfficientNetBackbone(Backbone):
     def __init__(self, *args, **kwargs) -> None:
+        super().__init__()
         self.encoder: nn.Module = timm.create_model(
             "efficientnet_b0", num_classes=0, pretrained=True
         )
-        super().__init__()
+        self.set_output_dim()
 
     def encode(self, input: Tensor) -> Tensor:
         return self.encoder(input)
@@ -90,18 +94,19 @@ class EfficientNetBackbone(Backbone):
 
 class BioClipBackbone(Backbone):
     def __init__(self) -> None:
+        super().__init__()
+
         self.model, self.train_transform, self.val_transform = (
             open_clip.create_model_and_transforms("hf-hub:imageomics/bioclip")
         )
 
+        self.set_output_dim()
+
         self.train_transform: transforms.Compose
         self.val_transform: transforms.Compose
-
         self.encoder: transformer.VisionTransformer = (
             self.model.visual
         )  # image tower only
-
-        super().__init__()
 
     def encode(self, input: Tensor) -> Tensor:
         return self.encoder(input)
