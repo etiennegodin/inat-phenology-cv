@@ -43,7 +43,7 @@ def train_cmd(args, configs: Config):
     # Initialise Data loaders params
     if cuda.is_available():
         dataloader_params = DataLoadersParams(
-            batch_size=32, num_workers=2, pin_memory=True, persistent_workers=True
+            batch_size=256, num_workers=2, pin_memory=True, persistent_workers=True
         )
     else:
         dataloader_params = DataLoadersParams(
