@@ -20,7 +20,7 @@ class Config:
     dataloaders_params: DataLoadersParams = field(init=False)
     optim_params: OptimizerParams = field(init=False)
     scheduler_params: SchedulerParams = field(init=False)
-
+    cuda: bool = False
     test: bool = False
 
     def to_dict(self):

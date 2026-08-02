@@ -48,6 +48,7 @@ def train_cmd(args, configs: Config):
         dataloader_params = DataLoadersParams(
             batch_size=256, num_workers=2, pin_memory=True, persistent_workers=True
         )
+        configs.cuda = True
     else:
         dataloader_params = DataLoadersParams(
             batch_size=16, num_workers=0, pin_memory=False, persistent_workers=False
