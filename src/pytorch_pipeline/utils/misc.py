@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from torch import Tensor, device
+from torch import Tensor, device, nn
 
 if TYPE_CHECKING:
     from ..train.dataset import DatasetParams, PhenologyDataset
@@ -14,6 +14,16 @@ import numpy as np
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+def freeze(block: nn.Module):
+    for p in block.parameters():
+        p.requires_grad = False
+
+
+def unfreeze(block: nn.Module):
+    for p in block.parameters():
+        p.requires_grad = True
 
 
 def get_pos_weights(

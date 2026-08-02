@@ -6,7 +6,7 @@ import torch
 from torch import optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 
-from ..utils.registry import EFFICIENT_NET_LAST_BLOCK
+from ..utils.misc import freeze, unfreeze
 from .model import PhenologyModel
 
 if TYPE_CHECKING:
@@ -21,20 +21,23 @@ def get_device() -> torch.device:
     return torch.device(d)
 
 
-def build_pipeline_model(device: torch.device, model_params: ModelParams) -> nn.Module:
+def build_pipeline_model(
+    device: torch.device, model_params: ModelParams
+) -> PhenologyModel:
     """Instantiate model and unfreezes backbone last params
 
     Returns:
         nn.Module: _description_
     """
     model = PhenologyModel(model_params)
-    for p in model.backbone.parameters():
-        p.requires_grad = False
+
+    # Freeze backbone
+    for block in model.backbone.get_trainable_blocks():
+        freeze(block)
 
     # Unfreeze last block
-    for name, p in model.backbone.named_parameters():
-        if name.startswith(tuple(EFFICIENT_NET_LAST_BLOCK)):
-            p.requires_grad = True
+    for block in model.backbone.get_trainable_blocks()[-model_params.last_blocks :]:
+        unfreeze(block)
 
     model.to(device)
     return model
@@ -65,7 +68,9 @@ def build_pipeline_optimizer(
     return optim.Adam(
         [
             {
-                "params": [p for p in model.backbone.parameters() if p.requires_grad],
+                "params": [
+                    p for p in model.backbone.encoder.parameters() if p.requires_grad
+                ],
                 "lr": params.backbone_lr,
             },
             {

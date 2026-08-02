@@ -11,6 +11,7 @@ from torch import cuda, nn
 
 from . import train
 from .status import status
+from .train.backbone import BACKBONE_REGISTRY
 from .train.dataloader import build_pipeline_dataloaders
 from .train.dataset import build_datasets
 from .train.factory import (
@@ -59,15 +60,15 @@ def train_cmd(args, configs: Config):
     )
     configs.optim_params = optim_params
 
-    ## Scheduler params
+    # // Scheduler params
     scheduler_params = SchedulerParams(
         warmup_epochs=args.warmup_epochs, total_epoch=args.epochs
     )
     configs.scheduler_params = scheduler_params
 
     # // Model params
-
     model_params = ModelParams(
+        args.backbone,
         head_neurons=256,
         head_outputs=3,
         head_dropout_prob=0.5,
@@ -82,7 +83,7 @@ def train_cmd(args, configs: Config):
     model = build_pipeline_model(device, model_params)
     optimizer = build_pipeline_optimizer(model, optim_params)
     scheduler = build_scheduler(optimizer, scheduler_params)
-    datasets = build_datasets(configs, model.backbone.default_cfg)
+    datasets = build_datasets(configs, model)
     train_loader, val_loader, _ = build_pipeline_dataloaders(datasets, configs)
 
     pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
@@ -209,6 +210,11 @@ def create_parser() -> argparse.ArgumentParser:
 
 
 def add_train_args(parser: argparse.ArgumentParser):
+
+    backbone_models = list(BACKBONE_REGISTRY.keys())
+    parser.add_argument(
+        "--backbone", type=str, choices=backbone_models, default=backbone_models[0]
+    )
     parser.add_argument("--epochs", "-n", type=int, default=10)
     parser.add_argument("--warmup_epochs", "-w", type=int, default=3)
     parser.add_argument("--patience", "-p", type=int, default=3)

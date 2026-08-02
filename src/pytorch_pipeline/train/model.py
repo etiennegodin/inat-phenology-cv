@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import timm
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+from .backbone import BACKBONE_REGISTRY, Backbone
 
 if TYPE_CHECKING:
     from torch import nn
@@ -55,12 +56,12 @@ class ClassifierHead(nn.Module):
 class PhenologyModel(nn.Module):
     def __init__(self, params: ModelParams, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.backbone = get_backbone()
+        self.backbone: Backbone = BACKBONE_REGISTRY[params.backbone]()
         self.attention = AttentionPooling(
-            self.backbone.num_features, params.attention_neurons, params.attention_dim
+            self.backbone.output_dim, params.attention_neurons, params.attention_dim
         )
         self.head = ClassifierHead(
-            self.backbone.num_features,
+            self.backbone.output_dim,
             params.head_neurons,
             params.head_outputs,
             params.head_dropout_prob,
@@ -79,7 +80,7 @@ class PhenologyModel(nn.Module):
         stacked = torch.cat(x)
 
         # Run backbone on stacked Tensor
-        embeddings = self.backbone(stacked)
+        embeddings = self.backbone.encode(stacked)
 
         # Split embedding per observation
         observations = torch.split(embeddings, indices)
@@ -95,7 +96,3 @@ class PhenologyModel(nn.Module):
 
         predictions = self.head(pooled).squeeze(1)
         return predictions, obs_weights
-
-
-def get_backbone():
-    return timm.create_model("efficientnet_b0", num_classes=0, pretrained=True)

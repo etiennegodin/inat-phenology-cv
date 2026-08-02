@@ -31,11 +31,13 @@ class OptimizerParams:
 
 @dataclass
 class ModelParams:
+    backbone: str
     head_neurons: int
     head_outputs: int
     head_dropout_prob: float
     attention_dim: int
     attention_neurons: int
+    last_blocks: int = 1
 
 
 @dataclass

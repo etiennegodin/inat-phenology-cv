@@ -1,6 +1,7 @@
 # inat_phenology_cv
 Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etiennegodin/inat-obs-scorer)
 
+
 ## v0.2
 - Observation-level mean pooling
 - Observation-aware train/val/test split to prevent leakage
@@ -45,7 +46,7 @@ non_flowering | 	2766| 	7130| 	2.58|
 
 - Attention-based MIL
 
-### 🔲 v0.4 — Multi-label classification
+### ✅ v0.4 — Multi-label classification
 
 - Multi-label classification expanding to full Flowers+Fruits phenology
 - Learning rate scheduling

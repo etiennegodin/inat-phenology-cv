@@ -6,13 +6,13 @@ import pandas as pd
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
-from torchvision import transforms
 
 from ..utils import get_df_from_table
 
 if TYPE_CHECKING:
     from ..utils.config import Config
     from ..utils.params import DatasetParams
+    from .model import PhenologyModel
 
 
 class PhenologyDataset(Dataset):
@@ -44,30 +44,6 @@ class PhenologyDataset(Dataset):
             .agg({"path": list, self.dataset_params.label_col: "first"})
             .reset_index(drop=True)
         )
-
-
-def build_base_transforms(input_size: tuple, mean: tuple, std: tuple):
-    return [
-        transforms.Resize((input_size[1], input_size[2])),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std),
-    ]
-
-
-def build_transforms(
-    base_transforms: list,
-) -> tuple[transforms.Compose, transforms.Compose]:
-    train_transform = transforms.Compose(
-        [
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.RandomPerspective(0.2),
-            transforms.RandomAutocontrast(),
-        ]
-        + base_transforms
-    )
-    val_transform = transforms.Compose(base_transforms)
-    return train_transform, val_transform
 
 
 def split_dataset(
@@ -108,7 +84,7 @@ def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
 
 
 def build_datasets(
-    config: Config, model_configs: dict
+    config: Config, model: PhenologyModel
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
     df = get_samples(config.paths, config.dataset_params)
 
@@ -118,10 +94,7 @@ def build_datasets(
 
     train_df, val_df, test_df = split_dataset(df, config.dataset_params)
 
-    base_transforms = build_base_transforms(
-        **{k: model_configs[k] for k in ("input_size", "mean", "std")}
-    )
-    train_transform, val_transform = build_transforms(base_transforms)
+    train_transform, val_transform = model.backbone.get_transforms()
 
     train_set = PhenologyDataset(train_df, train_transform, config.dataset_params)
     val_set = PhenologyDataset(val_df, val_transform, config.dataset_params)
