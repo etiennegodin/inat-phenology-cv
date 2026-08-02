@@ -48,3 +48,7 @@ non_flowering | 	2766| 	7130| 	2.58|
 ### 🔲 v0.4 — Multi-label classification
 
 - Multi-label classification expanding to full Flowers+Fruits phenology
+- Learning rate scheduling
+
+### 🔲 v0.5 — Optuna set up
+- Optuna setup

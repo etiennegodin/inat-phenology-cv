@@ -154,6 +154,9 @@ def execute(
         )
 
         # Stepping though scheduler
+
+        # to_do: resume mechanics need scheduler.load_state_dict() (or equivalent)
+        # to stay in sync with start_epoch — revisit after Optuna is working end-to-end
         scheduler.step()
         current_lr = scheduler.get_last_lr()  # list, one value per param group
         mlflow.log_metric("lr_backbone", current_lr[0], step=epoch)
