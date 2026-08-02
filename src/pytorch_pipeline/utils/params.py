@@ -11,6 +11,12 @@ class TrainingParams:
 
 
 @dataclass
+class SchedulerParams:
+    warmup_epochs: int = 3
+    total_epoch: int = 10
+
+
+@dataclass
 class OptimizerParams:
     base_lr: float = 1e-3
     backbone_lr: float = field(init=False)

@@ -16,6 +16,7 @@ from .train.dataset import build_datasets
 from .train.factory import (
     build_pipeline_model,
     build_pipeline_optimizer,
+    build_scheduler,
     get_device,
 )
 from .train.persistence import load_checkpoint
@@ -26,6 +27,7 @@ from .utils.params import (
     ModelParams,
     OptimizerParams,
     PathsParams,
+    SchedulerParams,
     TrainingParams,
 )
 
@@ -36,11 +38,11 @@ def train_cmd(args, configs: Config):
 
     mlflow.set_tracking_uri(f"sqlite:///{configs.paths.ml_flow_db}")
 
-    # Intialise dataset params
+    # // Dataset params
     dataset_params = DatasetParams(testing_frac=args.test_frac)
     configs.dataset_params = dataset_params
 
-    # Initialise Data loaders params
+    # // Dataloaders params
     if cuda.is_available():
         dataloader_params = DataLoadersParams(
             batch_size=256, num_workers=2, pin_memory=True, persistent_workers=True
@@ -51,11 +53,19 @@ def train_cmd(args, configs: Config):
         )
     configs.dataloaders_params = dataloader_params
 
-    # Intialize optim params
+    # // Optimiser params
     optim_params = OptimizerParams(
         base_lr=args.base_lr,
     )
     configs.optim_params = optim_params
+
+    ## Scheduler params
+    scheduler_params = SchedulerParams(
+        warmup_epochs=args.warmup_epochs, total_epoch=args.epochs
+    )
+    configs.scheduler_params = scheduler_params
+
+    # // Model params
 
     model_params = ModelParams(
         head_neurons=256,
@@ -71,6 +81,7 @@ def train_cmd(args, configs: Config):
     device = get_device()
     model = build_pipeline_model(device, model_params)
     optimizer = build_pipeline_optimizer(model, optim_params)
+    scheduler = build_scheduler(optimizer, scheduler_params)
     datasets = build_datasets(configs, model.backbone.default_cfg)
     train_loader, val_loader, _ = build_pipeline_dataloaders(datasets, configs)
 
@@ -113,6 +124,7 @@ def train_cmd(args, configs: Config):
             train_loader=train_loader,
             val_loader=val_loader,
             optimizer=optimizer,
+            scheduler=scheduler,
             criterion=criterion,
             checkpoint_path=configs.paths.checkpoint_path,
             training_params=configs.training_params,
@@ -198,6 +210,7 @@ def create_parser() -> argparse.ArgumentParser:
 
 def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--epochs", "-n", type=int, default=10)
+    parser.add_argument("--warmup_epochs", "-w", type=int, default=3)
     parser.add_argument("--patience", "-p", type=int, default=3)
     parser.add_argument("--base_lr", "-lr", type=float, default=0.0001)
     parser.add_argument("--reload", "-r", action="store_true", default=False)

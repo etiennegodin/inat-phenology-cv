@@ -6,6 +6,7 @@ from .params import (
     ModelParams,
     OptimizerParams,
     PathsParams,
+    SchedulerParams,
     TrainingParams,
 )
 
@@ -18,6 +19,8 @@ class Config:
     training_params: TrainingParams = field(init=False)
     dataloaders_params: DataLoadersParams = field(init=False)
     optim_params: OptimizerParams = field(init=False)
+    scheduler_params: SchedulerParams = field(init=False)
+
     test: bool = False
 
     def to_dict(self):

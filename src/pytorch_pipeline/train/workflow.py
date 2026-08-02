@@ -127,6 +127,7 @@ def execute(
     train_loader: DataLoader,
     val_loader: DataLoader,
     optimizer: Optimizer,
+    scheduler,
     criterion: nn.Module,
     checkpoint_path: str,
     training_params: TrainingParams,
@@ -151,6 +152,13 @@ def execute(
             criterion=criterion,
             device=device,
         )
+
+        # Stepping though scheduler
+        scheduler.step()
+        current_lr = scheduler.get_last_lr()  # list, one value per param group
+        mlflow.log_metric("lr_backbone", current_lr[0], step=epoch)
+        mlflow.log_metric("lr_attention", current_lr[1], step=epoch)
+        mlflow.log_metric("lr_head", current_lr[2], step=epoch)
 
         eval_metrics = evaluate(
             model=model,

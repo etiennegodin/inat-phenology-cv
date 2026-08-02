@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import torch
 from torch import optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 
 from ..utils.registry import EFFICIENT_NET_LAST_BLOCK
 from .model import PhenologyModel
@@ -11,7 +12,7 @@ from .model import PhenologyModel
 if TYPE_CHECKING:
     from torch import nn, optim
 
-    from ..utils.params import ModelParams, OptimizerParams
+    from ..utils.params import ModelParams, OptimizerParams, SchedulerParams
 
 
 def get_device() -> torch.device:
@@ -37,6 +38,25 @@ def build_pipeline_model(device: torch.device, model_params: ModelParams) -> nn.
 
     model.to(device)
     return model
+
+
+def build_scheduler(optimizer: optim.Optimizer, params: SchedulerParams, eta_min=1e-7):
+    warmup = LinearLR(
+        optimizer,
+        start_factor=0.1,
+        end_factor=1.0,
+        total_iters=params.warmup_epochs,
+    )
+    decay = CosineAnnealingLR(
+        optimizer,
+        T_max=params.total_epoch - params.warmup_epochs,
+        eta_min=eta_min,
+    )
+    return SequentialLR(
+        optimizer,
+        schedulers=[warmup, decay],
+        milestones=[params.warmup_epochs],
+    )
 
 
 def build_pipeline_optimizer(
