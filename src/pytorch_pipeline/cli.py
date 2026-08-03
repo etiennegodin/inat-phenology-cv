@@ -74,6 +74,7 @@ def train_cmd(args, configs: Config):
         head_dropout_prob=0.5,
         attention_dim=0,
         attention_neurons=128,
+        last_blocks=args.unfreeze,
     )
 
     configs.model_params = model_params
@@ -227,6 +228,8 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--base_lr", "-lr", type=float, default=0.0001)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
     parser.add_argument("--test", "-t", action="store_true", default=False)
+    parser.add_argument("--unfreeze", type=int, default=1)
+
     parser.add_argument(
         "--test_frac",
         "-tf",

@@ -46,7 +46,7 @@ class ModelParams:
     head_dropout_prob: float
     attention_dim: int
     attention_neurons: int
-    last_blocks: int = 1
+    last_blocks: int
 
     def to_dict(self):
         return asdict(self)
