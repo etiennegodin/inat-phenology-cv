@@ -1,13 +1,13 @@
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
 import mlflow
+import yaml
 from dotenv import load_dotenv
 from mlflow import pytorch
-from torch import cuda, nn
+from torch import nn
 
 from . import train
 from .status import status
@@ -21,7 +21,14 @@ from .train.factory import (
     get_device,
 )
 from .train.persistence import load_checkpoint
-from .utils import Config, clean_data, get_pos_weights, init_logger, update_dataset
+from .utils import (
+    Config,
+    clean_data,
+    get_pos_weights,
+    init_logger,
+    resolve_env_config_path,
+    update_dataset,
+)
 from .utils.params import (
     DataLoadersParams,
     DatasetParams,
@@ -44,16 +51,8 @@ def train_cmd(args, configs: Config):
     configs.dataset_params = dataset_params
 
     # // Dataloaders params
-    if cuda.is_available():
-        dataloader_params = DataLoadersParams(
-            num_workers=4, pin_memory=True, persistent_workers=False
-        )
-        configs.cuda = True
-    else:
-        dataloader_params = DataLoadersParams(
-            num_workers=0, pin_memory=False, persistent_workers=False
-        )
-    configs.dataloaders_params = dataloader_params
+
+    # configs.dataloaders_params = configs.dataloader_params
 
     # // Optimiser params
     optim_params = OptimizerParams(
@@ -122,7 +121,7 @@ def train_cmd(args, configs: Config):
         mlflow.log_params(model_params.to_dict())
         mlflow.log_params(training_params.to_dict())
         mlflow.log_params(dataset_params.to_dict())
-        mlflow.log_params(dataloader_params.to_dict())
+        mlflow.log_params(configs.dataloaders_params.to_dict())
         mlflow.log_params(optim_params.to_dict())
         mlflow.log_params(scheduler_params.to_dict())
 
@@ -247,15 +246,17 @@ def main():
     logger = init_logger(log_path, logging.INFO)
     logger.info("Starting")
     # Set up paths
-    paths = PathsParams(root=os.environ.get("INAT_DATA_ROOT", ""))
 
-    # Set up pipeline configs
-    configs = Config(
-        paths=paths,
-    )
+    # Set up environment specific configs
+    config_path = resolve_env_config_path()
+    with open(config_path, "r") as file:
+        env_configs = yaml.safe_load(file)
+    paths_params = PathsParams(**env_configs["paths"])
+    dataloader_params = DataLoadersParams(**env_configs["dataloader_params"])
+
+    configs = Config(paths=paths_params, dataloaders_params=dataloader_params)
 
     # Execute command
-
     if hasattr(args, "func"):
         exit_code = args.func(args, configs)
         sys.exit(exit_code)

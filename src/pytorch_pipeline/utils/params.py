@@ -54,11 +54,12 @@ class ModelParams:
 
 @dataclass
 class DataLoadersParams:
-    batch_size: int = 32
-    max_images: int = 32
-    num_workers: int = 2
-    pin_memory: bool = False
-    persistent_workers: bool = False
+    batch_size: int
+    max_images: int
+    num_workers: int
+    pin_memory: bool
+    persistent_workers: bool
+    use_max_images: bool
 
     def to_dict(self):
         return asdict(self)
@@ -67,20 +68,20 @@ class DataLoadersParams:
 @dataclass
 class PathsParams:
     root: str
+    data_root: str
+    image_dir: str
+
     checkpoint_path: str = field(init=False)
     db_path: str = field(init=False)
     ml_flow_db: str = field(init=False)
     source_db_path: str = "/home/etienne/projects/inatML/data/inat_raw.duckdb"
-    image_dir: str = field(init=False)
 
     def __post_init__(self):
-
-        self.image_dir = os.environ.get(
-            "INAT_IMAGE_DIR", os.path.join(self.root, "images")
+        self.db_path = os.path.join(self.data_root, "cv_raw.duckdb")
+        self.checkpoint_path = os.path.join(
+            self.data_root, "checkpoints/checkpoint.pth"
         )
-        self.db_path = os.path.join(self.root, "cv_raw.duckdb")
-        self.checkpoint_path = os.path.join(self.root, "checkpoints/checkpoint.pth")
-        self.ml_flow_db = os.path.join(self.root, "mlflow.db")
+        self.ml_flow_db = os.path.join(self.data_root, "mlflow.db")
 
     def to_dict(self):
         return asdict(self)

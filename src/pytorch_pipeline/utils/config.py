@@ -14,10 +14,10 @@ from .params import (
 @dataclass
 class Config:
     paths: PathsParams
+    dataloaders_params: DataLoadersParams
     dataset_params: DatasetParams = field(default_factory=DatasetParams)
     model_params: ModelParams = field(init=False)
     training_params: TrainingParams = field(init=False)
-    dataloaders_params: DataLoadersParams = field(init=False)
     optim_params: OptimizerParams = field(init=False)
     scheduler_params: SchedulerParams = field(init=False)
     cuda: bool = False

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from torch import Tensor, device, nn
@@ -14,6 +15,14 @@ import numpy as np
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_env_config_path() -> Path:
+    if os.environ.get("COLAB_GPU"):
+        return Path("configs/colab_gpu.yaml")
+    elif os.environ.get("COLAB_CPU"):
+        return Path("configs/colab_cpu.yaml")
+    return Path("configs/local.yaml")
 
 
 def freeze(block: nn.Module):

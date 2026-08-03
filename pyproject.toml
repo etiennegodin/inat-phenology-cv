@@ -15,7 +15,8 @@ dependencies = [
     "tqdm",
     "python-dotenv",
     "mlflow",
-    "open-clip-torch"
+    "open-clip-torch",
+    'pyyaml'
 
 ]
 

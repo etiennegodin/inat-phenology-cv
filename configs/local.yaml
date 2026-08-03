@@ -1,0 +1,12 @@
+paths :
+  root : '/home/etienne/projects/inat-phenology-cv/'
+  data_root : '/home/etienne/projects/inat-phenology-cv/data'
+  image_dir : '/home/etienne/projects/inat-phenology-cv/data/images'
+
+dataloader_params:
+    batch_size: 4
+    max_images: 32
+    num_workers: 4
+    pin_memory: false
+    persistent_workers: false
+    use_max_images : true
