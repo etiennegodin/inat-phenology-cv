@@ -7,7 +7,7 @@ import mlflow
 import yaml
 from dotenv import load_dotenv
 from mlflow import pytorch
-from torch import nn
+from torch import cuda, nn
 
 from . import train
 from .status import status
@@ -41,18 +41,21 @@ from .utils.params import (
 
 
 def train_cmd(args, configs: Config):
+
+    # Fast fail if in colab without GPU
+    if not cuda.is_available() and configs.config_path == Path("configs/colab.yaml"):
+        raise RuntimeError(
+            f"Attempted to load {configs.config_path} on a non-gpu colab session"
+        )
+
     # Set test
     configs.test = args.test
 
-    mlflow.set_tracking_uri(f"sqlite:///{configs.paths.ml_flow_db}")
+    mlflow.set_tracking_uri(f"sqlite:///{configs.paths_params.ml_flow_db}")
 
     # // Dataset params
     dataset_params = DatasetParams(testing_frac=args.test_frac)
     configs.dataset_params = dataset_params
-
-    # // Dataloaders params
-
-    # configs.dataloaders_params = configs.dataloader_params
 
     # // Optimiser params
     optim_params = OptimizerParams(
@@ -95,7 +98,7 @@ def train_cmd(args, configs: Config):
     # Reinstate model and optimizer state if reload
     if args.reload:
         model, optimizer, start_epoch, eval_metrics, previous_run_id = load_checkpoint(
-            configs.paths.checkpoint_path, model=model, optimizer=optimizer
+            configs.paths_params.checkpoint_path, model=model, optimizer=optimizer
         )
         best_loss = eval_metrics["val_loss"]
     else:
@@ -110,7 +113,7 @@ def train_cmd(args, configs: Config):
         best_loss=best_loss,
     )
 
-    # Set config params
+    # Set configs params
     configs.training_params = training_params
 
     mlflow.set_experiment("cv_inat_v0.4")
@@ -136,7 +139,7 @@ def train_cmd(args, configs: Config):
             optimizer=optimizer,
             scheduler=scheduler,
             criterion=criterion,
-            checkpoint_path=configs.paths.checkpoint_path,
+            checkpoint_path=configs.paths_params.checkpoint_path,
             training_params=configs.training_params,
         )
 
@@ -176,7 +179,7 @@ def test_cmd(args, configs: Config):
     # Tes loaders
     loaders = build_pipeline_dataloaders(configs, model)
     model, optimizer, start_epoch, eval_metrics, previous_run_id = load_checkpoint(
-        configs.paths.checkpoint_path, model=model, optimizer=optimizer
+        configs.paths_params.checkpoint_path, model=model, optimizer=optimizer
     )
 
     test.execute(device, model, loaders[2], criterion)
@@ -185,8 +188,8 @@ def test_cmd(args, configs: Config):
 
 def update_cmd(args, configs: Config):
     # Clean and update dataset
-    clean_data(configs.paths.image_dir)
-    update_dataset(configs.paths)
+    clean_data(configs.paths_params.image_dir)
+    update_dataset(configs.paths_params)
 
 
 def status_cmd(args, configs: Config):
@@ -259,7 +262,9 @@ def main():
     paths_params = PathsParams(**env_configs["paths"])
     dataloader_params = DataLoadersParams(**env_configs["dataloader_params"])
 
-    configs = Config(paths=paths_params, dataloaders_params=dataloader_params)
+    configs = Config(
+        config_path, paths_params=paths_params, dataloaders_params=dataloader_params
+    )
 
     # Execute command
     if hasattr(args, "func"):

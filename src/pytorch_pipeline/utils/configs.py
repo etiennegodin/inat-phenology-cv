@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 from .params import (
     DataLoadersParams,
@@ -13,7 +14,8 @@ from .params import (
 
 @dataclass
 class Config:
-    paths: PathsParams
+    config_path: Path
+    paths_params: PathsParams
     dataloaders_params: DataLoadersParams
     dataset_params: DatasetParams = field(default_factory=DatasetParams)
     model_params: ModelParams = field(init=False)

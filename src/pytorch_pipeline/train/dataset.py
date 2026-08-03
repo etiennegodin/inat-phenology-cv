@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 from ..utils import get_df_from_table
 
 if TYPE_CHECKING:
-    from ..utils.config import Config
+    from ..utils.configs import Config
     from ..utils.params import DatasetParams
     from .model import PhenologyModel
 
@@ -86,20 +86,20 @@ def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
 
 
 def build_datasets(
-    config: Config, model: PhenologyModel
+    configs: Config, model: PhenologyModel
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
-    df = get_samples(config.paths, config.dataset_params)
+    df = get_samples(configs.paths_params, configs.dataset_params)
 
     # Reduce data set size if testing
-    if config.test:
-        df = reduce_dataset(df, config.dataset_params)
+    if configs.test:
+        df = reduce_dataset(df, configs.dataset_params)
 
-    train_df, val_df, test_df = split_dataset(df, config.dataset_params)
+    train_df, val_df, test_df = split_dataset(df, configs.dataset_params)
 
     train_transform, val_transform = model.backbone.get_transforms()
 
-    train_set = PhenologyDataset(train_df, train_transform, config.dataset_params)
-    val_set = PhenologyDataset(val_df, val_transform, config.dataset_params)
-    test_set = PhenologyDataset(test_df, val_transform, config.dataset_params)
+    train_set = PhenologyDataset(train_df, train_transform, configs.dataset_params)
+    val_set = PhenologyDataset(val_df, val_transform, configs.dataset_params)
+    test_set = PhenologyDataset(test_df, val_transform, configs.dataset_params)
 
     return train_set, val_set, test_set

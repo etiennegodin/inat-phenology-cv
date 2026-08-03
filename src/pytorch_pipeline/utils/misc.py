@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 def resolve_env_config_path() -> Path:
     if os.environ.get("COLAB_GPU"):
-        return Path("configs/colab_gpu.yaml")
-    elif os.environ.get("COLAB_CPU"):
-        return Path("configs/colab_cpu.yaml")
+        return Path("configs/colab.yaml")
     return Path("configs/local.yaml")
 
 
