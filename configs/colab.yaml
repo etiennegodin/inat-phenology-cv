@@ -3,11 +3,13 @@ paths :
   data_root : '/content/inat-phenology-cv/data'
   image_dir : '/content/images'
   db_path : '/content/drive/MyDrive/inat-phenology-cv/data/cv_raw.duckdb'
+  checkpoint_path : '/content/drive/MyDrive/inat-phenology-cv/data/checkpoints/checkpoint.pth'
+  ml_flow_db : '/content/inat-phenology-cv/data/mlflow.db'
 
 dataloader_params:
     batch_size: 256
-    max_images: 32
+    max_images: 256
     num_workers: 2
     pin_memory: true
     persistent_workers: true
-    use_max_images : false
+    use_max_images : true

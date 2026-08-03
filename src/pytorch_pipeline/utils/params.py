@@ -1,4 +1,3 @@
-import os
 from dataclasses import asdict, dataclass, field
 
 
@@ -71,15 +70,9 @@ class PathsParams:
     data_root: str
     image_dir: str
     db_path: str
-    checkpoint_path: str = field(init=False)
-    ml_flow_db: str = field(init=False)
+    checkpoint_path: str
+    ml_flow_db: str
     source_db_path: str = "/home/etienne/projects/inatML/data/inat_raw.duckdb"
-
-    def __post_init__(self):
-        self.checkpoint_path = os.path.join(
-            self.data_root, "checkpoints/checkpoint.pth"
-        )
-        self.ml_flow_db = os.path.join(self.data_root, "mlflow.db")
 
     def to_dict(self):
         return asdict(self)
