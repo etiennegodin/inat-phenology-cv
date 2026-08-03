@@ -85,7 +85,9 @@ def train_cmd(args, configs: Config):
     optimizer = build_pipeline_optimizer(model, optim_params)
     scheduler = build_scheduler(optimizer, scheduler_params)
     datasets = build_datasets(configs, model)
-    train_loader, val_loader, _ = build_pipeline_dataloaders(datasets, configs)
+    train_loader, val_loader, _ = build_pipeline_dataloaders(
+        datasets, configs.dataloaders_params
+    )
 
     pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)

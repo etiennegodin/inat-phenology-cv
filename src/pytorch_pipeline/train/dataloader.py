@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from .batch_sampler import MaxImagesBatchSampler
 
 if TYPE_CHECKING:
-    from ..utils import Config
+    from ..utils.params import DataLoadersParams
     from .dataset import PhenologyDataset
 
 
@@ -23,48 +23,47 @@ def collate_fn(batch: list[tuple[torch.Tensor, torch.Tensor]]):
 
 def build_pipeline_dataloaders(
     datasets: tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset],
-    config: Config,
+    params: DataLoadersParams,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
 
-    train_set = datasets[0]
-    val_set = datasets[1]
-    test_set = datasets[2]
+    if params.use_max_images:
+        samplers = []
+        loaders = []
+        for i, set in enumerate(datasets):
+            samplers.append(
+                MaxImagesBatchSampler(
+                    set.bag_sizes,
+                    max_images=params.max_images,
+                    shuffle=True if i == 0 else False,
+                )
+            )
 
-    train_sampler = MaxImagesBatchSampler(
-        train_set.bag_sizes,
-        max_images=config.dataloaders_params.max_images,
-    )
-    val_sampler = MaxImagesBatchSampler(
-        val_set.bag_sizes,
-        max_images=config.dataloaders_params.max_images,
-    )
-    test_sampler = MaxImagesBatchSampler(
-        test_set.bag_sizes,
-        max_images=config.dataloaders_params.max_images,
-    )
+        for sampler, dataset in zip(samplers, datasets):
+            loaders.append(
+                DataLoader(
+                    dataset,
+                    batch_sampler=sampler,
+                    collate_fn=collate_fn,
+                    num_workers=params.num_workers,
+                    pin_memory=params.pin_memory,
+                    persistent_workers=params.persistent_workers,
+                )
+            )
+        return tuple(loaders)
 
-    train_loader = DataLoader(
-        train_set,
-        batch_sampler=train_sampler,
-        collate_fn=collate_fn,
-        num_workers=config.dataloaders_params.num_workers,
-        pin_memory=config.dataloaders_params.pin_memory,
-        persistent_workers=config.dataloaders_params.persistent_workers,
-    )
-    val_loader = DataLoader(
-        val_set,
-        batch_sampler=val_sampler,
-        collate_fn=collate_fn,
-        num_workers=config.dataloaders_params.num_workers,
-        pin_memory=config.dataloaders_params.pin_memory,
-        persistent_workers=config.dataloaders_params.persistent_workers,
-    )
-    test_loader = DataLoader(
-        test_set,
-        batch_sampler=test_sampler,
-        collate_fn=collate_fn,
-        num_workers=config.dataloaders_params.num_workers,
-        pin_memory=config.dataloaders_params.pin_memory,
-        persistent_workers=config.dataloaders_params.persistent_workers,
-    )
-    return train_loader, val_loader, test_loader
+    else:
+        loaders = []
+        for i, set in enumerate(datasets):
+            loaders.append(
+                DataLoader(
+                    set,
+                    batch_size=params.batch_size,
+                    shuffle=True if i == 0 else False,
+                    collate_fn=collate_fn,
+                    num_workers=params.num_workers,
+                    pin_memory=params.pin_memory,
+                    persistent_workers=params.persistent_workers,
+                )
+            )
+
+        return tuple(loaders)
