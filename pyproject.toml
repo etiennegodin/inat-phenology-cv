@@ -12,12 +12,18 @@ description = "Pytorch inat vision"
 authors = [{ name="Etienne Godin", email="etiennegodin@duck.com" }]
 
 dependencies = [
+    "pandas>=2.3,<2.4",
+    "matplotlib==3.10.9",
+    "duckdb==1.5.2" ,
+    "optuna==4.8.0",
+    "scikit-learn>=1.7,<1.8",
+    "mlflow==3.11.1",
+    "open-clip-torch",
+    "seaborn",
+    'pyyaml',
+    "ipykernel",          # Required for VS Code Jupyter to work correctly
     "tqdm",
     "python-dotenv",
-    "mlflow",
-    "open-clip-torch",
-    'pyyaml'
-
 ]
 
 [project.optional-dependencies]
