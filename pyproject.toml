@@ -12,16 +12,15 @@ description = "Pytorch inat vision"
 authors = [{ name="Etienne Godin", email="etiennegodin@duck.com" }]
 
 dependencies = [
-    "pandas>=2.3,<2.4",
-    "matplotlib==3.10.9",
-    "duckdb==1.5.2" ,
-    "optuna==4.8.0",
+    "pandas>=2.2,<2.4",
+    "matplotlib>=3.10,<3.11",
+    "duckdb>=1.5,<1.6",
+    "optuna>=4.8,<4.9",
     "scikit-learn>=1.7,<1.8",
-    "mlflow==3.11.1",
+    "mlflow>=3.11,<3.12",
     "open-clip-torch",
     "seaborn",
     'pyyaml',
-    "ipykernel",          # Required for VS Code Jupyter to work correctly
     "tqdm",
     "python-dotenv",
 ]
@@ -34,7 +33,9 @@ dev = [
     "ruff",
     "dvc",
     "jupyterlab",
-    "pre-commit"
+    "pre-commit",
+    "ipykernel",          # Required for VS Code Jupyter to work correctly
+
 ]
 
 [project.scripts]   # <-- entry point CLI
