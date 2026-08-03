@@ -100,13 +100,13 @@ class BioClipBackbone(Backbone):
             open_clip.create_model_and_transforms("hf-hub:imageomics/bioclip")
         )
 
-        self.set_output_dim()
-
         self.train_transform: transforms.Compose
         self.val_transform: transforms.Compose
         self.encoder: transformer.VisionTransformer = (
             self.model.visual
         )  # image tower only
+
+        self.set_output_dim()
 
     def encode(self, input: Tensor) -> Tensor:
         return self.encoder(input)
