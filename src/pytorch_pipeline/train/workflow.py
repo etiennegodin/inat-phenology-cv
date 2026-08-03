@@ -41,11 +41,17 @@ def train_one_epoch(
     criterion: nn.Module,
     device: device,
 ):
+    data_time = 0
+    compute_time = 0
+    t0 = time.time()
     logger.debug(f"Start train one epoch {epoch}")
     total_loss = 0
     model.train()
-
+    t0 = time.time()
     for images, labels in dataloader:
+        t1 = time.time()
+        data_time += t1 - t0
+
         labels: Tensor
         images = [t.to(device) for t in images]
         labels = labels.to(device)
@@ -60,6 +66,7 @@ def train_one_epoch(
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
+            torch.cuda.synchronize()
         else:
             logger.info("start prediction")
             predictions, weights = model(images)
@@ -68,6 +75,9 @@ def train_one_epoch(
             loss.backward()
             optimizer.step()
 
+        t0 = time.time()
+        compute_time += t0 - t1
+
         total_loss += loss.item()
 
     train_loss = total_loss / len(dataloader)
@@ -75,7 +85,7 @@ def train_one_epoch(
     # MLflow 'step' tells it which epoch this is for the graph
     mlflow.log_metric("train_loss", train_loss, step=epoch)
 
-    return train_loss
+    return train_loss, (data_time, compute_time)
 
 
 def evaluate(
@@ -155,8 +165,8 @@ def execute(
         ):
             print(f"Skipping epoch {epoch}")
             continue
-        start = time.time()
-        train_loss = train_one_epoch(
+
+        train_loss, times = train_one_epoch(
             epoch,
             model=model,
             dataloader=train_loader,
@@ -174,6 +184,8 @@ def execute(
         mlflow.log_metric("lr_backbone", float(current_lr[0]), step=epoch)
         mlflow.log_metric("lr_attention", float(current_lr[1]), step=epoch)
         mlflow.log_metric("lr_head", float(current_lr[2]), step=epoch)
+        mlflow.log_metric("train_data_time", float(times[0]), step=epoch)
+        mlflow.log_metric("train_compute_time", float(times[1]), step=epoch)
 
         eval_metrics = evaluate(
             model=model,
@@ -182,7 +194,6 @@ def execute(
             device=device,
             epoch=epoch,
         )
-        elapsed = time.time() - start
         val_loss = eval_metrics["val_loss"]
         gap = val_loss - train_loss
         mlflow.log_metric("loss_gap", gap, step=epoch)
@@ -191,7 +202,7 @@ def execute(
             f"Epoch {epoch}: train={train_loss:.3f} val={eval_metrics['val_loss']:.3f} "
             f"gap={gap:.3f} "
             f"roc_auc_macro={float(eval_metrics['val_roc_auc_macro']):.3f} "
-            f"time={elapsed:.3f}s"
+            f"data_time={times[0]:.1f}s compute_time={times[1]:.1f}s"
         )
 
         if device.type == "cuda" and epoch == 0:
