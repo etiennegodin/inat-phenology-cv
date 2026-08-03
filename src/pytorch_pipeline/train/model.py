@@ -15,13 +15,11 @@ if TYPE_CHECKING:
 
 
 class AttentionPooling(nn.Module):
-    def __init__(
-        self, in_features: int, neurons: int, dimension: int, *args, **kwargs
-    ) -> None:
+    def __init__(self, in_features: int, neurons: int, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.V = nn.Linear(in_features, neurons)
         self.w = nn.Linear(neurons, 1)
-        self.dim = dimension
+        self.dim = 0  # collapses on axis 0 (images)
 
     def forward(self, chunk):
         # chunk: (n_images, in_features)
@@ -58,7 +56,8 @@ class PhenologyModel(nn.Module):
         super().__init__(*args, **kwargs)
         self.backbone: Backbone = BACKBONE_REGISTRY[params.backbone]()
         self.attention = AttentionPooling(
-            self.backbone.output_dim, params.attention_neurons, params.attention_dim
+            in_features=self.backbone.output_dim,
+            neurons=params.attention_neurons,
         )
         self.head = ClassifierHead(
             self.backbone.output_dim,

@@ -43,7 +43,6 @@ class ModelParams:
     head_neurons: int
     head_outputs: int
     head_dropout_prob: float
-    attention_dim: int
     attention_neurons: int
     last_blocks: int
 

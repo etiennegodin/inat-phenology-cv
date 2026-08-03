@@ -75,7 +75,6 @@ def train_cmd(args, configs: Config):
         head_neurons=256,
         head_outputs=3,
         head_dropout_prob=0.5,
-        attention_dim=0,
         attention_neurons=128,
         last_blocks=args.unfreeze,
     )
