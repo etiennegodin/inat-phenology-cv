@@ -2,6 +2,8 @@ paths :
   root : '/home/etienne/projects/inat-phenology-cv/'
   data_root : '/home/etienne/projects/inat-phenology-cv/data'
   image_dir : '/home/etienne/projects/inat-phenology-cv/data/images'
+  db_path : '/home/etienne/projects/inat-phenology-cv/data/cv_raw.duckdb'
+
 
 dataloader_params:
     batch_size: 4

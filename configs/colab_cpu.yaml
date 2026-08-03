@@ -2,6 +2,7 @@ paths :
   root : '/content/inat-phenology-cv'
   data_root : '/content/inat-phenology-cv/data'
   image_dir : '/content/images'
+  db_path : '/content/drive/MyDrive/inat-phenology-cv/data/cv_raw.duckdb'
 
 dataloader_params:
     batch_size: 32

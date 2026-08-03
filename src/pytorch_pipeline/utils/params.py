@@ -70,14 +70,12 @@ class PathsParams:
     root: str
     data_root: str
     image_dir: str
-
+    db_path: str
     checkpoint_path: str = field(init=False)
-    db_path: str = field(init=False)
     ml_flow_db: str = field(init=False)
     source_db_path: str = "/home/etienne/projects/inatML/data/inat_raw.duckdb"
 
     def __post_init__(self):
-        self.db_path = os.path.join(self.data_root, "cv_raw.duckdb")
         self.checkpoint_path = os.path.join(
             self.data_root, "checkpoints/checkpoint.pth"
         )
