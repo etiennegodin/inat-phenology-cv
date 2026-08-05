@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 
 def resolve_env_config_path() -> Path:
     if os.environ.get("COLAB_GPU"):
-        return Path("configs/colab.yaml")
-    return Path("configs/local.yaml")
+        config_path = Path("configs/colab.yaml")
+    else:
+        config_path = Path("configs/local.yaml")
+    logger.debug(f"Resolved config path '{config_path}'")
+    return config_path
 
 
 def freeze(block: nn.Module):

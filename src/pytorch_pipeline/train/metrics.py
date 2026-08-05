@@ -22,8 +22,9 @@ from sklearn.metrics import (
 from ..utils.registry import LABEL_MAPPING
 
 if TYPE_CHECKING:
-    import torch
     from torch.utils.data import Dataset
+
+    from .model import PhenologyModel
 
 logger = logging.getLogger(__name__)
 
@@ -404,7 +405,7 @@ def log_best_artifacts(eval_metrics: dict[str, Any]) -> None:
 
 
 def log_experiment_metadata(
-    model: torch.nn.Module,
+    model: PhenologyModel,
     train_dataset: Dataset,
     val_dataset: Dataset,
 ) -> None:
@@ -416,11 +417,60 @@ def log_experiment_metadata(
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     frozen_params = total_params - trainable_params
 
+    # Backbone params
+    backbone_params = sum(p.numel() for p in model.backbone.parameters())
+    backbone_trainable_params = sum(
+        p.numel() for p in model.backbone.parameters() if p.requires_grad
+    )
+    backbone_frozen_params = backbone_params - backbone_trainable_params
+
+    # Attention params
+    attention_params = sum(p.numel() for p in model.attention.parameters())
+    attention_trainable_params = sum(
+        p.numel() for p in model.attention.parameters() if p.requires_grad
+    )
+    attention_frozen_params = attention_params - attention_trainable_params
+
+    # Classifier params
+    classifier_params = sum(p.numel() for p in model.head.parameters())
+    classifier_trainable_params = sum(
+        p.numel() for p in model.head.parameters() if p.requires_grad
+    )
+    classifier_frozen_params = classifier_params - classifier_trainable_params
+
     model_summary = {
-        "total_params": total_params,
-        "trainable_params": trainable_params,
-        "frozen_params": frozen_params,
-        "trainable_percent": round((trainable_params / max(total_params, 1)) * 100, 2),
+        "total": {
+            "total_params": total_params,
+            "trainable_params": trainable_params,
+            "frozen_params": frozen_params,
+            "trainable_percent": round(
+                (trainable_params / max(total_params, 1)) * 100, 2
+            ),
+        },
+        "backbone_architecture": {
+            "params": backbone_params,
+            "trainable_params": backbone_trainable_params,
+            "frozen_params": backbone_frozen_params,
+            "trainable_percent": round(
+                (backbone_trainable_params / max(backbone_params, 1)) * 100, 2
+            ),
+        },
+        "attention_architecture": {
+            "params": attention_params,
+            "trainable_params": attention_trainable_params,
+            "frozen_params": attention_frozen_params,
+            "trainable_percent": round(
+                (attention_trainable_params / max(attention_params, 1)) * 100, 2
+            ),
+        },
+        "classifier_architecture": {
+            "params": classifier_params,
+            "trainable_params": classifier_trainable_params,
+            "frozen_params": classifier_frozen_params,
+            "trainable_percent": round(
+                (classifier_trainable_params / max(classifier_params, 1)) * 100, 2
+            ),
+        },
     }
     mlflow.log_params(model_summary)
 
