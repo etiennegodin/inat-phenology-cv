@@ -305,15 +305,6 @@ def execute(
             f"Compute: {eval_times[1]:.1f}s"
         )
 
-        if device.type == "cuda" and epoch == 0:
-            alloc_gb = torch.cuda.memory_allocated() / 1e9
-            total_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
-            logger.info(f"GPU Memory allocated: {alloc_gb:.2f}GB / {total_gb:.2f}GB")
-            if mlflow.active_run():
-                mlflow.log_metric(
-                    "system/gpu_memory_allocated_gb", alloc_gb, step=epoch
-                )
-
         if val_loss < best_loss:
             best_loss = val_loss
             best_eval_metrics = eval_metrics
