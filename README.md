@@ -58,3 +58,5 @@ non_flowering | 	2766| 	7130| 	2.58|
 
 ### 🔲 v0.5 — Optuna set up
 - Optuna setup
+- Pipeline features
+    - Better step and metrics logging
