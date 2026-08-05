@@ -8,8 +8,9 @@ import mlflow
 import numpy as np
 import torch
 from torch.amp import autocast_mode, grad_scaler
+from tqdm import tqdm
 
-from .metrics import log_best_artifacts, log_metrics
+from .metrics import compute_attention_metrics, log_best_artifacts, log_metrics
 from .persistence import load_checkpoint, save_checkpoint
 
 if TYPE_CHECKING:
@@ -26,14 +27,6 @@ logger = logging.getLogger(__name__)
 scaler = grad_scaler.GradScaler()
 
 
-def mem(msg):
-    print(
-        msg,
-        torch.cuda.memory_allocated() / 1024**2,
-        torch.cuda.memory_reserved() / 1024**2,
-    )
-
-
 def train_one_epoch(
     epoch: int,
     model: PhenologyModel,
@@ -41,31 +34,34 @@ def train_one_epoch(
     optimizer: Optimizer,
     criterion: nn.Module,
     device: device,
-):
-    data_time = 0
-    compute_time = 0
-    t0 = time.time()
-    logger.debug(f"Start train one epoch {epoch}")
-    total_loss = 0
+    log_step_interval: int = 10,
+) -> tuple[float, tuple[float, float], dict[str, float]]:
+    """Train the model for one epoch with progress tracking and step logging."""
+    data_time = 0.0
+    compute_time = 0.0
+    total_loss = 0.0
     model.train()
-    t0 = time.time()
 
-    batches = 0
     img_per_batch = []
     obs_per_batch = []
+    all_obs_weights = []
 
-    for images, labels in dataloader:
-        indices = []
-        for i in images:
-            indices.append(i.size()[0])
+    pbar = tqdm(
+        dataloader,
+        desc=f"Epoch {epoch:02d} [Train]",
+        leave=False,
+        dynamic_ncols=True,
+    )
 
-        # Stats
+    t0 = time.time()
+    for step, (images, labels) in enumerate(pbar):
+        # Image and observation counts
+        indices = [img.size(0) for img in images]
         total_img = sum(indices)
-        obs = len(indices)
-        obs_per_batch.append(obs)
-        img_per_batch.append(total_img)
+        obs_count = len(indices)
 
-        batches += 1
+        obs_per_batch.append(obs_count)
+        img_per_batch.append(total_img)
 
         t1 = time.time()
         data_time += t1 - t0
@@ -76,7 +72,6 @@ def train_one_epoch(
 
         optimizer.zero_grad(set_to_none=True)
 
-        # Run foward prop and backprop
         if device.type == "cuda":
             with autocast_mode.autocast(device_type=device.type):
                 predictions, weights = model(images)
@@ -86,9 +81,7 @@ def train_one_epoch(
             scaler.update()
             torch.cuda.synchronize()
         else:
-            logger.info("start prediction")
             predictions, weights = model(images)
-            logger.info("predictions")
             loss = criterion(predictions, labels)
             loss.backward()
             optimizer.step()
@@ -96,25 +89,43 @@ def train_one_epoch(
         t0 = time.time()
         compute_time += t0 - t1
 
-        total_loss += loss.item()
+        current_loss = loss.item()
+        total_loss += current_loss
+        all_obs_weights.append(weights)
+
+        # Update tqdm status bar
+        pbar.set_postfix(
+            {
+                "loss": f"{current_loss:.4f}",
+                "avg_loss": f"{total_loss / (step + 1):.4f}",
+                "imgs/batch": total_img,
+            }
+        )
+
+        # Log step-level metrics to MLflow at interval
+        if (
+            mlflow.active_run()
+            and log_step_interval > 0
+            and step % log_step_interval == 0
+        ):
+            global_step = epoch * len(dataloader) + step
+            mlflow.log_metric("batch_train_loss", current_loss, step=global_step)
 
     train_loss = total_loss / len(dataloader)
 
-    print("total_images", np.sum(img_per_batch))
-    print("total_batches", batches)
-    print("total obs", len(dataloader))
+    # Calculate attention metrics for training pass
+    train_attn_metrics = compute_attention_metrics(all_obs_weights)
+    if mlflow.active_run():
+        mlflow.log_metric("train_loss", train_loss, step=epoch)
+        for k, v in train_attn_metrics.items():
+            mlflow.log_metric(f"train_{k}", v, step=epoch)
 
-    print(f"observation per batch mean {np.mean(obs_per_batch):.3f}")
-    print(f"observation per batch std {np.std(obs_per_batch):.3f}")
-    print(f"imgs per batch mean {np.mean(img_per_batch):.3f}")
-    print(f"imgs per batch std {np.std(img_per_batch):.3f}")
+    logger.debug(
+        f"Epoch {epoch} Train: Loss={train_loss:.6f} | "
+        f"Total Imgs={np.sum(img_per_batch)} | Total Obs={len(dataloader)}"
+    )
 
-    print(f"imgs per observation mean {(np.sum(img_per_batch) / len(dataloader)):.3f}")
-
-    # MLflow 'step' tells it which epoch this is for the graph
-    mlflow.log_metric("train_loss", train_loss, step=epoch)
-
-    return train_loss, (data_time, compute_time)
+    return train_loss, (data_time, compute_time), train_attn_metrics
 
 
 def evaluate(
@@ -124,21 +135,28 @@ def evaluate(
     device: device,
     epoch: int,
 ) -> tuple[dict[str, Any], tuple[float, float]]:
+    """Evaluate the model on validation set with rich multi-label metrics."""
+    data_time = 0.0
+    compute_time = 0.0
 
-    data_time = 0
-    compute_time = 0
-    t0 = time.time()
-
-    total_loss = 0
-    correct = 0
-    total = 0
-    all_preds = []
+    total_loss = 0.0
+    all_preds_bin = []
     all_labels = []
     all_preds_raw = []
+    all_obs_weights = []
+
     model.eval()
 
+    pbar = tqdm(
+        dataloader,
+        desc=f"Epoch {epoch:02d} [Val]  ",
+        leave=False,
+        dynamic_ncols=True,
+    )
+
+    t0 = time.time()
     with torch.no_grad():
-        for images, labels in dataloader:
+        for step, (images, labels) in enumerate(pbar):
             labels: Tensor
             images = [t.to(device) for t in images]
             labels = labels.to(device)
@@ -146,12 +164,10 @@ def evaluate(
             t1 = time.time()
             data_time += t1 - t0
 
-            # Run foward prop and backprop
             if device.type == "cuda":
                 with autocast_mode.autocast(device_type=device.type):
                     predictions, weights = model(images)
                     torch.cuda.synchronize()
-
             else:
                 predictions, weights = model(images)
 
@@ -159,29 +175,40 @@ def evaluate(
             total_loss += loss.item()
 
             preds_raw = torch.sigmoid(predictions)
-            preds = (preds_raw > 0.5).float()
+            preds_bin = (preds_raw >= 0.5).float()
 
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
-            all_preds.append(preds)
+            all_preds_bin.append(preds_bin)
             all_labels.append(labels)
             all_preds_raw.append(preds_raw)
+            all_obs_weights.append(weights)
+
             t0 = time.time()
             compute_time += t0 - t1
 
-    # Convert back to numpy arrays for metrics
-    all_preds = torch.cat(all_preds).detach().cpu().numpy()
-    all_labels = torch.cat(all_labels).detach().cpu().numpy()
-    all_preds_raw = torch.cat(all_preds_raw).detach().cpu().numpy()
+            pbar.set_postfix({"val_loss": f"{total_loss / (step + 1):.4f}"})
 
-    base_metrics = {
-        "val_loss": total_loss / len(dataloader),
-    }
+    # Convert tensors back to numpy arrays
+    all_preds_bin_np = torch.cat(all_preds_bin).detach().cpu().numpy()
+    all_labels_np = torch.cat(all_labels).detach().cpu().numpy()
+    all_preds_raw_np = torch.cat(all_preds_raw).detach().cpu().numpy()
+
+    val_loss = total_loss / len(dataloader)
+    base_metrics = {"val_loss": val_loss}
+
     if mlflow.active_run():
         mlflow.log_metrics(base_metrics, step=epoch)
 
-    eval_metrics = log_metrics(all_preds, all_labels, all_preds_raw, epoch)
+    # Compute & log comprehensive multi-label & attention metrics
+    eval_metrics = log_metrics(
+        all_preds=all_preds_bin_np,
+        all_labels=all_labels_np,
+        all_preds_raw=all_preds_raw_np,
+        epoch=epoch,
+        obs_weights=all_obs_weights,
+        prefix="val",
+    )
     eval_metrics.update(base_metrics)
+
     return eval_metrics, (data_time, compute_time)
 
 
@@ -196,38 +223,48 @@ def execute(
     checkpoint_path: str,
     training_params: TrainingParams,
 ):
-
+    """Execute training pipeline over requested epochs with full logging."""
     patience_counter = 0
     best_loss = training_params.best_loss
+    best_eval_metrics = {}
+
+    log_step_interval = getattr(training_params, "log_step_interval", 10)
+
+    logger.info(
+        f"Starting training run: total epochs={training_params.epochs}, "
+        f"patience={training_params.patience}, device={device.type}"
+    )
 
     for epoch in range(training_params.epochs):
         if (
             training_params.start_epoch is not None
             and epoch <= training_params.start_epoch
         ):
-            print(f"Skipping epoch {epoch}")
+            logger.info(f"Skipping epoch {epoch} (resume requested)")
             continue
 
-        train_loss, train_times = train_one_epoch(
+        epoch_start_time = time.time()
+
+        train_loss, train_times, train_attn = train_one_epoch(
             epoch,
             model=model,
             dataloader=train_loader,
             optimizer=optimizer,
             criterion=criterion,
             device=device,
+            log_step_interval=log_step_interval,
         )
 
-        # Stepping though scheduler
-
-        # to_do: resume mechanics need scheduler.load_state_dict() (or equivalent)
-        # to stay in sync with start_epoch — revisit after Optuna is working end-to-end
+        # Scheduler step
         scheduler.step()
-        current_lr = scheduler.get_last_lr()  # list, one value per param group
-        mlflow.log_metric("lr_backbone", float(current_lr[0]), step=epoch)
-        mlflow.log_metric("lr_attention", float(current_lr[1]), step=epoch)
-        mlflow.log_metric("lr_head", float(current_lr[2]), step=epoch)
-        mlflow.log_metric("train_data_time", float(train_times[0]), step=epoch)
-        mlflow.log_metric("train_compute_time", float(train_times[1]), step=epoch)
+        current_lr = scheduler.get_last_lr()  # list per param group
+
+        if mlflow.active_run():
+            mlflow.log_metric("lr_backbone", float(current_lr[0]), step=epoch)
+            mlflow.log_metric("lr_attention", float(current_lr[1]), step=epoch)
+            mlflow.log_metric("lr_head", float(current_lr[2]), step=epoch)
+            mlflow.log_metric("train_data_time", float(train_times[0]), step=epoch)
+            mlflow.log_metric("train_compute_time", float(train_times[1]), step=epoch)
 
         eval_metrics, eval_times = evaluate(
             model=model,
@@ -239,32 +276,48 @@ def execute(
 
         val_loss = eval_metrics["val_loss"]
         gap = val_loss - train_loss
-        mlflow.log_metric("loss_gap", gap, step=epoch)
-        mlflow.log_metric("eval_data_time", float(eval_times[0]), step=epoch)
-        mlflow.log_metric("eval_compute_time", float(eval_times[1]), step=epoch)
+        epoch_duration = time.time() - epoch_start_time
 
-        print(
-            f"Epoch {epoch}: train={train_loss:.6f} val={eval_metrics['val_loss']:.6f} "
-            f"gap={gap:.6f} "
-            f"roc_auc_macro={float(eval_metrics['val_roc_auc_macro']):.3f} "
+        if mlflow.active_run():
+            mlflow.log_metric("loss_gap", gap, step=epoch)
+            mlflow.log_metric("eval_data_time", float(eval_times[0]), step=epoch)
+            mlflow.log_metric("eval_compute_time", float(eval_times[1]), step=epoch)
+            mlflow.log_metric("epoch_duration_sec", float(epoch_duration), step=epoch)
+
+        # Console summary message
+        roc_macro = eval_metrics.get("val_roc_auc_macro", 0.0)
+        pr_macro = eval_metrics.get("val_pr_auc_macro", 0.0)
+        f1_best_macro = eval_metrics.get("val_f1_macro_best", 0.0)
+
+        logger.info(
+            f"Epoch {epoch:02d}/{training_params.epochs:02d} [{epoch_duration:.1f}s] - "
+            f"train_loss: {train_loss:.5f} | "
+            f"val_loss: {val_loss:.5f} | gap: {gap:.5f} | "
+            f"ROC-AUC: {roc_macro:.3f} | PR-AUC: {pr_macro:.3f} "
+            f"| Best-F1: {f1_best_macro:.3f}"
         )
 
-        print(
-            f"train data_time={train_times[0]:.1f}s | "
-            f"train_compute_time={train_times[1]:.1f}s | "
-            f"eval data_time={eval_times[0]:.1f}s | "
-            f"eval_compute_time={eval_times[1]:.1f}s"
+        logger.debug(
+            f"Timings -> Train Data: {train_times[0]:.1f}s, "
+            f"Compute: {train_times[1]:.1f}s | "
+            f"Eval Data: {eval_times[0]:.1f}s, Compute: {eval_times[1]:.1f}s"
         )
 
         if device.type == "cuda" and epoch == 0:
-            print(
-                f"GPU memory: {torch.cuda.memory_allocated() / 1e9:.2f}GB /"
-                f" {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f}GB"
-            )
+            alloc_gb = torch.cuda.memory_allocated() / 1e9
+            total_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+            logger.info(f"GPU Memory allocated: {alloc_gb:.2f}GB / {total_gb:.2f}GB")
+            if mlflow.active_run():
+                mlflow.log_metric("gpu_memory_allocated_gb", alloc_gb, step=epoch)
 
+        # Early stopping & checkpointing check
         if val_loss < best_loss:
             best_loss = val_loss
-            # Save only if better
+            best_eval_metrics = eval_metrics
+            logger.info(
+                f"Validation loss improved to {val_loss:.5f}. "
+                f"Saving checkpoint to {checkpoint_path}."
+            )
             save_checkpoint(
                 checkpoint_path,
                 epoch=epoch,
@@ -275,11 +328,15 @@ def execute(
             patience_counter = 0
         else:
             patience_counter += 1
+            logger.info(
+                f"Validation loss did not improve. "
+                f"Patience: {patience_counter}/{training_params.patience}"
+            )
             if patience_counter >= training_params.patience:
-                print("Early stopping")
+                logger.info("Early stopping threshold reached. Terminating training.")
                 break
 
-    # Reload best model
+    # Reload best model checkpoint
     checkpoint = load_checkpoint(checkpoint_path, model=model, optimizer=optimizer)
-    log_best_artifacts(checkpoint[3])
+    log_best_artifacts(checkpoint[3] if checkpoint[3] else best_eval_metrics)
     return checkpoint[0]
