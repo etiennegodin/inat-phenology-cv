@@ -473,6 +473,7 @@ def log_experiment_metadata(
         },
     }
     mlflow.log_params(model_summary)
+    mlflow.log_dict(model_summary, "model_summary.json")
 
     def get_dataset_stats(dataset, name):
         if not hasattr(dataset, "df") or dataset.df is None:
