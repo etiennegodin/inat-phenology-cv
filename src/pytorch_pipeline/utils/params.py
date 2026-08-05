@@ -7,6 +7,7 @@ class TrainingParams:
     patience: int
     start_epoch: int | None
     best_loss: float = 1e10
+    log_step_interval: int = 10
 
     def to_dict(self):
         return asdict(self)

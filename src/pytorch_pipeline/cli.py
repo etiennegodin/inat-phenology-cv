@@ -20,6 +20,7 @@ from .train.factory import (
     build_scheduler,
     get_device,
 )
+from .train.metrics import log_experiment_metadata
 from .train.persistence import load_checkpoint
 from .utils import (
     Config,
@@ -110,6 +111,7 @@ def train_cmd(args, configs: Config):
         patience=args.patience,
         start_epoch=start_epoch,
         best_loss=best_loss,
+        log_step_interval=args.log_step_interval,
     )
 
     # Set configs params
@@ -130,6 +132,12 @@ def train_cmd(args, configs: Config):
         mlflow.log_params(optim_params.to_dict())
         mlflow.log_params(scheduler_params.to_dict())
 
+        log_experiment_metadata(
+            model=model,
+            train_dataset=datasets[0],
+            val_dataset=datasets[1],
+        )
+
         best_model = train.execute(
             device=device,
             model=model,
@@ -146,6 +154,11 @@ def train_cmd(args, configs: Config):
         pytorch.log_model(best_model, "cv_inat")
         model_uri = f"runs:/{parent_run_id}/cv_inat"
         mlflow.register_model(model_uri, "cv_inat")
+
+        # Log accumulated run logs to MLflow
+        log_path = Path.cwd() / "log.log"
+        if log_path.exists():
+            mlflow.log_artifact(str(log_path))
 
 
 def test_cmd(args, configs: Config):
@@ -240,6 +253,12 @@ def add_train_args(parser: argparse.ArgumentParser):
         help="Fraction of intial dataset to keep for testing",
         type=float,
         default=0.33,
+    )
+    parser.add_argument(
+        "--log_step_interval",
+        type=int,
+        default=10,
+        help="Interval of steps for logging batch metrics to MLflow",
     )
 
 
