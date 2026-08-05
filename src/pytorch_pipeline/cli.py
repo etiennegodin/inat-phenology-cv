@@ -155,6 +155,11 @@ def train_cmd(args, configs: Config):
         model_uri = f"runs:/{parent_run_id}/cv_inat"
         mlflow.register_model(model_uri, "cv_inat")
 
+        # Log accumulated run logs to MLflow
+        log_path = Path.cwd() / "log.log"
+        if log_path.exists():
+            mlflow.log_artifact(str(log_path))
+
 
 def test_cmd(args, configs: Config):
     """
