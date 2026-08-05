@@ -32,7 +32,6 @@ def compute_attention_metrics(obs_weights_list: list[Any]) -> dict[str, float]:
     """Compute statistics on ADBIL attention weights across observations.
 
     obs_weights_list is a list of weight Tensors per batch/observation.
-    Each weight Tensor has shape (num_images_in_obs, 1) or (num_images_in_obs,).
     """
     if not obs_weights_list:
         return {}
@@ -43,7 +42,6 @@ def compute_attention_metrics(obs_weights_list: list[Any]) -> dict[str, float]:
     bag_sizes = []
 
     for item in obs_weights_list:
-        # Handle list of Tensors per observation or list of batch outputs
         weights_iter = item if isinstance(item, (list, tuple)) else [item]
         for w in weights_iter:
             if w is None:
@@ -57,11 +55,9 @@ def compute_attention_metrics(obs_weights_list: list[Any]) -> dict[str, float]:
                 w_arr = np.array([w_arr])
 
             bag_sizes.append(len(w_arr))
-            # Normalize to sum to 1 if not already
             total = np.sum(w_arr)
             if total > 0:
                 p = w_arr / total
-                # Shannon entropy in nats
                 p_pos = p[p > 0]
                 entropy = -np.sum(p_pos * np.log(p_pos + 1e-12))
                 entropies.append(entropy)
@@ -72,21 +68,17 @@ def compute_attention_metrics(obs_weights_list: list[Any]) -> dict[str, float]:
         return {}
 
     return {
-        "attn_entropy": float(np.mean(entropies)),
-        "attn_max_weight": float(np.mean(max_weights)),
-        "attn_min_weight": float(np.mean(min_weights)),
-        "attn_bag_size_mean": float(np.mean(bag_sizes)),
+        "attention/entropy": float(np.mean(entropies)),
+        "attention/max_weight": float(np.mean(max_weights)),
+        "attention/min_weight": float(np.mean(min_weights)),
+        "attention/bag_size_mean": float(np.mean(bag_sizes)),
     }
 
 
 def find_optimal_threshold(
     labels: np.ndarray, preds_raw: np.ndarray
 ) -> tuple[float, float, float, float, np.ndarray, np.ndarray]:
-    """Find threshold that maximizes F1 score for a single binary label.
-
-    Returns:
-        (best_thresh, max_f1, prec_at_best, recall_at_best, thresholds, f1s)
-    """
+    """Find threshold that maximizes F1 score for a single binary label."""
     thresholds = np.linspace(0.05, 0.95, 91)
     f1s = []
     precs = []
@@ -116,16 +108,7 @@ def calculate_multilabel_metrics(
     all_labels: np.ndarray,
     prefix: str = "val",
 ) -> dict[str, Any]:
-    """Calculate comprehensive multi-label evaluation metrics.
-
-    Args:
-        all_preds_raw: Sigmoid probabilities, shape (N, num_classes)
-        all_labels: Binary target matrix, shape (N, num_classes)
-        prefix: Prefix for metric names (e.g. "val" or "train")
-
-    Returns:
-        Dictionary of scalar metrics, per-class stats, and threshold curves.
-    """
+    """Calculate comprehensive multi-label evaluation metrics grouped with slashes."""
     num_classes = all_labels.shape[1]
     all_preds_bin_05 = (all_preds_raw >= 0.5).astype(int)
 
@@ -147,7 +130,6 @@ def calculate_multilabel_metrics(
         y_score = all_preds_raw[:, i]
         y_pred_05 = all_preds_bin_05[:, i]
 
-        # ROC-AUC
         if len(np.unique(y_true)) > 1:
             fpr, tpr, _ = roc_curve(y_true, y_score)
             roc_auc_val = auc(fpr, tpr)
@@ -159,13 +141,11 @@ def calculate_multilabel_metrics(
         roc_aucs.append(roc_auc_val)
         pr_aucs.append(pr_auc_val)
 
-        # Standard 0.5 threshold metrics
         p_05 = precision_score(y_true, y_pred_05, zero_division=0)
         r_05 = recall_score(y_true, y_pred_05, zero_division=0)
         f1_05 = f1_score(y_true, y_pred_05, zero_division=0)
         f1s_05.append(f1_05)
 
-        # Optimal threshold search
         best_t, best_f1, best_p, best_r, thresh_arr, f1_arr = find_optimal_threshold(
             y_true, y_score
         )
@@ -173,14 +153,14 @@ def calculate_multilabel_metrics(
         best_thresholds.append(best_t)
         thresh_curves[label_name] = (thresh_arr, f1_arr)
 
-        # Per-class metrics dictionary entries
-        metrics[f"{prefix}_roc_auc_{label_name_clean}"] = float(roc_auc_val)
-        metrics[f"{prefix}_pr_auc_{label_name_clean}"] = float(pr_auc_val)
-        metrics[f"{prefix}_f1_0.5_{label_name_clean}"] = float(f1_05)
-        metrics[f"{prefix}_precision_0.5_{label_name_clean}"] = float(p_05)
-        metrics[f"{prefix}_recall_0.5_{label_name_clean}"] = float(r_05)
-        metrics[f"{prefix}_best_thresh_{label_name_clean}"] = float(best_t)
-        metrics[f"{prefix}_best_f1_{label_name_clean}"] = float(best_f1)
+        # Per-class grouped metrics with slash notation
+        metrics[f"{prefix}/roc_auc/{label_name_clean}"] = float(roc_auc_val)
+        metrics[f"{prefix}/pr_auc/{label_name_clean}"] = float(pr_auc_val)
+        metrics[f"{prefix}/f1_0.5/{label_name_clean}"] = float(f1_05)
+        metrics[f"{prefix}/precision_0.5/{label_name_clean}"] = float(p_05)
+        metrics[f"{prefix}/recall_0.5/{label_name_clean}"] = float(r_05)
+        metrics[f"{prefix}/best_thresh/{label_name_clean}"] = float(best_t)
+        metrics[f"{prefix}/best_f1/{label_name_clean}"] = float(best_f1)
 
         per_class_reports.append(
             {
@@ -199,30 +179,25 @@ def calculate_multilabel_metrics(
             }
         )
 
-    # Macro & Global Aggregate Metrics
-    metrics[f"{prefix}_roc_auc_macro"] = float(np.mean(roc_aucs))
-    metrics[f"{prefix}_pr_auc_macro"] = float(np.mean(pr_aucs))
-    metrics[f"{prefix}_f1_macro_0.5"] = float(np.mean(f1s_05))
-    metrics[f"{prefix}_f1_macro_best"] = float(np.mean(best_f1s))
+    # Macro & Global Aggregate Metrics with slash notation
+    metrics[f"{prefix}/roc_auc_macro"] = float(np.mean(roc_aucs))
+    metrics[f"{prefix}/pr_auc_macro"] = float(np.mean(pr_aucs))
+    metrics[f"{prefix}/f1_macro_0.5"] = float(np.mean(f1s_05))
+    metrics[f"{prefix}/f1_macro_best"] = float(np.mean(best_f1s))
 
-    # Global Multi-label metrics at 0.5
-    metrics[f"{prefix}_f1_micro_0.5"] = float(
+    metrics[f"{prefix}/f1_micro_0.5"] = float(
         f1_score(all_labels, all_preds_bin_05, average="micro", zero_division=0)
     )
-    metrics[f"{prefix}_f1_weighted_0.5"] = float(
+    metrics[f"{prefix}/f1_weighted_0.5"] = float(
         f1_score(all_labels, all_preds_bin_05, average="weighted", zero_division=0)
     )
 
-    # Subset Accuracy (Exact match ratio across all classes)
     exact_matches = np.all(all_preds_bin_05 == all_labels, axis=1)
-    metrics[f"{prefix}_exact_match_ratio"] = float(np.mean(exact_matches))
-
-    # Hamming Loss (fraction of incorrect label predictions)
-    metrics[f"{prefix}_hamming_loss"] = float(
+    metrics[f"{prefix}/exact_match_ratio"] = float(np.mean(exact_matches))
+    metrics[f"{prefix}/hamming_loss"] = float(
         hamming_loss(all_labels, all_preds_bin_05)
     )
 
-    # Store internal data for plotting and reporting
     metrics["_per_class_reports"] = per_class_reports
     metrics["_thresh_curves"] = thresh_curves
     metrics["_best_thresholds"] = best_thresholds
@@ -235,15 +210,10 @@ def generate_metric_plots(
     all_labels: np.ndarray,
     metrics: dict[str, Any],
 ) -> dict[str, plt.Figure]:
-    """Generate high-quality diagnostic plots for multi-label classification.
-
-    Returns:
-        Dictionary mapping plot name -> matplotlib Figure.
-    """
+    """Generate diagnostic plots for multi-label classification."""
     num_classes = all_labels.shape[1]
     figures = {}
 
-    # Set styling
     plt.style.use(
         "seaborn-v0_8-whitegrid"
         if "seaborn-v0_8-whitegrid" in plt.style.available
@@ -321,7 +291,7 @@ def generate_metric_plots(
         label_name = LABEL_MAPPING.get(i, f"label_{i}")
         cm = confusion_matrix(all_labels[:, i], all_preds_bin_05[:, i])
         ax = axes_flat[i]
-        # im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+        ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
         ax.set_title(f"CM: {label_name}", fontsize=11, fontweight="bold")
         tick_marks = np.arange(2)
         ax.set_xticks(tick_marks)
@@ -331,7 +301,6 @@ def generate_metric_plots(
         ax.set_ylabel("True")
         ax.set_xlabel("Predicted")
 
-        # Annotate text inside confusion matrix cells
         thresh = cm.max() / 2.0 if cm.max() > 0 else 1
         for r in range(cm.shape[0]):
             for c in range(cm.shape[1]):
@@ -345,7 +314,6 @@ def generate_metric_plots(
                     fontweight="bold",
                 )
 
-    # Hide extra subplots if any
     for j in range(num_classes, len(axes_flat)):
         axes_flat[j].axis("off")
 
@@ -363,32 +331,18 @@ def log_metrics(
     obs_weights: list | None = None,
     prefix: str = "val",
 ) -> dict[str, Any]:
-    """Comprehensive evaluation metrics calculator and MLflow logger.
-
-    Args:
-        all_preds: Binary prediction matrix (at 0.5 threshold)
-        all_labels: Binary ground truth labels
-        all_preds_raw: Raw sigmoid probabilities
-        epoch: Current epoch number
-        obs_weights: List of ADBIL attention weight Tensors per observation
-        prefix: Prefix string for metric keys ('val' or 'train')
-
-    Returns:
-        Dictionary of calculated evaluation metrics and reports.
-    """
+    """Calculate and log evaluation metrics with slash grouping and epoch plots."""
     eval_metrics = calculate_multilabel_metrics(
         all_preds_raw=all_preds_raw,
         all_labels=all_labels,
         prefix=prefix,
     )
 
-    # Log ADBIL attention metrics if available
     if obs_weights:
         attn_metrics = compute_attention_metrics(obs_weights)
         for k, v in attn_metrics.items():
-            eval_metrics[f"{prefix}_{k}"] = v
+            eval_metrics[f"{prefix}/{k}"] = v
 
-    # Extract scalar metrics for MLflow logging (exclude internal dicts/figures)
     scalar_metrics = {
         k: v
         for k, v in eval_metrics.items()
@@ -396,44 +350,51 @@ def log_metrics(
     }
 
     if mlflow.active_run():
-        # Log scalar metrics with epoch step
         mlflow.log_metrics(scalar_metrics, step=epoch)
 
-        # Generate & log plots
         plots = generate_metric_plots(
             all_preds_raw=all_preds_raw,
             all_labels=all_labels,
             metrics=eval_metrics,
         )
 
+        # Log plot figures grouped in per-epoch subfolder: plots/epoch_001/
         for name, fig in plots.items():
-            mlflow.log_figure(fig, f"plots/epoch_{epoch:03d}_{name}.png")
-            plt.close(fig)  # Prevent matplotlib memory leaks!
+            mlflow.log_figure(fig, f"plots/epoch_{epoch:03d}/{name}.png")
+            plt.close(fig)
 
-        # Log CSV report artifact for this epoch
+        # Log classification report in epoch subfolder: plots/epoch_001/
         if "_per_class_reports" in eval_metrics:
             report_df = pd.DataFrame(eval_metrics["_per_class_reports"])
             csv_str = report_df.to_csv(index=False)
-            mlflow.log_text(csv_str, f"reports/epoch_{epoch:03d}_report.csv")
+            mlflow.log_text(
+                csv_str, f"plots/epoch_{epoch:03d}/classification_report.csv"
+            )
 
     return eval_metrics
 
 
 def log_best_artifacts(eval_metrics: dict[str, Any]) -> None:
-    """Log final best checkpoint metrics, summary report, and figures to MLflow."""
+    """Log final best checkpoint metrics grouped with slashes."""
     if not mlflow.active_run():
         return
 
-    # Log key metrics of best run
     best_scalars = {
-        "best_val_loss": eval_metrics.get("val_loss", 0.0),
-        "best_val_roc_auc_macro": eval_metrics.get("val_roc_auc_macro", 0.0),
-        "best_val_pr_auc_macro": eval_metrics.get("val_pr_auc_macro", 0.0),
-        "best_val_f1_macro_best": eval_metrics.get("val_f1_macro_best", 0.0),
+        "best/val_loss": eval_metrics.get(
+            "val/loss", eval_metrics.get("val_loss", 0.0)
+        ),
+        "best/val_roc_auc_macro": eval_metrics.get(
+            "val/roc_auc_macro", eval_metrics.get("val_roc_auc_macro", 0.0)
+        ),
+        "best/val_pr_auc_macro": eval_metrics.get(
+            "val/pr_auc_macro", eval_metrics.get("val_pr_auc_macro", 0.0)
+        ),
+        "best/val_f1_macro_best": eval_metrics.get(
+            "val/f1_macro_best", eval_metrics.get("val_f1_macro_best", 0.0)
+        ),
     }
     mlflow.log_metrics(best_scalars)
 
-    # Save final best classification report artifact
     if "_per_class_reports" in eval_metrics:
         report_df = pd.DataFrame(eval_metrics["_per_class_reports"])
         mlflow.log_text(report_df.to_csv(index=False), "best_classification_report.csv")
@@ -451,7 +412,6 @@ def log_experiment_metadata(
     if not mlflow.active_run():
         return
 
-    # 1. Model parameter counts
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     frozen_params = total_params - trainable_params
@@ -464,7 +424,6 @@ def log_experiment_metadata(
     }
     mlflow.log_params(model_summary)
 
-    # 2. Dataset label distribution stats
     def get_dataset_stats(dataset, name):
         if not hasattr(dataset, "df") or dataset.df is None:
             return {}

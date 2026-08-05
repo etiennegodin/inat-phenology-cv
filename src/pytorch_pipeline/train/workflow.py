@@ -55,7 +55,6 @@ def train_one_epoch(
 
     t0 = time.time()
     for step, (images, labels) in enumerate(pbar):
-        # Image and observation counts
         indices = [img.size(0) for img in images]
         total_img = sum(indices)
         obs_count = len(indices)
@@ -93,7 +92,6 @@ def train_one_epoch(
         total_loss += current_loss
         all_obs_weights.append(weights)
 
-        # Update tqdm status bar
         pbar.set_postfix(
             {
                 "loss": f"{current_loss:.4f}",
@@ -102,23 +100,21 @@ def train_one_epoch(
             }
         )
 
-        # Log step-level metrics to MLflow at interval
         if (
             mlflow.active_run()
             and log_step_interval > 0
             and step % log_step_interval == 0
         ):
             global_step = epoch * len(dataloader) + step
-            mlflow.log_metric("batch_train_loss", current_loss, step=global_step)
+            mlflow.log_metric("train/batch_loss", current_loss, step=global_step)
 
     train_loss = total_loss / len(dataloader)
 
-    # Calculate attention metrics for training pass
     train_attn_metrics = compute_attention_metrics(all_obs_weights)
     if mlflow.active_run():
-        mlflow.log_metric("train_loss", train_loss, step=epoch)
+        mlflow.log_metric("train/loss", train_loss, step=epoch)
         for k, v in train_attn_metrics.items():
-            mlflow.log_metric(f"train_{k}", v, step=epoch)
+            mlflow.log_metric(f"train/{k}", v, step=epoch)
 
     logger.debug(
         f"Epoch {epoch} Train: Loss={train_loss:.6f} | "
@@ -187,18 +183,19 @@ def evaluate(
 
             pbar.set_postfix({"val_loss": f"{total_loss / (step + 1):.4f}"})
 
-    # Convert tensors back to numpy arrays
     all_preds_bin_np = torch.cat(all_preds_bin).detach().cpu().numpy()
     all_labels_np = torch.cat(all_labels).detach().cpu().numpy()
     all_preds_raw_np = torch.cat(all_preds_raw).detach().cpu().numpy()
 
     val_loss = total_loss / len(dataloader)
-    base_metrics = {"val_loss": val_loss}
+    base_metrics = {
+        "val/loss": val_loss,
+        "val_loss": val_loss,  # Backward compatibility alias
+    }
 
     if mlflow.active_run():
-        mlflow.log_metrics(base_metrics, step=epoch)
+        mlflow.log_metric("val/loss", val_loss, step=epoch)
 
-    # Compute & log comprehensive multi-label & attention metrics
     eval_metrics = log_metrics(
         all_preds=all_preds_bin_np,
         all_labels=all_labels_np,
@@ -255,16 +252,15 @@ def execute(
             log_step_interval=log_step_interval,
         )
 
-        # Scheduler step
         scheduler.step()
-        current_lr = scheduler.get_last_lr()  # list per param group
+        current_lr = scheduler.get_last_lr()
 
         if mlflow.active_run():
-            mlflow.log_metric("lr_backbone", float(current_lr[0]), step=epoch)
-            mlflow.log_metric("lr_attention", float(current_lr[1]), step=epoch)
-            mlflow.log_metric("lr_head", float(current_lr[2]), step=epoch)
-            mlflow.log_metric("train_data_time", float(train_times[0]), step=epoch)
-            mlflow.log_metric("train_compute_time", float(train_times[1]), step=epoch)
+            mlflow.log_metric("lr/backbone", float(current_lr[0]), step=epoch)
+            mlflow.log_metric("lr/attention", float(current_lr[1]), step=epoch)
+            mlflow.log_metric("lr/head", float(current_lr[2]), step=epoch)
+            mlflow.log_metric("time/train_data", float(train_times[0]), step=epoch)
+            mlflow.log_metric("time/train_compute", float(train_times[1]), step=epoch)
 
         eval_metrics, eval_times = evaluate(
             model=model,
@@ -274,20 +270,25 @@ def execute(
             epoch=epoch,
         )
 
-        val_loss = eval_metrics["val_loss"]
+        val_loss = eval_metrics.get("val/loss", eval_metrics.get("val_loss", 0.0))
         gap = val_loss - train_loss
         epoch_duration = time.time() - epoch_start_time
 
         if mlflow.active_run():
-            mlflow.log_metric("loss_gap", gap, step=epoch)
-            mlflow.log_metric("eval_data_time", float(eval_times[0]), step=epoch)
-            mlflow.log_metric("eval_compute_time", float(eval_times[1]), step=epoch)
-            mlflow.log_metric("epoch_duration_sec", float(epoch_duration), step=epoch)
+            mlflow.log_metric("val/loss_gap", gap, step=epoch)
+            mlflow.log_metric("time/eval_data", float(eval_times[0]), step=epoch)
+            mlflow.log_metric("time/eval_compute", float(eval_times[1]), step=epoch)
+            mlflow.log_metric("time/epoch_duration", float(epoch_duration), step=epoch)
 
-        # Console summary message
-        roc_macro = eval_metrics.get("val_roc_auc_macro", 0.0)
-        pr_macro = eval_metrics.get("val_pr_auc_macro", 0.0)
-        f1_best_macro = eval_metrics.get("val_f1_macro_best", 0.0)
+        roc_macro = eval_metrics.get(
+            "val/roc_auc_macro", eval_metrics.get("val_roc_auc_macro", 0.0)
+        )
+        pr_macro = eval_metrics.get(
+            "val/pr_auc_macro", eval_metrics.get("val_pr_auc_macro", 0.0)
+        )
+        f1_best_macro = eval_metrics.get(
+            "val/f1_macro_best", eval_metrics.get("val_f1_macro_best", 0.0)
+        )
 
         logger.info(
             f"Epoch {epoch:02d}/{training_params.epochs:02d} [{epoch_duration:.1f}s] - "
@@ -300,7 +301,8 @@ def execute(
         logger.debug(
             f"Timings -> Train Data: {train_times[0]:.1f}s, "
             f"Compute: {train_times[1]:.1f}s | "
-            f"Eval Data: {eval_times[0]:.1f}s, Compute: {eval_times[1]:.1f}s"
+            f"Eval Data: {eval_times[0]:.1f}s, "
+            f"Compute: {eval_times[1]:.1f}s"
         )
 
         if device.type == "cuda" and epoch == 0:
@@ -308,14 +310,15 @@ def execute(
             total_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
             logger.info(f"GPU Memory allocated: {alloc_gb:.2f}GB / {total_gb:.2f}GB")
             if mlflow.active_run():
-                mlflow.log_metric("gpu_memory_allocated_gb", alloc_gb, step=epoch)
+                mlflow.log_metric(
+                    "system/gpu_memory_allocated_gb", alloc_gb, step=epoch
+                )
 
-        # Early stopping & checkpointing check
         if val_loss < best_loss:
             best_loss = val_loss
             best_eval_metrics = eval_metrics
             logger.info(
-                f"Validation loss improved to {val_loss:.5f}. "
+                f"Val loss improved to {val_loss:.5f}. "
                 f"Saving checkpoint to {checkpoint_path}."
             )
             save_checkpoint(
@@ -329,14 +332,13 @@ def execute(
         else:
             patience_counter += 1
             logger.info(
-                f"Validation loss did not improve. "
+                f"Val loss did not improve. "
                 f"Patience: {patience_counter}/{training_params.patience}"
             )
             if patience_counter >= training_params.patience:
                 logger.info("Early stopping threshold reached. Terminating training.")
                 break
 
-    # Reload best model checkpoint
     checkpoint = load_checkpoint(checkpoint_path, model=model, optimizer=optimizer)
     log_best_artifacts(checkpoint[3] if checkpoint[3] else best_eval_metrics)
     return checkpoint[0]
