@@ -1,17 +1,35 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, Union
 
 import mlflow
+import numpy as np
 import torch
 
 from .metrics import log_best_artifacts
 
 if TYPE_CHECKING:
-    import torch
     from torch.optim import Optimizer
 
     from .model import PhenologyModel
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitize_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    """Convert numpy types to native Python types for clean pickling."""
+    clean = {}
+    for k, v in metrics.items():
+        if k.startswith("_"):
+            continue
+        if isinstance(v, (np.integer, int)):
+            clean[k] = int(v)
+        elif isinstance(v, (np.floating, float)):
+            clean[k] = float(v)
+        elif isinstance(v, (str, bool)):
+            clean[k] = v
+    return clean
 
 
 def save_checkpoint(
@@ -19,27 +37,26 @@ def save_checkpoint(
     epoch: int,
     model: torch.nn.Module,
     optimizer: Optimizer,
-    eval_metrics: dict,
+    eval_metrics: dict[str, Any],
 ) -> None:
+    """Save training checkpoint to disk and MLflow."""
+    sanitized_metrics = _sanitize_metrics(eval_metrics)
+    run_id = mlflow.active_run().info.run_id if mlflow.active_run() else None
+
     checkpoint = {
         "epoch": epoch,
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
-        "eval_metrics": eval_metrics,
-        "run_id": mlflow.active_run().info.run_id,
+        "eval_metrics": sanitized_metrics,
+        "run_id": run_id,
     }
-    print(
-        f"Saving checkpoint for epoch {epoch} "
-        f"with loss of {eval_metrics['val_loss']:.3f}"
-    )
 
-    torch.save(
-        checkpoint,
-        checkpoint_path,
-    )
-    mlflow.log_artifact(
-        checkpoint_path,
-    )
+    val_loss = sanitized_metrics.get("val/loss", sanitized_metrics.get("val_loss", 0.0))
+    logger.info(f"Saving checkpoint for epoch {epoch} with val_loss of {val_loss:.4f}")
+
+    torch.save(checkpoint, checkpoint_path)
+    if mlflow.active_run():
+        mlflow.log_artifact(checkpoint_path)
 
     log_best_artifacts(eval_metrics)
 
@@ -49,14 +66,22 @@ def load_checkpoint(
     model: PhenologyModel,
     optimizer: Optimizer,
 ) -> tuple[PhenologyModel, Optimizer, int, dict[str, Any], Union[str, None]]:
-    checkpoint = torch.load(checkpoint_path)
-    checkpoint: dict
+    """Load model checkpoint safely across PyTorch versions."""
+    try:
+        checkpoint = torch.load(checkpoint_path, weights_only=False)
+    except TypeError:
+        # Fallback for PyTorch versions prior to weights_only parameter
+        checkpoint = torch.load(checkpoint_path)
+
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     start_epoch = checkpoint.get("epoch", 0)
     eval_metrics = checkpoint.get("eval_metrics", {})
     run_id = checkpoint.get("run_id", None)
 
-    print(f"Reloading run {run_id}")
-    print(f"Previous epoch= {start_epoch} previous_loss={eval_metrics['val_loss']}")
+    val_loss = eval_metrics.get("val/loss", eval_metrics.get("val_loss", 0.0))
+    logger.info(
+        f"Reloading checkpoint run_id={run_id}, epoch={start_epoch}, "
+        f"val_loss={val_loss:.4f}"
+    )
     return model, optimizer, start_epoch, eval_metrics, run_id
