@@ -45,7 +45,7 @@ def build_pipeline_model(
     # Show which blocks i trainable
     for i, block in enumerate(blocks):
         trainable = any(p.requires_grad for p in block.parameters())
-        print(f"Block {i}: trainable={trainable}")
+        logger.debug(f"Block {i}: trainable={trainable}")
 
     model.to(device)
     return model

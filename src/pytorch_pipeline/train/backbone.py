@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import open_clip
 import timm
 import torch
+import torch.nn.functional as F
 from torch import Tensor, nn
 from torchvision import transforms
 
@@ -36,7 +37,8 @@ class Backbone(nn.Module, ABC):
 
     @abstractmethod
     def encode(self, input: Tensor) -> Tensor:
-        """Encodes incoming tensor through the backbone"""
+        """returns embeddings ready for attention pooling; normalization,
+        if any, is handled per-backbone to match its pretraining regime"""
         pass
 
     @abstractmethod
@@ -110,7 +112,9 @@ class BioClipBackbone(Backbone):
         self.set_output_dim()
 
     def encode(self, input: Tensor) -> Tensor:
-        return self.encoder(input)
+        # Normalising clip embeddings for scale sensitive attention pooling
+        embeddings = self.encoder(input)
+        return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
 
     def get_transforms(self) -> tuple[transforms.Compose, transforms.Compose]:
         return self.train_transform, self.val_transform
