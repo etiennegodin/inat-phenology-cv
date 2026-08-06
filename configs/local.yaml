@@ -7,8 +7,8 @@ paths :
   ml_flow_db : '/home/etienne/projects/inat-phenology-cv/data/mlflow.db'
 
 dataloader_params:
-    batch_size: 4
-    max_images: 32
+    batch_size: 32
+    max_images: 128
     num_workers: 4
     pin_memory: false
     persistent_workers: false

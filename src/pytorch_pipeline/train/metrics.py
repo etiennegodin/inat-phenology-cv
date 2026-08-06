@@ -526,4 +526,6 @@ def log_experiment_metadata(
         "val": val_stats,
     }
     mlflow.log_dict(dataset_summary, "dataset_summary.json")
-    logger.info(f"Experiment metadata logged to MLflow:\n {format_dict(model_summary)}")
+    logger.debug(
+        f"Experiment metadata logged to MLflow:\n {format_dict(model_summary)}"
+    )
