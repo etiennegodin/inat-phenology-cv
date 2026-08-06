@@ -28,7 +28,7 @@ def init_logger(log_file: Path, level: int = logging.INFO) -> logging.Logger:
     # Avoid duplicate handlers if init_logger is called multiple times
     if not pkg_logger.handlers:
         # Accumulating file handler (mode="a")
-        file_handler = logging.FileHandler(log_file, mode="a")
+        file_handler = logging.FileHandler(log_file, mode="w")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(file_formatter)
         pkg_logger.addHandler(file_handler)

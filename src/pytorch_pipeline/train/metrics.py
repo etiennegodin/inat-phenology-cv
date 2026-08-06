@@ -19,6 +19,7 @@ from sklearn.metrics import (
     roc_curve,
 )
 
+from ..utils import format_dict
 from ..utils.registry import LABEL_MAPPING
 
 if TYPE_CHECKING:
@@ -439,6 +440,24 @@ def log_experiment_metadata(
     classifier_frozen_params = classifier_params - classifier_trainable_params
 
     model_summary = {
+        "percentages": {
+            "total": {
+                "backbone_pct": round(backbone_params / total_params * 100, 2),
+                "attention_pct": round(attention_params / total_params * 100, 2),
+                "classifier_pct": round(classifier_params / total_params * 100, 2),
+            },
+            "trainable": {
+                "backbone_pct": round(
+                    backbone_trainable_params / trainable_params * 100, 2
+                ),
+                "attention_pct": round(
+                    attention_trainable_params / trainable_params * 100, 2
+                ),
+                "classifier_pct": round(
+                    classifier_trainable_params / trainable_params * 100, 2
+                ),
+            },
+        },
         "total": {
             "total_params": total_params,
             "trainable_params": trainable_params,
@@ -507,4 +526,4 @@ def log_experiment_metadata(
         "val": val_stats,
     }
     mlflow.log_dict(dataset_summary, "dataset_summary.json")
-    logger.info(f"Experiment metadata logged to MLflow: {model_summary}")
+    logger.info(f"Experiment metadata logged to MLflow:\n {format_dict(model_summary)}")

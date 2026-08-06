@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pprint
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,10 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
+def format_dict(d: dict) -> str:
+    return pprint.pformat(d, indent=4)
+
+
 def resolve_env_config_path() -> Path:
     if os.environ.get("COLAB_GPU"):
         config_path = Path("configs/colab.yaml")
@@ -26,14 +31,12 @@ def resolve_env_config_path() -> Path:
     return config_path
 
 
-def freeze(block: nn.Module):
-    for p in block.parameters():
-        p.requires_grad = False
-
-
 def unfreeze(block: nn.Module):
-    for p in block.parameters():
+    count = 0
+    for p in block.parameters(recurse=True):
         p.requires_grad = True
+        count += p.numel()
+    logger.debug(f"Unfreezed {count}")
 
 
 def get_pos_weights(
