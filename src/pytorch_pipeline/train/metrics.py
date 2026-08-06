@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
@@ -39,12 +40,9 @@ def compute_attention_metrics(obs_weights_list: list[Any]) -> dict[str, float]:
         return {}
 
     entropies = []
-    max_weights = []
-    min_weights = []
-    bag_sizes = []
 
-    for item in obs_weights_list:
-        weights_iter = item if isinstance(item, (list, tuple)) else [item]
+    for batch in obs_weights_list:
+        weights_iter = batch if isinstance(batch, (list, tuple)) else [batch]
         for w in weights_iter:
             if w is None:
                 continue
@@ -56,24 +54,24 @@ def compute_attention_metrics(obs_weights_list: list[Any]) -> dict[str, float]:
             if w_arr.ndim == 0:
                 w_arr = np.array([w_arr])
 
-            bag_sizes.append(len(w_arr))
-            total = np.sum(w_arr)
-            if total > 0:
-                p = w_arr / total
-                p_pos = p[p > 0]
-                entropy = -np.sum(p_pos * np.log(p_pos + 1e-12))
-                entropies.append(entropy)
-                max_weights.append(np.max(p))
-                min_weights.append(np.min(p))
+            # Get img count for this observation
+            img_count = len(w_arr)
+            if img_count < 2:
+                continue
+            # Entropy ceiling for relative entropies
+            max_entropy = math.log(img_count)
+            entropy = -np.sum(w_arr * np.log(w_arr + 1e-12))
+            normalised_entropy = entropy / max_entropy
+            entropies.append(normalised_entropy)
 
     if not entropies:
         return {}
 
     return {
         "attention/entropy": float(np.mean(entropies)),
-        "attention/max_weight": float(np.mean(max_weights)),
-        "attention/min_weight": float(np.mean(min_weights)),
-        "attention/bag_size_mean": float(np.mean(bag_sizes)),
+        "attention/entropy_std": float(np.std(entropies)),
+        "attention/entropy_max": float(np.max(entropies)),
+        "attention/entropy_min": float(np.min(entropies)),
     }
 
 
