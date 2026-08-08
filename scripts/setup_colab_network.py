@@ -2,30 +2,35 @@ import os
 import subprocess
 import time
 
-from google.colab import userdata
 
-ts_auth_key = userdata.get("TAILSCALE_AUTH_KEY")
+def main():
+    auth_key = os.environ.get("TAILSCALE_AUTH_KEY")
 
-subprocess.run(
-    [
-        "sudo",
-        "tailscaled",
-        "--tun=userspace-networking",
-        "--socks5-server=localhost:1055",
-        "--state=/tmp/tailscale.state",
-    ],
-    stdout=subprocess.DEVNULL,
-    stderr=subprocess.DEVNULL,
-)
+    if not auth_key:
+        raise RuntimeError("TAILSCALE_AUTH_KEY environment variable is not set.")
 
-time.sleep(2)
+    subprocess.run(
+        [
+            "sudo",
+            "tailscaled",
+            "--tun=userspace-networking",
+            "--socks5-server=localhost:1055",
+            "--state=/tmp/tailscale.state",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
-subprocess.run(
-    ["sudo", "tailscale", "up", "--auth-key", ts_auth_key],
-    check=True,
-)
+    time.sleep(2)
 
-del ts_auth_key
+    subprocess.run(
+        ["sudo", "tailscale", "up", "--auth-key", auth_key],
+        check=True,
+    )
 
-os.environ["HTTP_PROXY"] = "socks5h://localhost:1055"
-os.environ["HTTPS_PROXY"] = "socks5h://localhost:1055"
+    os.environ["HTTP_PROXY"] = "socks5h://localhost:1055"
+    os.environ["HTTPS_PROXY"] = "socks5h://localhost:1055"
+
+
+if __name__ == "__main__":
+    main()
