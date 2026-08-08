@@ -6,6 +6,7 @@ from .misc import (
     format_dict,
     get_pos_weights,
     resolve_env_config_path,
+    resolve_uri,
     unfreeze,
 )
 
@@ -19,4 +20,5 @@ __all__ = [
     "resolve_env_config_path",
     "unfreeze",
     "format_dict",
+    "resolve_uri",
 ]

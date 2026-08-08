@@ -28,6 +28,7 @@ from .utils import (
     get_pos_weights,
     init_logger,
     resolve_env_config_path,
+    resolve_uri,
     update_dataset,
 )
 from .utils.params import (
@@ -52,7 +53,7 @@ def train_cmd(args, configs: Config):
     # Set test
     configs.test = args.test
 
-    mlflow.set_tracking_uri("http://localhost:5000")
+    mlflow.set_tracking_uri(resolve_uri())
 
     # // Dataset params
     dataset_params = DatasetParams(testing_frac=args.test_frac)

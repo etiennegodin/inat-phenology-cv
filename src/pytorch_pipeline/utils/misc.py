@@ -22,6 +22,14 @@ def format_dict(d: dict) -> str:
     return pprint.pformat(d, indent=4)
 
 
+def resolve_uri() -> str:
+
+    return os.getenv(
+        "MLFLOW_TRACKING_URI",
+        "http://localhost:5000",
+    )
+
+
 def resolve_env_config_path() -> Path:
     if os.environ.get("COLAB_GPU"):
         config_path = Path("configs/colab.yaml")
