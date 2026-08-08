@@ -71,7 +71,6 @@ class PathsParams:
     image_dir: str
     db_path: str
     checkpoint_path: str
-    ml_flow_db: str
     source_db_path: str = "/home/etienne/projects/inatML/data/inat_raw.duckdb"
 
     def to_dict(self):

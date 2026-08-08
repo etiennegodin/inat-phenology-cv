@@ -52,7 +52,7 @@ def train_cmd(args, configs: Config):
     # Set test
     configs.test = args.test
 
-    mlflow.set_tracking_uri(f"sqlite:///{configs.paths_params.ml_flow_db}")
+    mlflow.set_tracking_uri("http://localhost:5000")
 
     # // Dataset params
     dataset_params = DatasetParams(testing_frac=args.test_frac)
