@@ -9,7 +9,8 @@ def main():
     if not auth_key:
         raise RuntimeError("TAILSCALE_AUTH_KEY environment variable is not set.")
 
-    subprocess.run(
+    # Start tailscaled in the background.
+    subprocess.Popen(
         [
             "sudo",
             "tailscaled",
@@ -21,15 +22,14 @@ def main():
         stderr=subprocess.DEVNULL,
     )
 
+    # Give the daemon a moment to initialize.
     time.sleep(2)
 
+    # Connect this Colab runtime to the tailnet.
     subprocess.run(
         ["sudo", "tailscale", "up", "--auth-key", auth_key],
         check=True,
     )
-
-    os.environ["HTTP_PROXY"] = "socks5h://localhost:1055"
-    os.environ["HTTPS_PROXY"] = "socks5h://localhost:1055"
 
 
 if __name__ == "__main__":
