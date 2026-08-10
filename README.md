@@ -34,7 +34,16 @@ Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etien
         - EfficientNetB0
         - BioCLIP
 
-### 🔲 v0.5 — Optuna set up
-- Optuna setup
-- Pipeline features
-    - Better step and metrics logging
+### ✅ v0.5 — Pipeline and persistence upgrades
+
+- Better step and metrics logging
+- Colab compatibility reworked
+- Pushing pipeline logging to centralised mlflow server instead of local instances
+
+### 🔲 v0.6 — CLAM-MB Setup
+
+- Implementation of CLAM-MB
+
+### 🔲 v0.7 — Optuna set up
+
+- Optuna tuning set up
