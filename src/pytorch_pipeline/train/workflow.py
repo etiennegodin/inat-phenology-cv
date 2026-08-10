@@ -10,6 +10,7 @@ import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
+from ..utils.configs import CLASS_ORDER
 from .metrics import compute_attention_metrics, log_best_artifacts, log_metrics
 from .persistence import load_checkpoint, save_checkpoint
 
@@ -35,7 +36,7 @@ def train_one_epoch(
     criterion: nn.Module,
     device: device,
     log_step_interval: int = 10,
-) -> tuple[float, tuple[float, float], dict[str, float]]:
+) -> tuple[float, tuple[float, float]]:
     """Train the model for one epoch with progress tracking and step logging."""
     data_time = 0.0
     compute_time = 0.0
@@ -44,7 +45,9 @@ def train_one_epoch(
 
     img_per_batch = []
     obs_per_batch = []
-    all_obs_weights = []
+    all_obs_weights = {}
+    for c in CLASS_ORDER:
+        all_obs_weights[c] = []
 
     pbar = tqdm(
         dataloader,
@@ -73,14 +76,14 @@ def train_one_epoch(
 
         if device.type == "cuda":
             with autocast_mode.autocast(device_type=device.type):
-                predictions, weights = model(images)
+                predictions, class_weights = model(images)
                 loss = criterion(predictions, labels)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
             torch.cuda.synchronize()
         else:
-            predictions, weights = model(images)
+            predictions, class_weights = model(images)
             loss = criterion(predictions, labels)
             loss.backward()
             optimizer.step()
@@ -90,7 +93,8 @@ def train_one_epoch(
 
         current_loss = loss.item()
         total_loss += current_loss
-        all_obs_weights.append(weights)
+        for k, v in class_weights.items():
+            all_obs_weights[k].append(v)
 
         pbar.set_postfix(
             {
@@ -109,19 +113,19 @@ def train_one_epoch(
             mlflow.log_metric("train/batch_loss", current_loss, step=global_step)
 
     train_loss = total_loss / len(dataloader)
-
-    train_attn_metrics = compute_attention_metrics(all_obs_weights)
-    if mlflow.active_run():
-        mlflow.log_metric("train/loss", train_loss, step=epoch)
-        for k, v in train_attn_metrics.items():
-            mlflow.log_metric(f"train/{k}", v, step=epoch)
+    for named_class, obs_weights_list in all_obs_weights.items():
+        train_attn_metrics = compute_attention_metrics(named_class, obs_weights_list)
+        if mlflow.active_run():
+            mlflow.log_metric("train/loss", train_loss, step=epoch)
+            for k, v in train_attn_metrics.items():
+                mlflow.log_metric(f"train/{k}", v, step=epoch)
 
     logger.debug(
         f"Epoch {epoch} Train: Loss={train_loss:.6f} | "
         f"Total Imgs={np.sum(img_per_batch)} | Total Obs={len(dataloader)}"
     )
 
-    return train_loss, (data_time, compute_time), train_attn_metrics
+    return train_loss, (data_time, compute_time)
 
 
 def evaluate(
@@ -139,7 +143,9 @@ def evaluate(
     all_preds_bin = []
     all_labels = []
     all_preds_raw = []
-    all_obs_weights = []
+    all_obs_weights = {}
+    for c in CLASS_ORDER:
+        all_obs_weights[c] = []
 
     model.eval()
 
@@ -162,10 +168,10 @@ def evaluate(
 
             if device.type == "cuda":
                 with autocast_mode.autocast(device_type=device.type):
-                    predictions, weights = model(images)
+                    predictions, class_weights = model(images)
                     torch.cuda.synchronize()
             else:
-                predictions, weights = model(images)
+                predictions, class_weights = model(images)
 
             loss = criterion(predictions, labels)
             total_loss += loss.item()
@@ -176,8 +182,8 @@ def evaluate(
             all_preds_bin.append(preds_bin)
             all_labels.append(labels)
             all_preds_raw.append(preds_raw)
-            all_obs_weights.append(weights)
-
+            for k, v in class_weights.items():
+                all_obs_weights[k].append(v)
             t0 = time.time()
             compute_time += t0 - t1
 
@@ -242,7 +248,7 @@ def execute(
 
         epoch_start_time = time.time()
 
-        train_loss, train_times, train_attn = train_one_epoch(
+        train_loss, train_times = train_one_epoch(
             epoch,
             model=model,
             dataloader=train_loader,

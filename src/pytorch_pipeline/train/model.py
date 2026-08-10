@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from ..utils.configs import CLASS_ORDER
 from .backbone import BACKBONE_REGISTRY, Backbone
 
 if TYPE_CHECKING:
@@ -51,25 +52,58 @@ class ClassifierHead(nn.Module):
         return self.w(w2)
 
 
-class PhenologyModel(nn.Module):
-    def __init__(self, params: ModelParams, *args, **kwargs) -> None:
+class AttentionBranch(nn.Module):
+    def __init__(
+        self, input_dim: int, params: ModelParams, named_class: str, *args, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
-        self.backbone: Backbone = BACKBONE_REGISTRY[params.backbone]()
+        self.named_class = named_class
         self.attention = AttentionPooling(
-            in_features=self.backbone.output_dim,
+            in_features=input_dim,
             neurons=params.attention_neurons,
         )
         self.head = ClassifierHead(
-            self.backbone.output_dim,
+            input_dim,
             params.head_neurons,
             params.head_outputs,
             params.head_dropout_prob,
         )
 
-    def forward(self, x):
-        indices = []
+    def forward(self, observations):
         obs_pools = []
         obs_weights = []
+        for obs in observations:
+            pool, weights = self.attention(obs)
+            obs_pools.append(pool)
+            obs_weights.append(weights)
+
+        # Stack back in one Tensor
+        pooled = torch.stack(obs_pools)
+
+        predictions = self.head(pooled).squeeze(1)
+        return predictions, obs_weights
+
+
+class PhenologyModel(nn.Module):
+    def __init__(self, params: ModelParams, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.backbone: Backbone = BACKBONE_REGISTRY[params.backbone]()
+        self.branches = nn.ModuleList(
+            [AttentionBranch(self.backbone.output_dim, params, c) for c in CLASS_ORDER]
+        )
+
+    def forward(self, x):
+        """_summary_
+
+        Args:
+            x (_type_): _description_
+
+        Returns:
+            tuple[torch.Tensor, list[list[torch.Tensor]] ]:
+        """
+        indices = []
+        class_predictions = []
+        class_attention_weights = {}
 
         # Get indices for split
         for i in x:
@@ -84,14 +118,13 @@ class PhenologyModel(nn.Module):
         # Split embedding per observation
         observations = torch.split(embeddings, indices)
 
-        # Iterate attention pool over each observation
-        for obs in observations:
-            pool, weights = self.attention(obs)
-            obs_pools.append(pool)
-            obs_weights.append(weights)
+        # Iterate attention branches over each observation
+        for b in self.branches:
+            predictions, attention_weights = b(observations)
+            class_predictions.append(predictions)
+            class_attention_weights[b.named_class] = attention_weights
 
-        # Stack back in one Tensor
-        pooled = torch.stack(obs_pools)
+        # Stack back batch in shape (batch,n_classes)
+        predictions = torch.stack(class_predictions, dim=1)
 
-        predictions = self.head(pooled).squeeze(1)
-        return predictions, obs_weights
+        return predictions, class_attention_weights

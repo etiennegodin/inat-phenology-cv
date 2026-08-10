@@ -21,7 +21,7 @@ from sklearn.metrics import (
 )
 
 from ..utils import format_dict
-from ..utils.registry import LABEL_MAPPING
+from ..utils.configs import LABEL_MAPPING
 
 if TYPE_CHECKING:
     from torch.utils.data import Dataset
@@ -31,7 +31,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def compute_attention_metrics(obs_weights_list: list[Any]) -> dict[str, float]:
+def compute_attention_metrics(
+    named_class: str, obs_weights_list: list[Any]
+) -> dict[str, float]:
     """Compute statistics on ADBIL attention weights across observations.
 
     obs_weights_list is a list of weight Tensors per batch/observation.
@@ -68,10 +70,10 @@ def compute_attention_metrics(obs_weights_list: list[Any]) -> dict[str, float]:
         return {}
 
     return {
-        "attention/entropy": float(np.mean(entropies)),
-        "attention/entropy_std": float(np.std(entropies)),
-        "attention/entropy_max": float(np.max(entropies)),
-        "attention/entropy_min": float(np.min(entropies)),
+        f"attention/{named_class}/entropy": float(np.mean(entropies)),
+        f"attention/{named_class}/entropy_std": float(np.std(entropies)),
+        f"attention/{named_class}/entropy_max": float(np.max(entropies)),
+        f"attention/{named_class}/entropy_min": float(np.min(entropies)),
     }
 
 
@@ -328,7 +330,7 @@ def log_metrics(
     all_labels: np.ndarray,
     all_preds_raw: np.ndarray,
     epoch: int,
-    obs_weights: list | None = None,
+    obs_weights: dict | None = None,
     prefix: str = "val",
 ) -> dict[str, Any]:
     """Calculate and log evaluation metrics with slash grouping and epoch plots."""
@@ -339,9 +341,10 @@ def log_metrics(
     )
 
     if obs_weights:
-        attn_metrics = compute_attention_metrics(obs_weights)
-        for k, v in attn_metrics.items():
-            eval_metrics[f"{prefix}/{k}"] = v
+        for named_class, obs_weights_list in obs_weights.items():
+            attn_metrics = compute_attention_metrics(named_class, obs_weights_list)
+            for k, v in attn_metrics.items():
+                eval_metrics[f"{prefix}/{k}"] = v
 
     scalar_metrics = {
         k: v
@@ -424,16 +427,16 @@ def log_experiment_metadata(
     backbone_frozen_params = backbone_params - backbone_trainable_params
 
     # Attention params
-    attention_params = sum(p.numel() for p in model.attention.parameters())
+    attention_params = sum(p.numel() for p in model.branches[0].attention.parameters())
     attention_trainable_params = sum(
-        p.numel() for p in model.attention.parameters() if p.requires_grad
+        p.numel() for p in model.branches[0].attention.parameters() if p.requires_grad
     )
     attention_frozen_params = attention_params - attention_trainable_params
 
     # Classifier params
-    classifier_params = sum(p.numel() for p in model.head.parameters())
+    classifier_params = sum(p.numel() for p in model.branches[0].head.parameters())
     classifier_trainable_params = sum(
-        p.numel() for p in model.head.parameters() if p.requires_grad
+        p.numel() for p in model.branches[0].head.parameters() if p.requires_grad
     )
     classifier_frozen_params = classifier_params - classifier_trainable_params
 

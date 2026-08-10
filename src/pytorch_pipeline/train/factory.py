@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import logging
 from typing import TYPE_CHECKING
 
@@ -73,6 +74,17 @@ def build_scheduler(optimizer: optim.Optimizer, params: SchedulerParams, eta_min
 def build_pipeline_optimizer(
     model: nn.Module, params: OptimizerParams
 ) -> optim.Optimizer:
+
+    attention_params = itertools.chain.from_iterable(
+        branch.attention.parameters() for branch in model.branches
+    )
+    head_params = itertools.chain.from_iterable(
+        branch.head.parameters() for branch in model.branches
+    )
+
+    # to_do if branches should converge at different rates
+    # build 3 separate attention param groups (branch.attention.parameters() per branch
+    # each with its own named LR) instead of pooling.
     return optim.Adam(
         [
             {
@@ -82,11 +94,11 @@ def build_pipeline_optimizer(
                 "lr": params.backbone_lr,
             },
             {
-                "params": model.attention.parameters(),
+                "params": attention_params,
                 "lr": params.attention_lr,
             },
             {
-                "params": model.head.parameters(),
+                "params": head_params,
                 "lr": params.head_lr,
             },
         ]

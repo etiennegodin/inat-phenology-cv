@@ -11,6 +11,14 @@ from .params import (
     TrainingParams,
 )
 
+LABEL_MAPPING = {
+    0: "Flowering",
+    1: "Fruiting",
+    2: "Flower Budding",
+}
+
+CLASS_ORDER = ["Flowering", "Fruiting", "Flower Budding"]
+
 
 @dataclass
 class Config:

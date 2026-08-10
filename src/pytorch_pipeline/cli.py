@@ -78,7 +78,7 @@ def train_cmd(args, configs: Config):
     model_params = ModelParams(
         args.backbone,
         head_neurons=256,
-        head_outputs=3,
+        head_outputs=1,
         head_dropout_prob=0.5,
         attention_neurons=128,
         last_blocks=args.unfreeze,
