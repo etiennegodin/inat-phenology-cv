@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import open_clip
 import timm
 import torch
-from open_clip import transformer
+import torch.nn.functional as F
 from torch import Tensor, nn
 from torchvision import transforms
 
@@ -15,11 +15,16 @@ if TYPE_CHECKING:
 
 
 class Backbone(nn.Module, ABC):
-    encoder: Any
+    encoder: nn.Module
     output_dim: int
 
     def __init__(self) -> None:
         super().__init__()
+
+    def freeze(self):
+        """Freeze all backbone parameters"""
+        for p in self.encoder.parameters(recurse=True):
+            p.requires_grad = False
 
     def set_output_dim(self):
         """Single forward pass with a dummy input to get expected output shape"""
@@ -32,7 +37,8 @@ class Backbone(nn.Module, ABC):
 
     @abstractmethod
     def encode(self, input: Tensor) -> Tensor:
-        """Encodes incoming tensor through the backbone"""
+        """returns embeddings ready for attention pooling; normalization,
+        if any, is handled per-backbone to match its pretraining regime"""
         pass
 
     @abstractmethod
@@ -53,10 +59,11 @@ class Backbone(nn.Module, ABC):
 
 class EfficientNetBackbone(Backbone):
     def __init__(self, *args, **kwargs) -> None:
-        super().__init__()
+        super().__init__(*args, **kwargs)
         self.encoder: nn.Module = timm.create_model(
             "efficientnet_b0", num_classes=0, pretrained=True
         )
+        self.freeze()
         self.set_output_dim()
 
     def encode(self, input: Tensor) -> Tensor:
@@ -93,23 +100,21 @@ class EfficientNetBackbone(Backbone):
 
 
 class BioClipBackbone(Backbone):
-    def __init__(self) -> None:
-        super().__init__()
-
-        self.model, self.train_transform, self.val_transform = (
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        model, self.train_transform, self.val_transform = (
             open_clip.create_model_and_transforms("hf-hub:imageomics/bioclip")
         )
-
         self.train_transform: transforms.Compose
         self.val_transform: transforms.Compose
-        self.encoder: transformer.VisionTransformer = (
-            self.model.visual
-        )  # image tower only
-
+        self.encoder = model.visual  # image tower only
+        self.freeze()
         self.set_output_dim()
 
     def encode(self, input: Tensor) -> Tensor:
-        return self.encoder(input)
+        # Normalising clip embeddings for scale sensitive attention pooling
+        embeddings = self.encoder(input)
+        return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
 
     def get_transforms(self) -> tuple[transforms.Compose, transforms.Compose]:
         return self.train_transform, self.val_transform

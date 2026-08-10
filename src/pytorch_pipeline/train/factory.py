@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import torch
 from torch import optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 
-from ..utils.misc import freeze, unfreeze
+from ..utils.misc import unfreeze
 from .model import PhenologyModel
 
 if TYPE_CHECKING:
     from torch import nn, optim
 
     from ..utils.params import ModelParams, OptimizerParams, SchedulerParams
+
+logger = logging.getLogger(__name__)
 
 
 def get_device() -> torch.device:
@@ -30,21 +33,19 @@ def build_pipeline_model(
         nn.Module: _description_
     """
     model = PhenologyModel(model_params)
-    blocks = model.backbone.get_trainable_blocks()
 
-    # Freeze backbone
-    for block in blocks:
-        freeze(block)
+    blocks = model.backbone.get_trainable_blocks()
 
     # Unfreeze last block
     if model_params.last_blocks > 0:
+        logger.debug("Unfreezing backbone parameters")
         for block in blocks[-model_params.last_blocks :]:
             unfreeze(block)
 
     # Show which blocks i trainable
     for i, block in enumerate(blocks):
         trainable = any(p.requires_grad for p in block.parameters())
-        print(f"Block {i}: trainable={trainable}")
+        logger.debug(f"Block {i}: trainable={trainable}")
 
     model.to(device)
     return model

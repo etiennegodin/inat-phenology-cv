@@ -81,7 +81,7 @@ def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
     # Keep photos only from sampled observations
     df = df[df[params.idx_col].isin(test_idx[params.idx_col])]
     print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
-    print(f"{test_idx.shape[0]} observations with {df.shape[0]} annotations")
+    print(f"{test_idx.shape[0]} observations with {df.shape[0]} images")
     return df
 
 

@@ -36,3 +36,5 @@ Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etien
 
 ### 🔲 v0.5 — Optuna set up
 - Optuna setup
+- Pipeline features
+    - Better step and metrics logging

@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -7,6 +8,7 @@ class TrainingParams:
     patience: int
     start_epoch: int | None
     best_loss: float = 1e10
+    log_step_interval: int = 10
 
     def to_dict(self):
         return asdict(self)
@@ -70,8 +72,10 @@ class PathsParams:
     image_dir: str
     db_path: str
     checkpoint_path: str
-    ml_flow_db: str
     source_db_path: str = "/home/etienne/projects/inatML/data/inat_raw.duckdb"
+
+    def __post_init__(self):
+        Path(self.checkpoint_path).mkdir(parents=True, exist_ok=True)
 
     def to_dict(self):
         return asdict(self)
