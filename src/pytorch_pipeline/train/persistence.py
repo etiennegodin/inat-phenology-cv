@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any, Union
 
 import mlflow
@@ -55,10 +56,16 @@ def save_checkpoint(
 
     val_loss = sanitized_metrics.get("val/loss", sanitized_metrics.get("val_loss", 0.0))
     logger.info(f"Saving checkpoint for epoch {epoch} with val_loss of {val_loss:.4f}")
-
+    t0 = time.time()
     torch.save(checkpoint, checkpoint_path)
+    t1 = time.time() - t0
+    logger.debug(f"Took {t1:.3f}s")
     if mlflow.active_run():
         mlflow.log_artifact(checkpoint_path)
+        t2 = time.time() - t1
+        logger.debug(f"Took {t2:.3f}s")
+
+    logger.info("Logged to mlflow")
 
     log_best_artifacts(eval_metrics)
 
