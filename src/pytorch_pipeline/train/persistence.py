@@ -79,6 +79,10 @@ def load_checkpoint(
     optimizer: Optimizer,
 ) -> tuple[PhenologyModel, Optimizer, int, dict[str, Any], Union[str, None]]:
     """Load model checkpoint safely across PyTorch versions."""
+    run_id = mlflow.active_run().info.run_id if mlflow.active_run() else None
+
+    checkpoint_path = f"{checkpoint_path}/{run_id}.pth"
+
     try:
         checkpoint = torch.load(checkpoint_path, weights_only=False)
     except TypeError:
