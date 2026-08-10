@@ -53,8 +53,10 @@ def train_cmd(args, configs: Config):
     # Set test
     configs.test = args.test
 
+    print("Connecting to mlflow")
     mlflow.set_tracking_uri(resolve_uri())
 
+    print("Initalizing experiment")
     # // Dataset params
     dataset_params = DatasetParams(testing_frac=args.test_frac)
     configs.dataset_params = dataset_params
@@ -119,6 +121,7 @@ def train_cmd(args, configs: Config):
     configs.training_params = training_params
 
     mlflow.set_experiment("cv_inat_v0.4")
+
     with mlflow.start_run(run_id=previous_run_id) as parent_run:
         parent_run_id = parent_run.info.run_id
         print(f"\n{'=' * 60}")

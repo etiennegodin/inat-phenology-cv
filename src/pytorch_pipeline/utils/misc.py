@@ -23,11 +23,12 @@ def format_dict(d: dict) -> str:
 
 
 def resolve_uri() -> str:
-
-    return os.getenv(
+    uri = os.getenv(
         "MLFLOW_TRACKING_URI",
         "http://localhost:5000",
     )
+    logger.debug(uri)
+    return uri
 
 
 def resolve_env_config_path() -> Path:
