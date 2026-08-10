@@ -1,13 +1,13 @@
-import os
 import subprocess
 import time
 
+from google.colab import userdata
+
 
 def main():
-    auth_key = os.environ.get("TAILSCALE_AUTH_KEY")
 
-    if not auth_key:
-        raise RuntimeError("TAILSCALE_AUTH_KEY environment variable is not set.")
+    if not userdata.get("TAILSCALE_AUTH_KEY"):
+        raise RuntimeError("TAILSCALE_AUTH_KEY is not available.")
 
     print("Launching tailscaled")
     # Start tailscaled as a detached background process.
@@ -34,7 +34,7 @@ def main():
     print("Launching tailscale")
     # Connect this Colab runtime to the tailnet.
     subprocess.run(
-        ["sudo", "tailscale", "up", "--auth-key", auth_key],
+        ["sudo", "tailscale", "up", "--auth-key", userdata.get("TAILSCALE_AUTH_KEY")],
         check=True,
     )
     print("Done")
