@@ -75,7 +75,7 @@ class PathsParams:
     source_db_path: str = "/home/etienne/projects/inatML/data/inat_raw.duckdb"
 
     def __post_init__(self):
-        Path(self.db_path).mkdir(parents=True, exist_ok=True)
+        Path(self.checkpoint_path).mkdir(parents=True, exist_ok=True)
 
     def to_dict(self):
         return asdict(self)
