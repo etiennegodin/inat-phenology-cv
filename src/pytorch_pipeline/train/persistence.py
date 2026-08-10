@@ -39,6 +39,7 @@ def save_checkpoint(
     model: torch.nn.Module,
     optimizer: Optimizer,
     eval_metrics: dict[str, Any],
+    to_mlflow=False,
 ) -> None:
     """Save training checkpoint to disk and MLflow."""
     sanitized_metrics = _sanitize_metrics(eval_metrics)
@@ -52,7 +53,7 @@ def save_checkpoint(
         "run_id": run_id,
     }
 
-    checkpoint_path = f"{checkpoint_path}/checkpoint.pth"
+    checkpoint_path = f"{checkpoint_path}/{run_id}.pth"
 
     val_loss = sanitized_metrics.get("val/loss", sanitized_metrics.get("val_loss", 0.0))
     logger.info(f"Saving checkpoint for epoch {epoch} with val_loss of {val_loss:.4f}")
@@ -60,12 +61,14 @@ def save_checkpoint(
     torch.save(checkpoint, checkpoint_path)
     t1 = time.time() - t0
     logger.debug(f"Took {t1:.3f}s")
-    if mlflow.active_run():
-        mlflow.log_artifact(checkpoint_path)
-        t2 = time.time() - t1
-        logger.debug(f"Took {t2:.3f}s")
 
-    logger.info("Logged to mlflow")
+    if to_mlflow:
+        if mlflow.active_run():
+            mlflow.log_artifact(checkpoint_path)
+            t2 = time.time() - t1
+            logger.debug(f"Took {t2:.3f}s")
+
+        logger.info("Logged to mlflow")
 
     log_best_artifacts(eval_metrics)
 

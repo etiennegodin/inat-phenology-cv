@@ -3,7 +3,7 @@ paths :
   data_root : '/content/inat-phenology-cv/data'
   image_dir : '/content/images'
   db_path : '/content/data/cv_raw.duckdb'
-  checkpoint_path : '/content/checkpoints'
+  checkpoint_path : '/content/drive/MyDrive/inat-phenology-cv/checkpoints'
 
 dataloader_params:
     batch_size: 256

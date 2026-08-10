@@ -318,6 +318,7 @@ def execute(
                 model=model,
                 optimizer=optimizer,
                 eval_metrics=eval_metrics,
+                to_mlflow=False,
             )
             patience_counter = 0
         else:
