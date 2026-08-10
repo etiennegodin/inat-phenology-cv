@@ -3,7 +3,7 @@ paths :
   data_root : '/home/etienne/projects/inat-phenology-cv/data'
   image_dir : '/home/etienne/projects/inat-phenology-cv/data/images'
   db_path : '/home/etienne/projects/inat-phenology-cv/data/cv_raw.duckdb'
-  checkpoint_path : '/home/etienne/projects/inat-phenology-cv/data/checkpoints/checkpoint.pth'
+  checkpoint_path : '/home/etienne/projects/inat-phenology-cv/data/checkpoints'
 
 dataloader_params:
     batch_size: 32

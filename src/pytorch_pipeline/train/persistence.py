@@ -51,6 +51,8 @@ def save_checkpoint(
         "run_id": run_id,
     }
 
+    checkpoint_path = f"{checkpoint_path}/checkpoint.pth"
+
     val_loss = sanitized_metrics.get("val/loss", sanitized_metrics.get("val_loss", 0.0))
     logger.info(f"Saving checkpoint for epoch {epoch} with val_loss of {val_loss:.4f}")
 
