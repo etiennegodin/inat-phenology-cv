@@ -1,3 +1,4 @@
+from .utils import mlflow_socks_patch  # noqa
 import argparse
 import logging
 import sys
