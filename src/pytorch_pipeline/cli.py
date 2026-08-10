@@ -280,7 +280,6 @@ def main():
         env_configs = yaml.safe_load(file)
     paths_params = PathsParams(**env_configs["paths"])
     dataloader_params = DataLoadersParams(**env_configs["dataloader_params"])
-
     configs = Config(
         config_path, paths_params=paths_params, dataloaders_params=dataloader_params
     )
