@@ -11,7 +11,7 @@ from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
 from ..utils.configs import CLASS_ORDER
-from .metrics import compute_attention_metrics, log_best_artifacts, log_metrics
+from .metrics import log_attention_metrics, log_best_artifacts, log_metrics
 from .persistence import load_checkpoint, save_checkpoint
 
 if TYPE_CHECKING:
@@ -113,17 +113,15 @@ def train_one_epoch(
             mlflow.log_metric("train/batch_loss", current_loss, step=global_step)
 
     train_loss = total_loss / len(dataloader)
-    for named_class, obs_weights_list in all_obs_weights.items():
-        train_attn_metrics = compute_attention_metrics(named_class, obs_weights_list)
-        if mlflow.active_run():
-            mlflow.log_metric("train/loss", train_loss, step=epoch)
-            for k, v in train_attn_metrics.items():
-                mlflow.log_metric(f"train/{k}", v, step=epoch)
-
+    if mlflow.active_run():
+        mlflow.log_metric("train/loss", train_loss, step=epoch)
     logger.debug(
         f"Epoch {epoch} Train: Loss={train_loss:.6f} | "
         f"Total Imgs={np.sum(img_per_batch)} | Total Obs={len(dataloader)}"
     )
+
+    # Attention
+    log_attention_metrics(epoch, all_obs_weights, prefix="train")
 
     return train_loss, (data_time, compute_time)
 
@@ -207,9 +205,11 @@ def evaluate(
         all_labels=all_labels_np,
         all_preds_raw=all_preds_raw_np,
         epoch=epoch,
-        obs_weights=all_obs_weights,
         prefix="val",
     )
+
+    log_attention_metrics(epoch, all_obs_weights, prefix="val")
+
     eval_metrics.update(base_metrics)
 
     return eval_metrics, (data_time, compute_time)

@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from sklearn.metrics import (
     auc,
     average_precision_score,
@@ -31,9 +32,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def compute_attention_metrics(
-    named_class: str, obs_weights_list: list[Any]
-) -> dict[str, float]:
+def log_attention_metrics(
+    epoch: int, obs_weights_dict: dict[str, list[Any]], prefix: str = "val"
+):
+    classes_df = []
+
+    # Get attention values per class, accumulate binned for single plot
+    for named_class, obs_weights_list in obs_weights_dict.items():
+        entropies_records = compute_attention_values(obs_weights_list)
+        attn_metrics = {
+            f"attention/{named_class}/entropy": float(
+                np.mean(entropies_records["entropy"])
+            ),
+            f"attention/{named_class}/entropy_std": float(
+                np.std(entropies_records["entropy"])
+            ),
+            f"attention/{named_class}/entropy_max": float(
+                np.max(entropies_records["entropy"])
+            ),
+            f"attention/{named_class}/entropy_min": float(
+                np.min(entropies_records["entropy"])
+            ),
+        }
+        df_temp = pd.DataFrame(entropies_records)
+        df_temp["class"] = named_class
+        classes_df.append(df_temp)
+        if mlflow.active_run():
+            for k, v in attn_metrics.items():
+                mlflow.log_metric(f"{prefix}/{k}", v, step=epoch)
+
+    # Single plot for attention binned
+    df = pd.concat(classes_df, ignore_index=True)
+    attn_ax = sns.lineplot(df, x="img_count", y="entropy", hue="class")
+    plt.ylim(0, 1.1)
+    plt.xlim(2, max(df["img_count"]))
+    attn_ax.set_xlabel("n_images")
+    attn_ax.set_ylabel("Mean Normalized Entropy")
+    attn_ax.set_title("Mean Normalized Entropy by image count", fontsize=10)
+    attn_fig = attn_ax.figure
+
+    if mlflow.active_run():
+        mlflow.log_figure(
+            attn_fig, f"plots/epoch_{epoch:03d}/{prefix}_multi_class_attention.png"
+        )
+        plt.close(attn_fig)
+
+
+def compute_attention_values(
+    obs_weights_list: list[Any],
+) -> dict[str, list[np.ndarray]]:
     """Compute statistics on ADBIL attention weights across observations.
 
     obs_weights_list is a list of weight Tensors per batch/observation.
@@ -41,7 +88,8 @@ def compute_attention_metrics(
     if not obs_weights_list:
         return {}
 
-    entropies = []
+    # Log entropy per n_images
+    entropies_records = {"img_count": [], "entropy": []}
 
     for batch in obs_weights_list:
         weights_iter = batch if isinstance(batch, (list, tuple)) else [batch]
@@ -60,21 +108,18 @@ def compute_attention_metrics(
             img_count = len(w_arr)
             if img_count < 2:
                 continue
+
             # Entropy ceiling for relative entropies
             max_entropy = math.log(img_count)
             entropy = -np.sum(w_arr * np.log(w_arr + 1e-12))
             normalised_entropy = entropy / max_entropy
-            entropies.append(normalised_entropy)
+            entropies_records["img_count"].append(img_count)
+            entropies_records["entropy"].append(normalised_entropy)
 
-    if not entropies:
+    if not entropies_records["entropy"]:
         return {}
 
-    return {
-        f"attention/{named_class}/entropy": float(np.mean(entropies)),
-        f"attention/{named_class}/entropy_std": float(np.std(entropies)),
-        f"attention/{named_class}/entropy_max": float(np.max(entropies)),
-        f"attention/{named_class}/entropy_min": float(np.min(entropies)),
-    }
+    return entropies_records
 
 
 def find_optimal_threshold(
@@ -330,7 +375,6 @@ def log_metrics(
     all_labels: np.ndarray,
     all_preds_raw: np.ndarray,
     epoch: int,
-    obs_weights: dict | None = None,
     prefix: str = "val",
 ) -> dict[str, Any]:
     """Calculate and log evaluation metrics with slash grouping and epoch plots."""
@@ -339,12 +383,6 @@ def log_metrics(
         all_labels=all_labels,
         prefix=prefix,
     )
-
-    if obs_weights:
-        for named_class, obs_weights_list in obs_weights.items():
-            attn_metrics = compute_attention_metrics(named_class, obs_weights_list)
-            for k, v in attn_metrics.items():
-                eval_metrics[f"{prefix}/{k}"] = v
 
     scalar_metrics = {
         k: v
