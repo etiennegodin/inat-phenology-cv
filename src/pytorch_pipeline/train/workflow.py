@@ -41,6 +41,7 @@ def train_one_epoch(
     data_time = 0.0
     compute_time = 0.0
     total_loss = 0.0
+    classes_loss = {la: 0.0 for la in CLASS_ORDER}
     model.train()
 
     img_per_batch = []
@@ -77,14 +78,22 @@ def train_one_epoch(
         if device.type == "cuda":
             with autocast_mode.autocast(device_type=device.type):
                 predictions, class_weights = model(images)
-                loss = criterion(predictions, labels)
+                raw_loss = criterion(predictions, labels)
+                class_loss = torch.mean(raw_loss, dim=0)
+                for i, c in enumerate(CLASS_ORDER):
+                    classes_loss[c] += class_loss[i].item()
+                loss = torch.mean(class_loss, dim=0)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
             torch.cuda.synchronize()
         else:
             predictions, class_weights = model(images)
-            loss = criterion(predictions, labels)
+            raw_loss = criterion(predictions, labels)
+            class_loss = torch.mean(raw_loss, dim=0)
+            for i, c in enumerate(CLASS_ORDER):
+                classes_loss[c] += class_loss[i].item()
+            loss = torch.mean(class_loss, dim=0)
             loss.backward()
             optimizer.step()
 
@@ -93,6 +102,7 @@ def train_one_epoch(
 
         current_loss = loss.item()
         total_loss += current_loss
+
         for k, v in class_weights.items():
             all_obs_weights[k].append(v)
 
@@ -115,6 +125,9 @@ def train_one_epoch(
     train_loss = total_loss / len(dataloader)
     if mlflow.active_run():
         mlflow.log_metric("train/loss", train_loss, step=epoch)
+        for k, v in classes_loss.items():
+            c_loss = v / len(dataloader)
+            mlflow.log_metric(f"train/{k}_loss", c_loss, step=epoch)
     logger.debug(
         f"Epoch {epoch} Train: Loss={train_loss:.6f} | "
         f"Total Imgs={np.sum(img_per_batch)} | Total Obs={len(dataloader)}"
@@ -138,6 +151,8 @@ def evaluate(
     compute_time = 0.0
 
     total_loss = 0.0
+    classes_loss = {la: 0.0 for la in CLASS_ORDER}
+
     all_preds_bin = []
     all_labels = []
     all_preds_raw = []
@@ -171,7 +186,11 @@ def evaluate(
             else:
                 predictions, class_weights = model(images)
 
-            loss = criterion(predictions, labels)
+            raw_loss = criterion(predictions, labels)
+            class_loss = torch.mean(raw_loss, dim=0)
+            for i, c in enumerate(CLASS_ORDER):
+                classes_loss[c] += class_loss[i].item()
+            loss = torch.mean(class_loss, dim=0)
             total_loss += loss.item()
 
             preds_raw = torch.sigmoid(predictions)
@@ -199,6 +218,9 @@ def evaluate(
 
     if mlflow.active_run():
         mlflow.log_metric("val/loss", val_loss, step=epoch)
+        for k, v in classes_loss.items():
+            c_loss = v / len(dataloader)
+            mlflow.log_metric(f"val/{k}_loss", c_loss, step=epoch)
 
     eval_metrics = log_metrics(
         all_preds=all_preds_bin_np,

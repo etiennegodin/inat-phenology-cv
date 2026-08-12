@@ -40,42 +40,44 @@ def log_attention_metrics(
     # Get attention values per class, accumulate binned for single plot
     for named_class, obs_weights_list in obs_weights_dict.items():
         entropies_records = compute_attention_values(obs_weights_list)
-        attn_metrics = {
-            f"attention/{named_class}/entropy": float(
-                np.mean(entropies_records["entropy"])
-            ),
-            f"attention/{named_class}/entropy_std": float(
-                np.std(entropies_records["entropy"])
-            ),
-            f"attention/{named_class}/entropy_max": float(
-                np.max(entropies_records["entropy"])
-            ),
-            f"attention/{named_class}/entropy_min": float(
-                np.min(entropies_records["entropy"])
-            ),
-        }
-        df_temp = pd.DataFrame(entropies_records)
-        df_temp["class"] = named_class
-        classes_df.append(df_temp)
+        if entropies_records:
+            attn_metrics = {
+                f"attention/{named_class}/entropy": float(
+                    np.mean(entropies_records["entropy"])
+                ),
+                f"attention/{named_class}/entropy_std": float(
+                    np.std(entropies_records["entropy"])
+                ),
+                f"attention/{named_class}/entropy_max": float(
+                    np.max(entropies_records["entropy"])
+                ),
+                f"attention/{named_class}/entropy_min": float(
+                    np.min(entropies_records["entropy"])
+                ),
+            }
+            df_temp = pd.DataFrame(entropies_records)
+            df_temp["class"] = named_class
+            classes_df.append(df_temp)
+            if mlflow.active_run():
+                for k, v in attn_metrics.items():
+                    mlflow.log_metric(f"{prefix}/{k}", v, step=epoch)
+
+    if classes_df:
+        # Single plot for attention binned
+        df = pd.concat(classes_df, ignore_index=True)
+        attn_ax = sns.lineplot(df, x="img_count", y="entropy", hue="class")
+        plt.ylim(0, 1.1)
+        plt.xlim(2, max(df["img_count"]))
+        attn_ax.set_xlabel("n_images")
+        attn_ax.set_ylabel("Mean Normalized Entropy")
+        attn_ax.set_title("Mean Normalized Entropy by image count", fontsize=10)
+        attn_fig = attn_ax.figure
+
         if mlflow.active_run():
-            for k, v in attn_metrics.items():
-                mlflow.log_metric(f"{prefix}/{k}", v, step=epoch)
-
-    # Single plot for attention binned
-    df = pd.concat(classes_df, ignore_index=True)
-    attn_ax = sns.lineplot(df, x="img_count", y="entropy", hue="class")
-    plt.ylim(0, 1.1)
-    plt.xlim(2, max(df["img_count"]))
-    attn_ax.set_xlabel("n_images")
-    attn_ax.set_ylabel("Mean Normalized Entropy")
-    attn_ax.set_title("Mean Normalized Entropy by image count", fontsize=10)
-    attn_fig = attn_ax.figure
-
-    if mlflow.active_run():
-        mlflow.log_figure(
-            attn_fig, f"plots/epoch_{epoch:03d}/{prefix}_multi_class_attention.png"
-        )
-        plt.close(attn_fig)
+            mlflow.log_figure(
+                attn_fig, f"plots/epoch_{epoch:03d}/{prefix}_multi_class_attention.png"
+            )
+            plt.close(attn_fig)
 
 
 def compute_attention_values(

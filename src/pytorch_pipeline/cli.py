@@ -97,7 +97,7 @@ def train_cmd(args, configs: Config):
     )
 
     pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights, reduction="none")
 
     # Reinstate model and optimizer state if reload
     if args.reload:
