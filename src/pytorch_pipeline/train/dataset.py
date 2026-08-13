@@ -1,22 +1,29 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, NewType
 
+import numpy as np
 import pandas as pd
 import torch
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from pytorch_pipeline.utils.params import DatasetParams
+
 from ..utils import get_df_from_table
+from ..utils.system import HardwareProfile
 
 if TYPE_CHECKING:
     from ..utils.configs import Config
     from ..utils.params import DatasetParams
     from .model import PhenologyModel
 
+CacheDataset = NewType("CacheDataset", bool)
 
-class PhenologyDataset(Dataset):
+
+class PhenologyDataset(Dataset, ABC):
     def __init__(
         self, df: pd.DataFrame, transform, dataset_params: DatasetParams
     ) -> None:
@@ -24,14 +31,39 @@ class PhenologyDataset(Dataset):
         self.transform = transform
         self.dataset_params = dataset_params
         self.df = df
+
         # Create list of photo count per observation
         self.bag_sizes = self.df["path"].str.len().to_list()
 
     def __len__(self) -> int:
         return len(self.df)
 
+    @classmethod
+    def from_profile(
+        cls,
+        cache: CacheDataset,
+        df: pd.DataFrame,
+        transform,
+        dataset_params: DatasetParams,
+    ):
+        if cache:
+            return CacheDatasetdPhenologyDataset(df, transform, dataset_params)
+        return UncachedPhenologyDataset(df, transform, dataset_params)
+
+    @abstractmethod
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        pass
+
+
+class UncachedPhenologyDataset(PhenologyDataset):
+    def __init__(
+        self, df: pd.DataFrame, transform, dataset_params: DatasetParams
+    ) -> None:
+        super().__init__(df, transform, dataset_params)
+
     def __getitem__(self, index: int):
-        paths, target = self.df.iloc[index]
+        print(index)
+        paths, target = self.df.iloc[index][["path", self.dataset_params.label_col]]
         images = []
         for path in paths:
             image = Image.open(path).convert("RGB")
@@ -41,17 +73,12 @@ class PhenologyDataset(Dataset):
         return torch.stack(images), torch.tensor(target, dtype=torch.float32)
 
 
-class CachedPhenologyDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, transform, params: DatasetParams) -> None:
-        super().__init__()
-        self.transform = transform
-        self.params = params
-        self.images, self.targets = self.preload_images_to_ram(df, params)
-        # Create list of photo count per observation
-        self.bag_sizes = df["path"].str.len().to_list()
-
-    def __len__(self) -> int:
-        return len(self.images)
+class CacheDatasetdPhenologyDataset(PhenologyDataset):
+    def __init__(
+        self, df: pd.DataFrame, transform, dataset_params: DatasetParams
+    ) -> None:
+        super().__init__(df, transform, dataset_params)
+        self.images, self.targets = self.preload_images_to_ram(df, dataset_params)
 
     def __getitem__(self, index: int):
 
@@ -59,9 +86,8 @@ class CachedPhenologyDataset(Dataset):
         target = self.targets[index]
 
         if self.transform is not None:
-            images = self.transform(images)
-
-        return torch.stack(images), torch.tensor(target, dtype=torch.float32)
+            images = [self.transform(i) for i in images]
+        return torch.stack(images), target
 
     def preload_images_to_ram(self, df, params: DatasetParams):
         preloaded_images = []
@@ -76,15 +102,47 @@ class CachedPhenologyDataset(Dataset):
                 row["path"],
                 row[params.label_col],
             )  # Adjust indices if your columns are named
+            observation_tensors = []
             for path in paths:
                 # Read image from local drive
                 img = Image.open(path).convert("RGB")
                 # Convert to tensor immediately to free PIL memory
                 img_tensor = F.to_image(img)  # Keeps it as uint8 to save RAM
-                preloaded_images.append(img_tensor)
+                observation_tensors.append(img_tensor)
             targets.append(torch.tensor(target, dtype=torch.float32))
-
+            preloaded_images.append(observation_tensors)
         return preloaded_images, targets
+
+
+def get_mean_img_ratio(df: pd.DataFrame):
+    ratios = []
+    for path in df["path"]:
+        try:
+            x, y = Image.open(path).size
+        except UnidentifiedImageError:
+            continue
+        if x <= y:
+            ratio = y / x
+        else:
+            ratio = x / y
+        ratios.append(round(ratio, 3))
+    return np.array(ratios).mean()
+
+
+def resolve_cache_decision(
+    hardware_profile: HardwareProfile,
+    total_image_count: int,
+    img_mean_ratio: float,
+    max_resolution: int,
+) -> CacheDataset:
+    total_pixel = max_resolution * (max_resolution / img_mean_ratio)
+    images_data_size = (total_pixel * 3 * total_image_count) / 1073741824
+    ram_avail = max(
+        hardware_profile.ram * 0.9 - 10.0, 1e-5
+    )  # 90% of existing ram with 10 Gb buffer for running pipeline
+    if images_data_size > ram_avail:
+        return CacheDataset(False)
+    return CacheDataset(True)
 
 
 def split_dataset(
@@ -108,11 +166,6 @@ def split_dataset(
 def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
     df = get_df_from_table(paths.db_path, "cv_photos2")
     df["path"] = paths.image_dir + "/" + df[params.photo_idx_col].astype(str) + ".jpg"
-    df = (
-        df.groupby(params.idx_col)
-        .agg({"path": list, params.label_col: "first"})
-        .reset_index(drop=False)
-    )
     return df
 
 
@@ -129,18 +182,42 @@ def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
 def build_datasets(
     configs: Config, model: PhenologyModel
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
+
     df = get_samples(configs.paths_params, configs.dataset_params)
 
     # Reduce data set size if testing
     if configs.test:
         df = reduce_dataset(df, configs.dataset_params)
 
+    # Get mean image ratio on raw df
+    mean_image_ratio = get_mean_img_ratio(df)
+
+    # Decide if caching is possible with dataset size and current hardware
+    cache = resolve_cache_decision(
+        configs.hardware_profile, len(df), mean_image_ratio, configs.max_img_resolution
+    )
+
+    # Collapse df by observation
+    df = (
+        df.groupby(configs.dataset_params.idx_col)
+        .agg({"path": list, configs.dataset_params.label_col: "first"})
+        .reset_index(drop=False)
+    )
+
+    # Create splits
     train_df, val_df, test_df = split_dataset(df, configs.dataset_params)
 
+    # Get backbone specific transforms
     train_transform, val_transform = model.backbone.get_transforms()
 
-    train_set = PhenologyDataset(train_df, train_transform, configs.dataset_params)
-    val_set = PhenologyDataset(val_df, val_transform, configs.dataset_params)
-    test_set = PhenologyDataset(test_df, val_transform, configs.dataset_params)
+    train_set = PhenologyDataset.from_profile(
+        cache, train_df, train_transform, configs.dataset_params
+    )
+    val_set = PhenologyDataset.from_profile(
+        cache, val_df, val_transform, configs.dataset_params
+    )
+    test_set = PhenologyDataset.from_profile(
+        cache, test_df, val_transform, configs.dataset_params
+    )
 
     return train_set, val_set, test_set

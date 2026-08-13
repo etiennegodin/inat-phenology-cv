@@ -41,6 +41,7 @@ from .utils.params import (
     SchedulerParams,
     TrainingParams,
 )
+from .utils.system import resolve_hardware_profile
 
 
 def train_cmd(args, configs: Config):
@@ -284,8 +285,12 @@ def main():
         env_configs = yaml.safe_load(file)
     paths_params = PathsParams(**env_configs["paths"])
     dataloader_params = DataLoadersParams(**env_configs["dataloader_params"])
+    hardware_profile = resolve_hardware_profile()
     configs = Config(
-        config_path, paths_params=paths_params, dataloaders_params=dataloader_params
+        config_path,
+        paths_params=paths_params,
+        dataloaders_params=dataloader_params,
+        hardware_profile=hardware_profile,
     )
 
     # Execute command
