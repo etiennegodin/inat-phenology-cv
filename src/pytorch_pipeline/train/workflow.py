@@ -25,7 +25,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-scaler = grad_scaler.GradScaler()
+
+dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+scaler = None
+if dtype == torch.float16:
+    scaler = grad_scaler.GradScaler()
 
 
 def train_one_epoch(
@@ -75,17 +79,24 @@ def train_one_epoch(
 
         optimizer.zero_grad(set_to_none=True)
 
+        # to_do add switch if scaler is needed for amp of previous cards vs new ones
         if device.type == "cuda":
-            with autocast_mode.autocast(device_type=device.type):
+            with autocast_mode.autocast(device_type=device.type, dtype=dtype):
                 predictions, class_weights = model(images)
                 raw_loss = criterion(predictions, labels)
                 class_loss = torch.mean(raw_loss, dim=0)
                 for i, c in enumerate(CLASS_ORDER):
                     classes_loss[c] += class_loss[i].item()
                 loss = torch.mean(class_loss, dim=0)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+
+                # Scale if fp16
+                if scaler is not None:
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
             torch.cuda.synchronize()
         else:
             predictions, class_weights = model(images)
@@ -180,7 +191,7 @@ def evaluate(
             data_time += t1 - t0
 
             if device.type == "cuda":
-                with autocast_mode.autocast(device_type=device.type):
+                with autocast_mode.autocast(device_type=device.type, dtype=dtype):
                     predictions, class_weights = model(images)
                     torch.cuda.synchronize()
             else:
