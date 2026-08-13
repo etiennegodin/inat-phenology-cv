@@ -40,9 +40,11 @@ Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etien
 - Colab compatibility reworked
 - Pushing pipeline logging to centralised mlflow server instead of local instances
 
-### 🔲 v0.6 — CLAM-MB Setup
+### ✅ v0.6 — CLAM-MB Setup
 
 - Implementation of CLAM-MB
+- Reworked attention metrics
+- Per-class loss logging
 
 ### 🔲 v0.7 — Optuna set up
 

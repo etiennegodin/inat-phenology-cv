@@ -219,3 +219,4 @@ mlruns/
 *.sh
 *.zip
 .env
+to_do.md
