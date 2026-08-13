@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from ..utils import get_df_from_table
 
@@ -22,8 +23,7 @@ class PhenologyDataset(Dataset):
         super().__init__()
         self.transform = transform
         self.dataset_params = dataset_params
-        self.df = self._format_df(df)
-
+        self.df = df
         # Create list of photo count per observation
         self.bag_sizes = self.df["path"].str.len().to_list()
 
@@ -40,12 +40,51 @@ class PhenologyDataset(Dataset):
                 images.append(image)
         return torch.stack(images), torch.tensor(target, dtype=torch.float32)
 
-    def _format_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        return (
-            df.groupby(self.dataset_params.idx_col)
-            .agg({"path": list, self.dataset_params.label_col: "first"})
-            .reset_index(drop=True)
-        )
+
+class CachedPhenologyDataset(Dataset):
+    def __init__(self, df: pd.DataFrame, transform, params: DatasetParams) -> None:
+        super().__init__()
+        self.transform = transform
+        self.params = params
+        self.images, self.targets = self.preload_images_to_ram(df, params)
+        # Create list of photo count per observation
+        self.bag_sizes = df["path"].str.len().to_list()
+
+    def __len__(self) -> int:
+        return len(self.images)
+
+    def __getitem__(self, index: int):
+
+        images = self.images[index]
+        target = self.targets[index]
+
+        if self.transform is not None:
+            images = self.transform(images)
+
+        return torch.stack(images), torch.tensor(target, dtype=torch.float32)
+
+    def preload_images_to_ram(self, df, params: DatasetParams):
+        preloaded_images = []
+        targets = []
+
+        # Simple ToTensor conversion to get images into RAM as bytes/floats
+        import torchvision.transforms.v2.functional as F
+
+        print(f"Loading {len(df)} images into RAM... This may take a while...")
+        for _, row in tqdm(df.iterrows(), total=len(df)):
+            paths, target = (
+                row["path"],
+                row[params.label_col],
+            )  # Adjust indices if your columns are named
+            for path in paths:
+                # Read image from local drive
+                img = Image.open(path).convert("RGB")
+                # Convert to tensor immediately to free PIL memory
+                img_tensor = F.to_image(img)  # Keeps it as uint8 to save RAM
+                preloaded_images.append(img_tensor)
+            targets.append(torch.tensor(target, dtype=torch.float32))
+
+        return preloaded_images, targets
 
 
 def split_dataset(
@@ -69,15 +108,17 @@ def split_dataset(
 def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
     df = get_df_from_table(paths.db_path, "cv_photos2")
     df["path"] = paths.image_dir + "/" + df[params.photo_idx_col].astype(str) + ".jpg"
+    df = (
+        df.groupby(params.idx_col)
+        .agg({"path": list, params.label_col: "first"})
+        .reset_index(drop=False)
+    )
     return df
 
 
 def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
-
-    # Collapse to obs level
-    test_df = df.drop_duplicates(subset=[params.idx_col])
     # Sample obs id from fraction
-    test_idx = test_df.sample(frac=params.testing_frac)
+    test_idx = df.sample(frac=params.testing_frac)
     # Keep photos only from sampled observations
     df = df[df[params.idx_col].isin(test_idx[params.idx_col])]
     print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
