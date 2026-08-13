@@ -63,8 +63,7 @@ python_version = "3.11"
 strict = true
 
 [tool.pytest.ini_options]
-# Updated the cov path to match your project name
-addopts = "--cov=src/pytorch_pipeline --cov-report=term-missing --cov-report=html"
+addopts = "--cov=src/pytorch_pipeline --cov-report=term-missing --cov-report=html -s"
 [tool.sqlfluff.core]
 dialect = "duckdb"
 templater = "placeholder"

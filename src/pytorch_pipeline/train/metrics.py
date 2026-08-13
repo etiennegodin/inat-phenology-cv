@@ -83,9 +83,14 @@ def log_attention_metrics(
 def compute_attention_values(
     obs_weights_list: list[Any],
 ) -> dict[str, list[np.ndarray]]:
-    """Compute statistics on ADBIL attention weights across observations.
+    """_summary_
 
-    obs_weights_list is a list of weight Tensors per batch/observation.
+    Args:
+        obs_weights_list (list[Any]): _description_
+
+    Returns:
+        dict[str, list[np.ndarray]]: {"img_count": [], "entropy": []}
+
     """
     if not obs_weights_list:
         return {}
