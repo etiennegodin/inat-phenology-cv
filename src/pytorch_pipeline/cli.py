@@ -44,6 +44,10 @@ from .utils.params import (
 )
 from .utils.system import resolve_hardware_profile
 
+mlflow.enable_system_metrics_logging()
+mlflow.system_metrics.set_system_metrics_sampling_interval(10)
+mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
+
 
 def train_cmd(args, configs: Config):
 
