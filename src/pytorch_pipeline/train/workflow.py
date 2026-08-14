@@ -207,9 +207,9 @@ def evaluate(
             preds_raw = torch.sigmoid(predictions)
             preds_bin = (preds_raw >= 0.5).float()
 
-            all_preds_bin.append(preds_bin)
-            all_labels.append(labels)
-            all_preds_raw.append(preds_raw)
+            all_preds_bin.append(preds_bin.detach().float().cpu())
+            all_labels.append(labels.detach().float().cpu())
+            all_preds_raw.append(preds_raw.detach().float().cpu())
             for k, v in class_weights.items():
                 all_obs_weights[k].append(v)
             t0 = time.time()
@@ -217,9 +217,9 @@ def evaluate(
 
             pbar.set_postfix({"val_loss": f"{total_loss / (step + 1):.4f}"})
 
-    all_preds_bin_np = torch.cat(all_preds_bin).detach().cpu().numpy()
-    all_labels_np = torch.cat(all_labels).detach().cpu().numpy()
-    all_preds_raw_np = torch.cat(all_preds_raw).detach().cpu().numpy()
+    all_preds_bin_np = torch.cat(all_preds_bin).numpy()
+    all_labels_np = torch.cat(all_labels).numpy()
+    all_preds_raw_np = torch.cat(all_preds_raw).numpy()
 
     val_loss = total_loss / len(dataloader)
     base_metrics = {
