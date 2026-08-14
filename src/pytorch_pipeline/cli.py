@@ -7,7 +7,6 @@ from pathlib import Path
 import mlflow
 import yaml
 from dotenv import load_dotenv
-from mlflow import pytorch
 from torch import cuda, nn
 
 from . import train
@@ -149,7 +148,7 @@ def train_cmd(args, configs: Config):
             val_dataset=datasets[1],
         )
 
-        best_model = train.execute(
+        train.execute(
             device=device,
             model=model,
             train_loader=train_loader,
@@ -161,10 +160,12 @@ def train_cmd(args, configs: Config):
             training_params=configs.training_params,
         )
 
+        """
         # Log and register best model
         pytorch.log_model(best_model, "cv_inat")
         model_uri = f"runs:/{parent_run_id}/cv_inat"
         mlflow.register_model(model_uri, "cv_inat")
+        """
 
         # Log accumulated run logs to MLflow
         log_path = Path.cwd() / "log.log"
