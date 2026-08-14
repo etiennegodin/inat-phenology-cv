@@ -11,11 +11,23 @@ if TYPE_CHECKING:
 
 import logging
 import os
+import subprocess
 
 import numpy as np
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+def get_current_git_branch():
+    try:
+        # Runs the git command and decodes the byte output to a string
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True
+        ).strip()
+        return branch
+    except subprocess.CalledProcessError:
+        return "Not a git repository or Git is not installed."
 
 
 def format_dict(d: dict) -> str:

@@ -31,6 +31,7 @@ from .utils import (
     resolve_env_config_path,
     resolve_uri,
     update_dataset,
+    get_current_git_branch,
 )
 from .utils.params import (
     DataLoadersParams,
@@ -291,6 +292,7 @@ def main():
         paths_params=paths_params,
         dataloaders_params=dataloader_params,
         hardware_profile=hardware_profile,
+        git_branch=get_current_git_branch(),
     )
 
     # Execute command
