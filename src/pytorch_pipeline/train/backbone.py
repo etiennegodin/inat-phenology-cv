@@ -75,6 +75,7 @@ class EfficientNetBackbone(Backbone):
         img_size = (configs["input_size"][1], configs["input_size"][2])
         base_transforms = [
             v2.Resize(img_size),
+            v2.ToImage(),
             v2.ToDtype(dtype=torch.float32),
             v2.Normalize(mean=configs["mean"], std=configs["std"]),
         ]
@@ -130,6 +131,7 @@ class BioClipBackbone(Backbone):
                     antialias=True,
                 ),
                 v2.RandomHorizontalFlip(p=0.5),
+                v2.ToImage(),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(
                     mean=[0.48145466, 0.4578275, 0.40821073],
