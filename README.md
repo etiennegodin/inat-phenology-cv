@@ -46,6 +46,16 @@ Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etien
 - Reworked attention metrics
 - Per-class loss logging
 
-### 🔲 v0.7 — Optuna set up
+### 🔲 v0.7 — Hardware and caching
+
+- New HardwareProfile dataclass reading the system's configuration
+- Dataset caching implementation
+    - resolve_cache_decision() outputs a cache decision from HardwareProfile, and derived dataset memory size.
+    - PhenologyDataset.from_profile() constructor
+- Support for bf16 and fp16 datatypes
+- Backbone transforms moved to v2 to accept cached tensors.
+    - Uint8 until normalisation
+
+### 🔲 v0.8 — Optuna set up
 
 - Optuna tuning set up

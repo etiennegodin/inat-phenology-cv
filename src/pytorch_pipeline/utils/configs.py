@@ -10,6 +10,7 @@ from .params import (
     SchedulerParams,
     TrainingParams,
 )
+from .system import HardwareProfile
 
 LABEL_MAPPING = {
     0: "Flowering",
@@ -25,6 +26,8 @@ class Config:
     config_path: Path
     paths_params: PathsParams
     dataloaders_params: DataLoadersParams
+    hardware_profile: HardwareProfile
+    git_branch: str
     dataset_params: DatasetParams = field(default_factory=DatasetParams)
     model_params: ModelParams = field(init=False)
     training_params: TrainingParams = field(init=False)
@@ -32,6 +35,7 @@ class Config:
     scheduler_params: SchedulerParams = field(init=False)
     cuda: bool = False
     test: bool = False
+    max_img_resolution: int = 500
 
     def to_dict(self):
         return asdict(self)

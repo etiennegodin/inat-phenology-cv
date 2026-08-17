@@ -4,6 +4,7 @@ from .logger import init_logger
 from .misc import (
     clean_data,
     format_dict,
+    get_current_git_branch,
     get_pos_weights,
     resolve_env_config_path,
     resolve_uri,
@@ -21,4 +22,5 @@ __all__ = [
     "unfreeze",
     "format_dict",
     "resolve_uri",
+    "get_current_git_branch",
 ]

@@ -3,7 +3,7 @@ import pytest
 
 from pytorch_pipeline.train.metrics import (
     calculate_multilabel_metrics,
-    compute_attention_metrics,
+    compute_attention_values,
     find_optimal_threshold,
     generate_metric_plots,
 )
@@ -14,13 +14,14 @@ def test_compute_attention_metrics():
     w2 = np.array([0.33, 0.33, 0.34])
     w3 = np.array([1.0])
 
-    res = compute_attention_metrics([w1, w2, w3])
-    assert "attention/entropy" in res
-    assert "attention/max_weight" in res
-    assert "attention/min_weight" in res
-    assert "attention/bag_size_mean" in res
-    assert res["attention/bag_size_mean"] == pytest.approx(2.0)
-    assert res["attention/max_weight"] > 0.6
+    res = compute_attention_values([w1, w2, w3])
+    assert "img_count" in res
+    assert "entropy" in res
+    assert res["img_count"] == [2, 3]
+    assert res["entropy"] == [
+        np.float64(0.7219280948844771),
+        np.float64(0.9999092749813393),
+    ]
 
 
 def test_find_optimal_threshold():

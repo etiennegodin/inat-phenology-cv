@@ -7,7 +7,6 @@ from pathlib import Path
 import mlflow
 import yaml
 from dotenv import load_dotenv
-from mlflow import pytorch
 from torch import cuda, nn
 
 from . import train
@@ -31,6 +30,7 @@ from .utils import (
     resolve_env_config_path,
     resolve_uri,
     update_dataset,
+    get_current_git_branch,
 )
 from .utils.params import (
     DataLoadersParams,
@@ -41,6 +41,11 @@ from .utils.params import (
     SchedulerParams,
     TrainingParams,
 )
+from .utils.system import resolve_hardware_profile
+
+mlflow.enable_system_metrics_logging()
+mlflow.system_metrics.set_system_metrics_sampling_interval(10)
+mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
 
 
 def train_cmd(args, configs: Config):
@@ -143,7 +148,7 @@ def train_cmd(args, configs: Config):
             val_dataset=datasets[1],
         )
 
-        best_model = train.execute(
+        train.execute(
             device=device,
             model=model,
             train_loader=train_loader,
@@ -155,10 +160,12 @@ def train_cmd(args, configs: Config):
             training_params=configs.training_params,
         )
 
+        """
         # Log and register best model
         pytorch.log_model(best_model, "cv_inat")
         model_uri = f"runs:/{parent_run_id}/cv_inat"
         mlflow.register_model(model_uri, "cv_inat")
+        """
 
         # Log accumulated run logs to MLflow
         log_path = Path.cwd() / "log.log"
@@ -284,8 +291,13 @@ def main():
         env_configs = yaml.safe_load(file)
     paths_params = PathsParams(**env_configs["paths"])
     dataloader_params = DataLoadersParams(**env_configs["dataloader_params"])
+    hardware_profile = resolve_hardware_profile()
     configs = Config(
-        config_path, paths_params=paths_params, dataloaders_params=dataloader_params
+        config_path,
+        paths_params=paths_params,
+        dataloaders_params=dataloader_params,
+        hardware_profile=hardware_profile,
+        git_branch=get_current_git_branch(),
     )
 
     # Execute command
