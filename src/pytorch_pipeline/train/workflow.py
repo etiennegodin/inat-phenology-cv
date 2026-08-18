@@ -268,7 +268,7 @@ def execute(
     training_params: TrainingParams,
 ):
     """Execute training pipeline over requested epochs with full logging."""
-    best_pr_excess_macro = training_params.best_loss
+    best_pr_excess_macro = training_params.best_objective
     best_eval_metrics = {}
     classes_conditions = ClassesPatienceCondition(class_count=len(CLASS_ORDER))
     log_step_interval = getattr(training_params, "log_step_interval", 10)

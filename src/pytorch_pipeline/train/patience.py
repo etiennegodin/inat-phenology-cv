@@ -17,7 +17,6 @@ def patience_counter(
         (best metric for this run, updated class staleness)
     """
     for i, m in enumerate(classes_metric):
-        print(m)
         if m > classes_conditions.best_metrics[i]:
             classes_conditions.best_metrics[i] = m
             classes_conditions.staleness[i] = 0

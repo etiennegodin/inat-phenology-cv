@@ -50,6 +50,7 @@ mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
 
 
 def train_cmd(args, configs: Config):
+    best_objective = 1e-5
 
     # Fast fail if in colab without GPU
     if not cuda.is_available() and configs.config_path == Path("configs/colab.yaml"):
@@ -110,17 +111,18 @@ def train_cmd(args, configs: Config):
         model, optimizer, start_epoch, eval_metrics, previous_run_id = load_checkpoint(
             configs.paths_params.checkpoint_path, model=model, optimizer=optimizer
         )
-        best_loss = eval_metrics["val_loss"]
+        if eval_metrics is not None:
+            best_objective = eval_metrics.pr_norm_excess_macro
+
     else:
         start_epoch = None
-        best_loss = 1e10
         previous_run_id = None
 
     training_params = TrainingParams(
         epochs=args.epochs,
         patience=args.patience,
         start_epoch=start_epoch,
-        best_loss=best_loss,
+        best_objective=best_objective,
         log_step_interval=args.log_step_interval,
         pos_ratios=get_pos_ratios(datasets[1]),
     )

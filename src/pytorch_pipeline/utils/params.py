@@ -9,7 +9,7 @@ class TrainingParams:
     epochs: int
     patience: int
     start_epoch: int | None
-    best_loss: float = 1e-7
+    best_objective: float
     log_step_interval: int = 10
     pos_ratios: list[float] = field(default_factory=list[float])
 
