@@ -36,10 +36,6 @@ def save_checkpoint(
 
     if eval_metrics is not None:
         checkpoint["eval_metrics"] = eval_metrics.to_dict()
-        logger.info(
-            f"Saving checkpoint for epoch {epoch} with "
-            f"pr_norm_excess_macro={eval_metrics.pr_norm_excess_macro:.5f}"
-        )
         log_best_artifacts(eval_metrics)
 
     if optimizer is not None:
@@ -57,8 +53,6 @@ def save_checkpoint(
             mlflow.log_artifact(checkpoint_file)
             t2 = time.time() - t1
             logger.debug(f"Took {t2:.3f}s")
-
-        logger.info("Logged to mlflow")
 
 
 def load_checkpoint(

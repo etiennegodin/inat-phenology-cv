@@ -10,7 +10,7 @@ import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
-from ..utils.configs import CLASS_ORDER, ClassesPatienceCondition
+from ..utils.configs import CLASS_ORDER, ClassesObjectiveState
 from .metrics import (
     EpochMetrics,
     compute_metrics,
@@ -268,9 +268,8 @@ def execute(
     training_params: TrainingParams,
 ):
     """Execute training pipeline over requested epochs with full logging."""
-    best_pr_excess_macro = training_params.best_objective
     best_eval_metrics = {}
-    classes_conditions = ClassesPatienceCondition(class_count=len(CLASS_ORDER))
+    classes_conditions = ClassesObjectiveState(class_count=len(CLASS_ORDER))
     log_step_interval = getattr(training_params, "log_step_interval", 10)
 
     logger.info(
@@ -343,14 +342,10 @@ def execute(
             eval_metrics.pr_norm_excess_per_class(), classes_conditions
         )
 
-        if eval_metrics.pr_norm_excess_macro > best_pr_excess_macro:
-            best_pr_excess_macro = eval_metrics.pr_norm_excess_macro
+        # If any class improved, checkpoint
+        if min(classes_conditions.staleness) == 0:
+            logger.info(f"Saving checkpoint for epoch {epoch} to {checkpoint_path}")
             best_eval_metrics = eval_metrics
-            logger.info(
-                "Pr_norm_excess_macro improved to "
-                f"{eval_metrics.pr_norm_excess_macro:.5f}. "
-                f"Saving checkpoint to {checkpoint_path}."
-            )
             save_checkpoint(
                 checkpoint_path,
                 epoch=epoch,

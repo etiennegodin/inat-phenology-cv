@@ -1,3 +1,4 @@
+import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -20,9 +21,11 @@ LABEL_MAPPING = {
 
 CLASS_ORDER = ["Flowering", "Fruiting", "Flower_Budding"]
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
-class ClassesPatienceCondition:
+class ClassesObjectiveState:
     class_count: int = 3
     best_metrics: list[float] = field(init=False)
     staleness: list[int] = field(init=False)
@@ -30,6 +33,11 @@ class ClassesPatienceCondition:
     def __post_init__(self):
         self.best_metrics = [0.0 for _ in range(self.class_count)]
         self.staleness = [0 for _ in range(self.class_count)]
+
+    def log_state_update(self, i: int) -> None:
+        logger.info(
+            f"Pr_norm_excess_{CLASS_ORDER[i]} improved to {self.best_metrics[i]:.5f}. "
+        )
 
     def to_dict(self):
         return asdict(self)
