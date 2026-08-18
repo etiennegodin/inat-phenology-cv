@@ -15,10 +15,24 @@ from .system import HardwareProfile
 LABEL_MAPPING = {
     0: "Flowering",
     1: "Fruiting",
-    2: "Flower Budding",
+    2: "Flower_Budding",
 }
 
-CLASS_ORDER = ["Flowering", "Fruiting", "Flower Budding"]
+CLASS_ORDER = ["Flowering", "Fruiting", "Flower_Budding"]
+
+
+@dataclass
+class ClassesPatienceCondition:
+    class_count: int = 3
+    best_metrics: list[float] = field(init=False)
+    staleness: list[int] = field(init=False)
+
+    def __post_init__(self):
+        self.best_metrics = [0.0 for _ in range(self.class_count)]
+        self.staleness = [0 for _ in range(self.class_count)]
+
+    def to_dict(self):
+        return asdict(self)
 
 
 @dataclass

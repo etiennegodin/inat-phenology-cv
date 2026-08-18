@@ -31,6 +31,7 @@ from .utils import (
     resolve_uri,
     update_dataset,
     get_current_git_branch,
+    get_pos_ratios,
 )
 from .utils.params import (
     DataLoadersParams,
@@ -121,12 +122,13 @@ def train_cmd(args, configs: Config):
         start_epoch=start_epoch,
         best_loss=best_loss,
         log_step_interval=args.log_step_interval,
+        pos_ratios=get_pos_ratios(datasets[1]),
     )
 
     # Set configs params
     configs.training_params = training_params
 
-    mlflow.set_experiment("cv_inat_v0.4")
+    mlflow.set_experiment(args.experiment_name)
 
     with mlflow.start_run(run_id=previous_run_id) as parent_run:
         parent_run_id = parent_run.info.run_id
@@ -258,6 +260,7 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--reload", "-r", action="store_true", default=False)
     parser.add_argument("--test", "-t", action="store_true", default=False)
     parser.add_argument("--unfreeze", type=int, default=1)
+    parser.add_argument("--experiment_name", "-name", type=str, default="cv_inat_v0.4")
 
     parser.add_argument(
         "--test_frac",

@@ -62,7 +62,6 @@ class UncachedPhenologyDataset(PhenologyDataset):
         super().__init__(df, transform, dataset_params)
 
     def __getitem__(self, index: int):
-        print(index)
         paths, target = self.df.iloc[index][["path", self.dataset_params.label_col]]
         images = []
         for path in paths:

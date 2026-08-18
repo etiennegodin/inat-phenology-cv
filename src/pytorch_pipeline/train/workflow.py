@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import mlflow
 import numpy as np
@@ -10,8 +10,15 @@ import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
-from ..utils.configs import CLASS_ORDER
-from .metrics import log_attention_metrics, log_best_artifacts, log_metrics
+from ..utils.configs import CLASS_ORDER, ClassesPatienceCondition
+from .metrics import (
+    EpochMetrics,
+    compute_metrics,
+    log_attention_metrics,
+    log_best_artifacts,
+    log_epoch_metrics,
+)
+from .patience import patience_counter, stop_condition
 from .persistence import load_checkpoint, save_checkpoint
 
 if TYPE_CHECKING:
@@ -156,7 +163,8 @@ def evaluate(
     criterion: nn.Module,
     device: device,
     epoch: int,
-) -> tuple[dict[str, Any], tuple[float, float]]:
+    pos_ratios: list[float],
+) -> tuple[EpochMetrics, tuple[float, float]]:
     """Evaluate the model on validation set with rich multi-label metrics."""
     data_time = 0.0
     compute_time = 0.0
@@ -217,15 +225,10 @@ def evaluate(
 
             pbar.set_postfix({"val_loss": f"{total_loss / (step + 1):.4f}"})
 
-    all_preds_bin_np = torch.cat(all_preds_bin).numpy()
     all_labels_np = torch.cat(all_labels).numpy()
     all_preds_raw_np = torch.cat(all_preds_raw).numpy()
 
     val_loss = total_loss / len(dataloader)
-    base_metrics = {
-        "val/loss": val_loss,
-        "val_loss": val_loss,  # Backward compatibility alias
-    }
 
     if mlflow.active_run():
         mlflow.log_metric("val/loss", val_loss, step=epoch)
@@ -233,17 +236,22 @@ def evaluate(
             c_loss = v / len(dataloader)
             mlflow.log_metric(f"val/{k}_loss", c_loss, step=epoch)
 
-    eval_metrics = log_metrics(
-        all_preds=all_preds_bin_np,
-        all_labels=all_labels_np,
+    eval_metrics = compute_metrics(
         all_preds_raw=all_preds_raw_np,
-        epoch=epoch,
+        all_labels=all_labels_np,
+        pos_ratios=pos_ratios,
+        val_loss=val_loss,
         prefix="val",
     )
 
-    log_attention_metrics(epoch, all_obs_weights, prefix="val")
+    log_epoch_metrics(
+        metrics=eval_metrics,
+        all_preds_raw=all_preds_raw_np,
+        all_labels=all_labels_np,
+        epoch=epoch,
+    )
 
-    eval_metrics.update(base_metrics)
+    log_attention_metrics(epoch, all_obs_weights, prefix="val")
 
     return eval_metrics, (data_time, compute_time)
 
@@ -260,10 +268,9 @@ def execute(
     training_params: TrainingParams,
 ):
     """Execute training pipeline over requested epochs with full logging."""
-    patience_counter = 0
-    best_loss = training_params.best_loss
+    best_pr_excess_macro = training_params.best_loss
     best_eval_metrics = {}
-
+    classes_conditions = ClassesPatienceCondition(class_count=len(CLASS_ORDER))
     log_step_interval = getattr(training_params, "log_step_interval", 10)
 
     logger.info(
@@ -307,34 +314,22 @@ def execute(
             criterion=criterion,
             device=device,
             epoch=epoch,
+            pos_ratios=training_params.pos_ratios,
         )
 
-        val_loss = eval_metrics.get("val/loss", eval_metrics.get("val_loss", 0.0))
-        gap = val_loss - train_loss
         epoch_duration = time.time() - epoch_start_time
 
         if mlflow.active_run():
-            mlflow.log_metric("val/loss_gap", gap, step=epoch)
             mlflow.log_metric("time/eval_data", float(eval_times[0]), step=epoch)
             mlflow.log_metric("time/eval_compute", float(eval_times[1]), step=epoch)
             mlflow.log_metric("time/epoch_duration", float(epoch_duration), step=epoch)
 
-        roc_macro = eval_metrics.get(
-            "val/roc_auc_macro", eval_metrics.get("val_roc_auc_macro", 0.0)
-        )
-        pr_macro = eval_metrics.get(
-            "val/pr_auc_macro", eval_metrics.get("val_pr_auc_macro", 0.0)
-        )
-        f1_best_macro = eval_metrics.get(
-            "val/f1_macro_best", eval_metrics.get("val_f1_macro_best", 0.0)
-        )
-
         logger.info(
             f"Epoch {epoch:02d}/{training_params.epochs:02d} [{epoch_duration:.1f}s] - "
-            f"train_loss: {train_loss:.5f} | "
-            f"val_loss: {val_loss:.5f} | gap: {gap:.5f} | "
-            f"ROC-AUC: {roc_macro:.3f} | PR-AUC: {pr_macro:.3f} "
-            f"| Best-F1: {f1_best_macro:.3f}"
+            f"pr_norm_excess_macro: {eval_metrics.pr_norm_excess_macro:.5f} | "
+            f"ROC-AUC: {eval_metrics.roc_auc_macro:.3f} | "
+            f"PR-AUC: {eval_metrics.pr_auc_macro:.3f} "
+            f"| Best-F1: {eval_metrics.f1_macro_best:.3f}"
         )
 
         logger.debug(
@@ -344,11 +339,16 @@ def execute(
             f"Compute: {eval_times[1]:.1f}s"
         )
 
-        if val_loss < best_loss:
-            best_loss = val_loss
+        classes_conditions = patience_counter(
+            eval_metrics.pr_norm_excess_per_class(), classes_conditions
+        )
+
+        if eval_metrics.pr_norm_excess_macro > best_pr_excess_macro:
+            best_pr_excess_macro = eval_metrics.pr_norm_excess_macro
             best_eval_metrics = eval_metrics
             logger.info(
-                f"Val loss improved to {val_loss:.5f}. "
+                "Pr_norm_excess_macro improved to "
+                f"{eval_metrics.pr_norm_excess_macro:.5f}. "
                 f"Saving checkpoint to {checkpoint_path}."
             )
             save_checkpoint(
@@ -359,14 +359,12 @@ def execute(
                 eval_metrics=eval_metrics,
                 to_mlflow=False,
             )
-            patience_counter = 0
         else:
-            patience_counter += 1
             logger.info(
-                f"Val loss did not improve. "
-                f"Patience: {patience_counter}/{training_params.patience}"
+                f"Pr_excess did not improve. "
+                f"Patience: {classes_conditions} / {training_params.patience}"
             )
-            if patience_counter >= training_params.patience:
+            if stop_condition(classes_conditions, training_params.patience):
                 logger.info("Early stopping threshold reached. Terminating training.")
                 break
 

@@ -70,6 +70,24 @@ def get_pos_weights(
     return Tensor(np.divide(label_neg, label_pos)).to(device)
 
 
+def get_pos_ratios(dataset):
+    ratios = []
+    if not hasattr(dataset, "df") or dataset.df is None:
+        return []
+
+    df = dataset.df
+    labels_list = df["label"].tolist() if "label" in df.columns else []
+    if not labels_list:
+        return []
+    labels_arr = np.array(labels_list)
+    total_obs = len(labels_arr)
+    pos_counts = np.sum(labels_arr, axis=0)
+
+    for i, pos_c in enumerate(pos_counts):
+        ratios.append(round(float(pos_c / total_obs), 4))
+    return ratios
+
+
 def clean_data(image_dir: str):
     for image_dir, dirs, files in os.walk(image_dir):
         for file in files:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -7,8 +9,9 @@ class TrainingParams:
     epochs: int
     patience: int
     start_epoch: int | None
-    best_loss: float = 1e10
+    best_loss: float = 1e-7
     log_step_interval: int = 10
+    pos_ratios: list[float] = field(default_factory=list[float])
 
     def to_dict(self):
         return asdict(self)
