@@ -78,7 +78,7 @@ class AttentionBranch(nn.Module):
 
     def forward(self, observations):
         obs_pools = []
-        obs_weights = []
+        obs_weights: list[torch.Tensor] = []
         for obs in observations:
             pool, weights = self.attention(obs)
             obs_pools.append(pool)
@@ -110,7 +110,7 @@ class PhenologyModel(nn.Module):
         """
         indices = []
         class_predictions = []
-        class_attention_weights = {}
+        class_attention_weights: dict[str, list[torch.Tensor]] = {}
 
         # Get indices for split
         for i in x:

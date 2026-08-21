@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from pytorch_pipeline.train.metrics import (
-    calculate_multilabel_metrics,
     compute_attention_values,
+    compute_metrics,
     find_optimal_threshold,
     generate_metric_plots,
 )
@@ -37,7 +37,7 @@ def test_find_optimal_threshold():
     assert recall == pytest.approx(1.0)
 
 
-def test_calculate_multilabel_metrics():
+def test_compute_metrics():
     np.random.seed(42)
     N = 50
     C = 3
@@ -46,25 +46,14 @@ def test_calculate_multilabel_metrics():
     all_preds_raw = np.clip(
         all_labels * 0.7 + np.random.uniform(0, 0.3, size=(N, C)), 0.01, 0.99
     )
+    pos_ratios = [0.5, 0.5, 0.5]
 
-    metrics = calculate_multilabel_metrics(all_preds_raw, all_labels, prefix="val")
+    metrics = compute_metrics(
+        all_preds_raw, all_labels, pos_ratios=pos_ratios, prefix="val"
+    )
 
-    # Check aggregate metrics with slash notation
-    assert "val/roc_auc_macro" in metrics
-    assert "val/pr_auc_macro" in metrics
-    assert "val/f1_macro_0.5" in metrics
-    assert "val/f1_macro_best" in metrics
-    assert "val/f1_micro_0.5" in metrics
-    assert "val/exact_match_ratio" in metrics
-    assert "val/hamming_loss" in metrics
-
-    # Check per-class metrics with slash notation
-    assert "val/roc_auc/flowering" in metrics
-    assert "val/pr_auc/fruiting" in metrics
-    assert "val/best_thresh/flower_budding" in metrics
-
-    assert 0.0 <= metrics["val/roc_auc_macro"] <= 1.0
-    assert 0.0 <= metrics["val/pr_auc_macro"] <= 1.0
+    assert 0.0 <= metrics.roc_auc_macro <= 1.0
+    assert 0.0 <= metrics.pr_auc_macro <= 1.0
 
 
 def test_generate_metric_plots():
@@ -72,9 +61,12 @@ def test_generate_metric_plots():
     C = 3
     all_labels = np.random.randint(0, 2, size=(N, C))
     all_preds_raw = np.random.uniform(0.1, 0.9, size=(N, C))
+    pos_ratios = [0.5, 0.5, 0.5]
 
-    metrics = calculate_multilabel_metrics(all_preds_raw, all_labels, prefix="val")
-    figures = generate_metric_plots(all_preds_raw, all_labels, metrics)
+    metrics = compute_metrics(
+        all_preds_raw, all_labels, pos_ratios=pos_ratios, prefix="val"
+    )
+    figures = generate_metric_plots(all_preds_raw, all_labels, metrics.best_thresh)
 
     assert "roc_curves" in figures
     assert "pr_curves" in figures

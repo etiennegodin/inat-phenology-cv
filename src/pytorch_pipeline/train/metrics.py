@@ -82,6 +82,12 @@ class EpochMetrics:
         """Ordered list matching CLASS_ORDER -- feeds patience_counter directly."""
         return [self.pr_norm_excess[c] for c in CLASS_ORDER]
 
+    def get_per_class(self, named_metric: str):
+        metric_dict = getattr(self, named_metric)
+        if metric_dict:
+            return [metric_dict[c] for c in CLASS_ORDER]
+        return []
+
     def scalar_dict(self) -> dict[str, float]:
         """Flat '{prefix}/key' dict suitable for mlflow.log_metrics().
 

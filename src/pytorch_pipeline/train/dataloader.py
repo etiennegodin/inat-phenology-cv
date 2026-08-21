@@ -12,13 +12,16 @@ if TYPE_CHECKING:
     from .dataset import PhenologyDataset
 
 
-def collate_fn(batch: list[tuple[torch.Tensor, torch.Tensor]]):
+def collate_fn(batch: list[tuple[torch.Tensor, torch.Tensor, int]]):
     images = []
     labels = []
-    for images_tensor, label in batch:
+    obs_ids = []
+    for images_tensor, label, obs_id in batch:
         labels.append(label)
         images.append(images_tensor)
-    return images, torch.stack(labels)
+        obs_ids.append(obs_id)
+
+    return images, torch.stack(labels), obs_ids
 
 
 def build_pipeline_dataloaders(

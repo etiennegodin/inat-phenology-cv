@@ -11,6 +11,7 @@ from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
 from ..utils.configs import CLASS_ORDER, ClassesObjectiveState
+from .analysis import error_analysis, log_error_analysis
 from .metrics import (
     EpochMetrics,
     compute_metrics,
@@ -69,7 +70,7 @@ def train_one_epoch(
     )
 
     t0 = time.time()
-    for step, (images, labels) in enumerate(pbar):
+    for step, (images, labels, obs_ids) in enumerate(pbar):
         indices = [img.size(0) for img in images]
         total_img = sum(indices)
         obs_count = len(indices)
@@ -121,8 +122,8 @@ def train_one_epoch(
         current_loss = loss.item()
         total_loss += current_loss
 
-        for k, v in class_weights.items():
-            all_obs_weights[k].append(v)
+        for class_name, batch_weights in class_weights.items():
+            all_obs_weights[class_name].extend(batch_weights)
 
         pbar.set_postfix(
             {
@@ -175,9 +176,10 @@ def evaluate(
     all_preds_bin = []
     all_labels = []
     all_preds_raw = []
-    all_obs_weights = {}
+    all_obs_ids = []
+    observations_attention_weights: dict[str, list[torch.Tensor]] = {}
     for c in CLASS_ORDER:
-        all_obs_weights[c] = []
+        observations_attention_weights[c] = []
 
     model.eval()
 
@@ -190,7 +192,8 @@ def evaluate(
 
     t0 = time.time()
     with torch.no_grad():
-        for step, (images, labels) in enumerate(pbar):
+        for step, (images, labels, obs_ids) in enumerate(pbar):
+            all_obs_ids.extend(obs_ids)
             labels: Tensor
             images = [t.to(device) for t in images]
             labels = labels.to(device)
@@ -218,11 +221,10 @@ def evaluate(
             all_preds_bin.append(preds_bin.detach().float().cpu())
             all_labels.append(labels.detach().float().cpu())
             all_preds_raw.append(preds_raw.detach().float().cpu())
-            for k, v in class_weights.items():
-                all_obs_weights[k].append(v)
+            for class_name, batch_weights in class_weights.items():
+                observations_attention_weights[class_name].extend(batch_weights)
             t0 = time.time()
             compute_time += t0 - t1
-
             pbar.set_postfix({"val_loss": f"{total_loss / (step + 1):.4f}"})
 
     all_labels_np = torch.cat(all_labels).numpy()
@@ -251,8 +253,16 @@ def evaluate(
         epoch=epoch,
     )
 
-    log_attention_metrics(epoch, all_obs_weights, prefix="val")
+    log_attention_metrics(epoch, observations_attention_weights, prefix="val")
 
+    error_report = error_analysis(
+        all_obs_ids,
+        all_preds_raw_np,
+        all_labels_np,
+        observations_attention_weights,
+        eval_metrics,
+    )
+    log_error_analysis(error_report, epoch)
     return eval_metrics, (data_time, compute_time)
 
 
