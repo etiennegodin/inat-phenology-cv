@@ -123,7 +123,7 @@ def train_one_epoch(
         total_loss += current_loss
 
         for class_name, batch_weights in class_weights.items():
-            all_obs_weights[class_name].append(batch_weights)
+            all_obs_weights[class_name].extend(batch_weights)
 
         pbar.set_postfix(
             {
@@ -177,11 +177,9 @@ def evaluate(
     all_labels = []
     all_preds_raw = []
     all_obs_ids = []
-    per_class_attention_weights: dict[str, list[list[torch.Tensor]]] = {}
     observations_attention_weights: dict[str, list[torch.Tensor]] = {}
     for c in CLASS_ORDER:
         observations_attention_weights[c] = []
-        per_class_attention_weights[c] = []
 
     model.eval()
 
@@ -225,7 +223,6 @@ def evaluate(
             all_preds_raw.append(preds_raw.detach().float().cpu())
             for class_name, batch_weights in class_weights.items():
                 observations_attention_weights[class_name].extend(batch_weights)
-                per_class_attention_weights[class_name].append(batch_weights)
             t0 = time.time()
             compute_time += t0 - t1
             pbar.set_postfix({"val_loss": f"{total_loss / (step + 1):.4f}"})
@@ -256,7 +253,7 @@ def evaluate(
         epoch=epoch,
     )
 
-    log_attention_metrics(epoch, per_class_attention_weights, prefix="val")
+    log_attention_metrics(epoch, observations_attention_weights, prefix="val")
 
     error_report = error_analysis(
         all_obs_ids,
