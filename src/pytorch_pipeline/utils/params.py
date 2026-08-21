@@ -10,6 +10,7 @@ class TrainingParams:
     patience: int
     start_epoch: int | None
     best_objective: float
+    seed: int = 42
     log_step_interval: int = 10
     pos_ratios: list[float] = field(default_factory=list[float])
 

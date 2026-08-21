@@ -9,16 +9,22 @@ class MaxImagesBatchSampler(Sampler[list[int]]):
         bag_sizes: list[int],
         max_images: int,
         shuffle: bool = True,
+        seed: int | None = None,
     ):
         self.bag_sizes = bag_sizes
         self.max_images = max_images
         self.shuffle = shuffle
+        self.seed = seed
 
     def __iter__(self):
         indices = list(range(len(self.bag_sizes)))
 
         if self.shuffle:
-            random.shuffle(indices)
+            if self.seed is not None:
+                rng = random.Random(self.seed)
+                rng.shuffle(indices)
+            else:
+                random.shuffle(indices)
 
         batch = []
         total_images = 0

@@ -146,14 +146,14 @@ def resolve_cache_decision(
 
 
 def split_dataset(
-    df: pd.DataFrame, params: DatasetParams
+    df: pd.DataFrame, params: DatasetParams, seed: int = 42
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     # Collapse to one observation per row
     obs_df = df.drop_duplicates(subset=[params.idx_col])
-    train_idx = obs_df.sample(frac=params.train_frac)
+    train_idx = obs_df.sample(frac=params.train_frac, random_state=seed)
     val_idx = obs_df.drop(train_idx.index).sample(
-        frac=params.val_frac / (1 - params.train_frac)
+        frac=params.val_frac / (1 - params.train_frac), random_state=seed
     )
     test_idx = obs_df.drop(train_idx.index).drop(val_idx.index)
 
@@ -169,9 +169,9 @@ def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
     return df
 
 
-def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
+def reduce_dataset(df, params: DatasetParams, seed: int = 42) -> pd.DataFrame:
     # Sample obs id from fraction
-    test_idx = df.sample(frac=params.testing_frac)
+    test_idx = df.sample(frac=params.testing_frac, random_state=seed)
     # Keep photos only from sampled observations
     df = df[df[params.idx_col].isin(test_idx[params.idx_col])]
     print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
@@ -180,14 +180,14 @@ def reduce_dataset(df, params: DatasetParams) -> pd.DataFrame:
 
 
 def build_datasets(
-    configs: Config, model: PhenologyModel
+    configs: Config, model: PhenologyModel, seed: int = 42
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
 
     df = get_samples(configs.paths_params, configs.dataset_params)
 
     # Reduce data set size if testing
     if configs.test:
-        df = reduce_dataset(df, configs.dataset_params)
+        df = reduce_dataset(df, configs.dataset_params, seed=seed)
 
     # Get mean image ratio on raw df
     mean_image_ratio = get_mean_img_ratio(df)
@@ -205,7 +205,7 @@ def build_datasets(
     )
 
     # Create splits
-    train_df, val_df, test_df = split_dataset(df, configs.dataset_params)
+    train_df, val_df, test_df = split_dataset(df, configs.dataset_params, seed=seed)
 
     # Get backbone specific transforms
     train_transform, val_transform = model.backbone.get_transforms()

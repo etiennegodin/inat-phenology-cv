@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch.utils.data import DataLoader
 
+from ..utils.seed import seed_worker
 from .batch_sampler import MaxImagesBatchSampler
 
 if TYPE_CHECKING:
@@ -27,7 +28,10 @@ def collate_fn(batch: list[tuple[torch.Tensor, torch.Tensor, int]]):
 def build_pipeline_dataloaders(
     datasets: tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset],
     params: DataLoadersParams,
+    seed: int = 42,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
+
+    generator = torch.Generator().manual_seed(seed)
 
     if params.use_max_images:
         samplers = []
@@ -38,6 +42,7 @@ def build_pipeline_dataloaders(
                     set.bag_sizes,
                     max_images=params.max_images,
                     shuffle=True if i == 0 else False,
+                    seed=seed if i == 0 else None,
                 )
             )
 
@@ -50,6 +55,8 @@ def build_pipeline_dataloaders(
                     num_workers=params.num_workers,
                     pin_memory=params.pin_memory,
                     persistent_workers=params.persistent_workers,
+                    generator=generator,
+                    worker_init_fn=seed_worker,
                 )
             )
         return tuple(loaders)
@@ -66,6 +73,8 @@ def build_pipeline_dataloaders(
                     num_workers=params.num_workers,
                     pin_memory=params.pin_memory,
                     persistent_workers=params.persistent_workers,
+                    generator=generator,
+                    worker_init_fn=seed_worker,
                 )
             )
 
