@@ -11,6 +11,7 @@ from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
 from ..utils.configs import CLASS_ORDER, ClassesObjectiveState
+from .analysis import error_analysis, log_error_analysis
 from .metrics import (
     EpochMetrics,
     compute_metrics,
@@ -69,7 +70,7 @@ def train_one_epoch(
     )
 
     t0 = time.time()
-    for step, (images, labels) in enumerate(pbar):
+    for step, (images, labels, obs_ids) in enumerate(pbar):
         indices = [img.size(0) for img in images]
         total_img = sum(indices)
         obs_count = len(indices)
@@ -175,6 +176,7 @@ def evaluate(
     all_preds_bin = []
     all_labels = []
     all_preds_raw = []
+    all_obs_ids = []
     all_obs_weights = {}
     for c in CLASS_ORDER:
         all_obs_weights[c] = []
@@ -190,7 +192,8 @@ def evaluate(
 
     t0 = time.time()
     with torch.no_grad():
-        for step, (images, labels) in enumerate(pbar):
+        for step, (images, labels, obs_ids) in enumerate(pbar):
+            all_obs_ids.extend(obs_ids)
             labels: Tensor
             images = [t.to(device) for t in images]
             labels = labels.to(device)
@@ -253,6 +256,10 @@ def evaluate(
 
     log_attention_metrics(epoch, all_obs_weights, prefix="val")
 
+    error_report = error_analysis(
+        all_obs_ids, all_preds_raw_np, all_labels_np, eval_metrics
+    )
+    log_error_analysis(error_report, epoch)
     return eval_metrics, (data_time, compute_time)
 
 

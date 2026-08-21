@@ -51,7 +51,7 @@ class PhenologyDataset(Dataset, ABC):
         return UncachedPhenologyDataset(df, transform, dataset_params)
 
     @abstractmethod
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, int]:
         pass
 
 
@@ -62,6 +62,7 @@ class UncachedPhenologyDataset(PhenologyDataset):
         super().__init__(df, transform, dataset_params)
 
     def __getitem__(self, index: int):
+        obs_id = int(self.df.iat[index, 0])
         paths, target = self.df.iloc[index][["path", self.dataset_params.label_col]]
         images = []
         for path in paths:
@@ -69,7 +70,7 @@ class UncachedPhenologyDataset(PhenologyDataset):
             if self.transform is not None:
                 image = self.transform(image)
                 images.append(image)
-        return torch.stack(images), torch.tensor(target, dtype=torch.float32)
+        return torch.stack(images), torch.tensor(target, dtype=torch.float32), obs_id
 
 
 class CacheDatasetdPhenologyDataset(PhenologyDataset):
@@ -80,13 +81,13 @@ class CacheDatasetdPhenologyDataset(PhenologyDataset):
         self.images, self.targets = self.preload_images_to_ram(df, dataset_params)
 
     def __getitem__(self, index: int):
-
+        obs_id = int(self.df.iat[index, 0])
         images = self.images[index]
         target = self.targets[index]
 
         if self.transform is not None:
             images = [self.transform(i) for i in images]
-        return torch.stack(images), target
+        return torch.stack(images), target, obs_id
 
     def preload_images_to_ram(self, df, params: DatasetParams):
         preloaded_images = []
