@@ -21,6 +21,7 @@ class BaseAttentionPooling(nn.Module):
     ) -> None:
         super().__init__(*args, **kwargs)
         self.V = nn.Linear(in_features, neurons)
+        self.U = nn.Linear(in_features, neurons)
         self.w = nn.Linear(neurons, 1)
         self.dim = 0  # collapses on axis 0 (images)
         self.d = nn.Dropout(dropout_rate)
@@ -45,12 +46,6 @@ class AttentionPooling(BaseAttentionPooling):
 
 class GatedAttentionPooling(BaseAttentionPooling):
     """Gated attention pooling: w^T (tanh(V x) * sigm(U x))"""
-
-    def __init__(
-        self, in_features: int, neurons: int, dropout_rate: float, *args, **kwargs
-    ) -> None:
-        super().__init__(in_features, neurons, dropout_rate, *args, **kwargs)
-        self.U = nn.Linear(in_features, neurons)
 
     def _compute_scores(self, x: torch.Tensor) -> torch.Tensor:
         v = torch.tanh(self.V(x))
