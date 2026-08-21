@@ -19,14 +19,16 @@ class AttentionPooling(nn.Module):
     def __init__(self, in_features: int, neurons: int, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.V = nn.Linear(in_features, neurons)
+        self.U = nn.Linear(in_features, neurons)
         self.w = nn.Linear(neurons, 1)
         self.dim = 0  # collapses on axis 0 (images)
 
-    def forward(self, chunk):
-        # chunk: (n_images, in_features)
-        scores = self.w(torch.tanh(self.V(chunk)))
+    def forward(self, x):
+        v = torch.tanh(self.V(x))
+        u = torch.sigmoid(self.U(x))
+        scores = self.w(v * u)
         weights = F.softmax(scores, dim=self.dim)
-        pooled = (weights * chunk).sum(dim=self.dim)
+        pooled = (weights * x).sum(dim=self.dim)
         return pooled, weights
 
 
