@@ -122,8 +122,8 @@ def train_one_epoch(
         current_loss = loss.item()
         total_loss += current_loss
 
-        for k, v in class_weights.items():
-            all_obs_weights[k].append(v)
+        for class_name, batch_weights in class_weights.items():
+            all_obs_weights[class_name].append(batch_weights)
 
         pbar.set_postfix(
             {
@@ -177,9 +177,11 @@ def evaluate(
     all_labels = []
     all_preds_raw = []
     all_obs_ids = []
-    all_obs_weights = {}
+    per_class_attention_weights: dict[str, list[list[torch.Tensor]]] = {}
+    observations_attention_weights: dict[str, list[torch.Tensor]] = {}
     for c in CLASS_ORDER:
-        all_obs_weights[c] = []
+        observations_attention_weights[c] = []
+        per_class_attention_weights[c] = []
 
     model.eval()
 
@@ -221,11 +223,11 @@ def evaluate(
             all_preds_bin.append(preds_bin.detach().float().cpu())
             all_labels.append(labels.detach().float().cpu())
             all_preds_raw.append(preds_raw.detach().float().cpu())
-            for k, v in class_weights.items():
-                all_obs_weights[k].append(v)
+            for class_name, batch_weights in class_weights.items():
+                observations_attention_weights[class_name].extend(batch_weights)
+                per_class_attention_weights[class_name].append(batch_weights)
             t0 = time.time()
             compute_time += t0 - t1
-
             pbar.set_postfix({"val_loss": f"{total_loss / (step + 1):.4f}"})
 
     all_labels_np = torch.cat(all_labels).numpy()
@@ -254,10 +256,14 @@ def evaluate(
         epoch=epoch,
     )
 
-    log_attention_metrics(epoch, all_obs_weights, prefix="val")
+    log_attention_metrics(epoch, per_class_attention_weights, prefix="val")
 
     error_report = error_analysis(
-        all_obs_ids, all_preds_raw_np, all_labels_np, eval_metrics
+        all_obs_ids,
+        all_preds_raw_np,
+        all_labels_np,
+        observations_attention_weights,
+        eval_metrics,
     )
     log_error_analysis(error_report, epoch)
     return eval_metrics, (data_time, compute_time)
