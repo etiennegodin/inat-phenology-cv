@@ -16,18 +16,22 @@ if TYPE_CHECKING:
 
 
 class AttentionPooling(nn.Module):
-    def __init__(self, in_features: int, neurons: int, *args, **kwargs) -> None:
+    def __init__(
+        self, in_features: int, neurons: int, dropout_rate: float, *args, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.V = nn.Linear(in_features, neurons)
         self.U = nn.Linear(in_features, neurons)
         self.w = nn.Linear(neurons, 1)
         self.dim = 0  # collapses on axis 0 (images)
+        self.d = nn.Dropout(dropout_rate)
 
     def forward(self, x):
         v = torch.tanh(self.V(x))
         u = torch.sigmoid(self.U(x))
         scores = self.w(v * u)
         weights = F.softmax(scores, dim=self.dim)
+        weights = self.d(weights)
         pooled = (weights * x).sum(dim=self.dim)
         return pooled, weights
 
@@ -63,6 +67,7 @@ class AttentionBranch(nn.Module):
         self.attention = AttentionPooling(
             in_features=input_dim,
             neurons=params.attention_neurons,
+            dropout_rate=params.attention_dropout_prob,
         )
         self.head = ClassifierHead(
             input_dim,

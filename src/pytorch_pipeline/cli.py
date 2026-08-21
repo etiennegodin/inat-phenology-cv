@@ -88,6 +88,7 @@ def train_cmd(args, configs: Config):
         head_outputs=1,
         head_dropout_prob=0.5,
         attention_neurons=128,
+        attention_dropout_prob=0.1,
         last_blocks=args.unfreeze,
     )
 

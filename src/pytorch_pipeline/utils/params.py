@@ -49,6 +49,7 @@ class ModelParams:
     head_outputs: int
     head_dropout_prob: float
     attention_neurons: int
+    attention_dropout_prob: float
     last_blocks: int
 
     def to_dict(self):
