@@ -45,12 +45,13 @@ class OptimizerParams:
 @dataclass
 class ModelParams:
     backbone: str
-    head_neurons: int
-    head_outputs: int
-    head_dropout_prob: float
-    attention_neurons: int
-    attention_dropout_prob: float
-    last_blocks: int
+    head_neurons: int = 256
+    head_outputs: int = 1
+    head_dropout_prob: float = 0.5
+    attention_neurons: int = 128
+    attention_dropout_prob: float = 0.1
+    last_blocks: int = 1
+    gated: bool = True
 
     def to_dict(self):
         return asdict(self)
