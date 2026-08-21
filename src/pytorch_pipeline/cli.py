@@ -92,8 +92,9 @@ def train_cmd(args, configs: Config):
         head_outputs=1,
         head_dropout_prob=0.5,
         attention_neurons=128,
-        attention_dropout_prob=0.1,
+        attention_dropout_prob=args.attention_dropout,
         last_blocks=args.unfreeze,
+        gated=args.gated,
     )
 
     configs.model_params = model_params
@@ -289,6 +290,19 @@ def add_train_args(parser: argparse.ArgumentParser):
         type=int,
         default=10,
         help="Interval of steps for logging batch metrics to MLflow",
+    )
+    parser.add_argument(
+        "--gated",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="""Use gated attention pooling mechanism (default: True).
+        Use --no-gated for simple attention.""",
+    )
+    parser.add_argument(
+        "--attention_dropout",
+        type=float,
+        default=0.1,
+        help="Dropout probability for attention weights (default: 0.1)",
     )
 
 
