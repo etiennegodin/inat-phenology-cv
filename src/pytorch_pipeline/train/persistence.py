@@ -35,8 +35,11 @@ def save_checkpoint(
     }
 
     if eval_metrics is not None:
-        checkpoint["eval_metrics"] = eval_metrics.to_dict()
-        log_best_artifacts(eval_metrics)
+        checkpoint["eval_metrics"] = (
+            eval_metrics.to_dict() if hasattr(eval_metrics, "to_dict") else eval_metrics
+        )
+        if hasattr(eval_metrics, "to_dict"):
+            log_best_artifacts(eval_metrics)
 
     if optimizer is not None:
         checkpoint["optimizer_state_dict"] = optimizer.state_dict()
@@ -98,9 +101,11 @@ def load_checkpoint(
                 f"val_loss={eval_metrics.val_loss:.4f}"
             )
         except (TypeError, KeyError) as exc:
-            # Graceful fallback for checkpoints saved before the EpochMetrics refactor
-            logger.warning(
-                f"Could not reconstruct EpochMetrics from checkpoint ({exc}). "
-                "eval_metrics will be None."
-            )
+            if isinstance(raw, dict):
+                eval_metrics = raw
+            else:
+                logger.warning(
+                    f"Could not reconstruct EpochMetrics from checkpoint ({exc}). "
+                    "eval_metrics will be None."
+                )
     return model, optimizer, start_epoch, eval_metrics, run_id

@@ -54,6 +54,17 @@ class PhenologyDataset(Dataset, ABC):
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, int]:
         pass
 
+    def get_obs_paths_map(self) -> dict[int, str] | None:
+        obs_paths_map = None
+        if "path" in self.df.columns:
+            idx_col = (
+                "observation_id"
+                if "observation_id" in self.df.columns
+                else self.df.columns[0]
+            )
+            obs_paths_map = dict(zip(self.df[idx_col], self.df["path"]))
+        return obs_paths_map
+
 
 class UncachedPhenologyDataset(PhenologyDataset):
     def __init__(

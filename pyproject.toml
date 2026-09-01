@@ -35,6 +35,7 @@ dev = [
     "jupyterlab",
     "pre-commit",
     "ipykernel",          # Required for VS Code Jupyter to work correctly
+    "ipywidgets"
 
 ]
 
