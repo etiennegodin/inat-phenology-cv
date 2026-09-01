@@ -46,7 +46,7 @@ Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etien
 - Reworked attention metrics
 - Per-class loss logging
 
-### 🔲 v0.7 — Hardware and caching
+### ✅ v0.7 — Hardware and caching
 
 - New HardwareProfile dataclass reading the system's configuration
 - Dataset caching implementation
@@ -56,6 +56,19 @@ Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etien
 - Backbone transforms moved to v2 to accept cached tensors.
     - Uint8 until normalisation
 
-### 🔲 v0.8 — Optuna set up
+### ✅ v0.8 — Checkpoint objective, metrics, gated attention, seeding
+
+- Reworked objective for checkpointing and patience
+    - Continue as long as worst performing is still improving
+    - Patience counter per-class
+- Metrics overhaul
+    - EpochMetrics class with methods
+    - Computing, logging and plotting separation of concerns
+- Attention can now be gated and supports a dropout value
+- Seedind for determinism
+- v2 transforms support
+
+
+### 🔲 v0.9 — Optuna set up
 
 - Optuna tuning set up
