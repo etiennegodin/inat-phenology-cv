@@ -16,7 +16,6 @@ def test_save_and_load_full_checkpoint(tmp_path):
         head_outputs=3,
         head_dropout_prob=0.1,
         attention_neurons=16,
-        attention_dropout_prob=0.1,
         last_blocks=0,
     )
     model = build_pipeline_model(device, model_params)
@@ -51,7 +50,6 @@ def test_save_and_load_checkpoint_no_optimizer(tmp_path):
         head_outputs=3,
         head_dropout_prob=0.1,
         attention_neurons=16,
-        attention_dropout_prob=0.1,
         last_blocks=0,
     )
     model = build_pipeline_model(device, model_params)
@@ -84,7 +82,6 @@ def test_save_and_load_checkpoint_no_metrics(tmp_path):
         head_outputs=3,
         head_dropout_prob=0.1,
         attention_neurons=16,
-        attention_dropout_prob=0.1,
         last_blocks=0,
     )
     model = build_pipeline_model(device, model_params)
