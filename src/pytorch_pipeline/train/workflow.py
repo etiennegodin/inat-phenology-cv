@@ -255,12 +255,15 @@ def evaluate(
 
     log_attention_metrics(epoch, observations_attention_weights, prefix="val")
 
+    obs_paths_map = dataloader.dataset.get_obs_paths_map()
+
     error_report = error_analysis(
         all_obs_ids,
         all_preds_raw_np,
         all_labels_np,
         observations_attention_weights,
         eval_metrics,
+        all_obs_paths=obs_paths_map,
     )
     log_error_analysis(error_report, epoch)
     return eval_metrics, (data_time, compute_time)
