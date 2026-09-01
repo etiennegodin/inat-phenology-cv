@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from ..utils.params import ModelParams
 
 
-class AttentionPooling(nn.Module):
+class BaseAttentionPooling(nn.Module):
     def __init__(
         self, in_features: int, neurons: int, dropout_rate: float, *args, **kwargs
     ) -> None:
@@ -26,14 +26,31 @@ class AttentionPooling(nn.Module):
         self.dim = 0  # collapses on axis 0 (images)
         self.d = nn.Dropout(dropout_rate)
 
-    def forward(self, x):
+    def _compute_scores(self, x: torch.Tensor) -> torch.Tensor:
         v = torch.tanh(self.V(x))
-        u = torch.sigmoid(self.U(x))
-        scores = self.w(v * u)
+        return self.w(v)
+
+    def forward(self, x: torch.Tensor):
+        scores = self._compute_scores(x)
         weights = F.softmax(scores, dim=self.dim)
         weights = self.d(weights)
         pooled = (weights * x).sum(dim=self.dim)
         return pooled, weights
+
+
+class AttentionPooling(BaseAttentionPooling):
+    """Simple (ungated) attention pooling: w^T tanh(V x)"""
+
+    pass
+
+
+class GatedAttentionPooling(BaseAttentionPooling):
+    """Gated attention pooling: w^T (tanh(V x) * sigm(U x))"""
+
+    def _compute_scores(self, x: torch.Tensor) -> torch.Tensor:
+        v = torch.tanh(self.V(x))
+        u = torch.sigmoid(self.U(x))
+        return self.w(v * u)
 
 
 class ClassifierHead(nn.Module):
@@ -64,7 +81,8 @@ class AttentionBranch(nn.Module):
     ) -> None:
         super().__init__(*args, **kwargs)
         self.named_class = named_class
-        self.attention = AttentionPooling(
+        attn_cls = GatedAttentionPooling if params.gated else AttentionPooling
+        self.attention = attn_cls(
             in_features=input_dim,
             neurons=params.attention_neurons,
             dropout_rate=params.attention_dropout_prob,

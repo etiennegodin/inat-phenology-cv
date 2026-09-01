@@ -32,6 +32,7 @@ from .utils import (
     update_dataset,
     get_current_git_branch,
     get_pos_ratios,
+    seed_everything,
 )
 from .utils.params import (
     DataLoadersParams,
@@ -50,6 +51,9 @@ mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
 
 
 def train_cmd(args, configs: Config):
+    # Set RNG seed across Python random, numpy, torch, cuda
+    seed_everything(args.seed, set_cuda_deterministic=False)
+
     best_objective = 1e-5
 
     # Fast fail if in colab without GPU
@@ -88,8 +92,9 @@ def train_cmd(args, configs: Config):
         head_outputs=1,
         head_dropout_prob=0.5,
         attention_neurons=128,
-        attention_dropout_prob=0.1,
+        attention_dropout_prob=args.attention_dropout,
         last_blocks=args.unfreeze,
+        gated=args.gated,
     )
 
     configs.model_params = model_params
@@ -99,9 +104,9 @@ def train_cmd(args, configs: Config):
     model = build_pipeline_model(device, model_params)
     optimizer = build_pipeline_optimizer(model, optim_params)
     scheduler = build_scheduler(optimizer, scheduler_params)
-    datasets = build_datasets(configs, model)
+    datasets = build_datasets(configs, model, seed=args.seed)
     train_loader, val_loader, _ = build_pipeline_dataloaders(
-        datasets, configs.dataloaders_params
+        datasets, configs.dataloaders_params, seed=args.seed
     )
 
     pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
@@ -124,6 +129,7 @@ def train_cmd(args, configs: Config):
         patience=args.patience,
         start_epoch=start_epoch,
         best_objective=best_objective,
+        seed=args.seed,
         log_step_interval=args.log_step_interval,
         pos_ratios=get_pos_ratios(datasets[1]),
     )
@@ -266,6 +272,13 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--experiment_name", "-name", type=str, default="cv_inat_v0.4")
 
     parser.add_argument(
+        "--seed",
+        "-s",
+        type=int,
+        default=42,
+        help="Random seed for pipeline reproducibility",
+    )
+    parser.add_argument(
         "--test_frac",
         "-tf",
         help="Fraction of intial dataset to keep for testing",
@@ -277,6 +290,19 @@ def add_train_args(parser: argparse.ArgumentParser):
         type=int,
         default=10,
         help="Interval of steps for logging batch metrics to MLflow",
+    )
+    parser.add_argument(
+        "--gated",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="""Use gated attention pooling mechanism (default: True).
+        Use --no-gated for simple attention.""",
+    )
+    parser.add_argument(
+        "--attention_dropout",
+        type=float,
+        default=0.1,
+        help="Dropout probability for attention weights (default: 0.1)",
     )
 
 
