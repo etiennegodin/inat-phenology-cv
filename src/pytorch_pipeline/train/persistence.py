@@ -8,7 +8,10 @@ import mlflow
 import torch
 
 from ..utils.misc import get_mlflow_run_id
+from ..utils.params import ModelParams
+from .factory import build_pipeline_model, get_device
 from .metrics import EpochMetrics, log_best_artifacts
+from .model import PhenologyModel
 
 if TYPE_CHECKING:
     from torch.optim import Optimizer
@@ -20,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Checkpoint:
-    model: torch.nn.Module
+    model: PhenologyModel
     optimizer: Optimizer | None
     eval_metrics: EpochMetrics | None
 
@@ -28,10 +31,12 @@ class Checkpoint:
     def from_file(
         cls,
         checkpoint_path: str,
-        model: PhenologyModel,
+        run_id: str | None = None,
+        model: PhenologyModel | None = None,
         optimizer: Optimizer | None = None,
     ) -> Checkpoint:
-        run_id = get_mlflow_run_id()
+        if run_id is None:
+            run_id = get_mlflow_run_id()
         checkpoint_file = f"{checkpoint_path}/{run_id}.pth"
         try:
             checkpoint_dict = torch.load(checkpoint_file, weights_only=False)
@@ -39,6 +44,18 @@ class Checkpoint:
         except TypeError:
             # Fallback for PyTorch versions prior to weights_only parameter
             checkpoint_dict = torch.load(checkpoint_file)
+
+        # Try to re-instanciate model if not provied
+        if model is None:
+            if "model_params" in checkpoint_dict:
+                model_params = ModelParams(**checkpoint_dict["model_params"])
+                device = get_device()
+                model = build_pipeline_model(device, model_params)
+            else:
+                raise ValueError(
+                    "No model params in checkpoint file - "
+                    "Can't re-instanciate model to load state dict"
+                )
 
         model.load_state_dict(checkpoint_dict["model_state_dict"])
         run_id = checkpoint_dict.get("run_id", None)
@@ -82,6 +99,7 @@ class Checkpoint:
         """Save training checkpoint to disk and MLflow."""
         run_id = get_mlflow_run_id()
         checkpoint_file = f"{checkpoint_path}/{run_id}.pth"
+
         checkpoint = self.to_dict()
         checkpoint.update(
             {
@@ -99,6 +117,7 @@ class Checkpoint:
     def to_dict(self) -> dict:
         checkpoint = {
             "model_state_dict": self.model.state_dict(),
+            "model_params": self.model.params.to_dict(),
         }
 
         if self.eval_metrics is not None:

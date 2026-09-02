@@ -112,6 +112,7 @@ class AttentionBranch(nn.Module):
 class PhenologyModel(nn.Module):
     def __init__(self, params: ModelParams, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.params = params
         self.backbone: Backbone = BACKBONE_REGISTRY[params.backbone]()
         self.branches = nn.ModuleList(
             [AttentionBranch(self.backbone.output_dim, params, c) for c in CLASS_ORDER]
