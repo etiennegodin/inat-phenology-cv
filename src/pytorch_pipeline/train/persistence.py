@@ -33,8 +33,28 @@ class Checkpoint:
         checkpoint_path: str,
         run_id: str | None = None,
         model: PhenologyModel | None = None,
+        model_params: ModelParams | dict | None = None,
         optimizer: Optimizer | None = None,
     ) -> Checkpoint:
+        """Reinstates a full Checkpoint object from a raw checkpoint file
+
+        Args:
+            checkpoint_path (str): Checkpoint folder path
+            run_id (str | None, optional): Mlflow run id. Defaults to None.
+            model (PhenologyModel | None, optional): Optionnal model to reinstate.
+            Defaults to None.
+            model_params (ModelParams | None, optional): Model description.
+              Mainly for legacy runs without model params in checkfpoint.
+              Defaults to None.
+            optimizer (Optimizer | None, optional): Optionnal optimizer to reinstate.
+            Defaults to None.
+
+        Raises:
+            ValueError: If no model, model_params is provided and absent from checkpoint
+
+        Returns:
+            Checkpoint: Checkpoint dataclass instance
+        """
         if run_id is None:
             run_id = get_mlflow_run_id()
         checkpoint_file = f"{checkpoint_path}/{run_id}.pth"
@@ -47,15 +67,20 @@ class Checkpoint:
 
         # Try to re-instanciate model if not provied
         if model is None:
-            if "model_params" in checkpoint_dict:
-                model_params = ModelParams(**checkpoint_dict["model_params"])
-                device = get_device()
-                model = build_pipeline_model(device, model_params)
-            else:
-                raise ValueError(
-                    "No model params in checkpoint file - "
-                    "Can't re-instanciate model to load state dict"
-                )
+            # If model params is not provided, read it back from checkpoint
+            if model_params is None:
+                if "model_params" in checkpoint_dict:
+                    model_params = ModelParams(**checkpoint_dict["model_params"])
+                else:
+                    raise ValueError(
+                        "No model params provided and in checkpoint file - "
+                        "Can't re-instanciate model to load state dict"
+                    )
+            elif isinstance(model_params, dict):
+                model_params = ModelParams(**model_params)
+
+            device = get_device()
+            model = build_pipeline_model(device, model_params)
 
         model.load_state_dict(checkpoint_dict["model_state_dict"])
         run_id = checkpoint_dict.get("run_id", None)
