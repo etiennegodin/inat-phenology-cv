@@ -171,3 +171,28 @@ def test_review_misclassifications():
     }
     result = review_misclassifications(report)
     assert result == report
+
+
+def test_resolve_report_paths_rebase_colab_paths():
+    report = {
+        "Flowering": {
+            "fp": [
+                {
+                    "obs_id": 601,
+                    "weights": [0.8],
+                    "paths": [
+                        "/content/data/images/10001.jpg",
+                        "/content/data/images/10002.jpg",
+                    ],
+                }
+            ],
+            "fn": [],
+        }
+    }
+    resolved = resolve_report_paths(
+        report, image_dir="/home/etienne/projects/inat-phenology-cv/data/images"
+    )
+    assert resolved["Flowering"]["fp"][0]["paths"] == [
+        "/home/etienne/projects/inat-phenology-cv/data/images/10001.jpg",
+        "/home/etienne/projects/inat-phenology-cv/data/images/10002.jpg",
+    ]

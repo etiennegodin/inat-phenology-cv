@@ -14,11 +14,24 @@ def resolve_report_paths(
     table_name: str = "cv_photos2",
     image_dir: str | Path | None = None,
     dataset_df: pd.DataFrame | None = None,
+    rebase_existing: bool = True,
 ) -> dict[str, dict]:
     """
-    Ensure all observation entries in report dictionary have 'paths' populated.
-    Queries dataset_df or DuckDB table if paths are missing.
+    Ensure all observation entries in report dictionary have 'paths' populated,
+    and optionally rebase existing paths to a new image directory (e.g. converting
+    Colab /content/... paths to local directory paths).
     """
+    # Rebase existing paths if image_dir is provided
+    if image_dir is not None and rebase_existing:
+        img_dir_str = str(image_dir).rstrip("/")
+        for class_data in report.values():
+            for category in ("fp", "fn"):
+                for item in class_data.get(category, []):
+                    if item.get("paths"):
+                        item["paths"] = [
+                            f"{img_dir_str}/{Path(p).name}" for p in item["paths"]
+                        ]
+
     missing_obs_ids = set()
     for class_data in report.values():
         for category in ("fp", "fn"):
@@ -45,9 +58,18 @@ def resolve_report_paths(
                 obs_id = int(row[idx_col])
                 paths_val = row[path_col]
                 if isinstance(paths_val, str):
-                    path_map[obs_id] = [paths_val]
+                    paths_list = [paths_val]
                 elif isinstance(paths_val, list):
-                    path_map[obs_id] = paths_val
+                    paths_list = paths_val
+                else:
+                    paths_list = []
+
+                if image_dir is not None:
+                    paths_list = [
+                        f"{str(image_dir).rstrip('/')}/{Path(p).name}"
+                        for p in paths_list
+                    ]
+                path_map[obs_id] = paths_list
 
     # Query DuckDB for any remaining missing observation IDs
     remaining_obs = missing_obs_ids - set(path_map.keys())
@@ -78,12 +100,12 @@ def resolve_report_paths(
                 for obs_id, group in df_db.groupby(obs_col):
                     obs_id = int(obs_id)
                     photos = group[photo_col].tolist()
-                    if image_dir and photo_col != "path":
+                    if image_dir:
                         photos = [
                             (
-                                f"{str(image_dir).rstrip('/')}/{p}.jpg"
-                                if not str(p).endswith(".jpg")
-                                else f"{str(image_dir).rstrip('/')}/{p}"
+                                f"{str(image_dir).rstrip('/')}/{Path(str(p)).name}"
+                                if str(p).endswith(".jpg")
+                                else f"{str(image_dir).rstrip('/')}/{p}.jpg"
                             )
                             for p in photos
                         ]
@@ -105,11 +127,12 @@ def plot_misclassified_observation(
     label_name: str = "",
     error_type: str = "",
     max_cols: int = 4,
+    image_dir: str | Path | None = None,
     save_path: str | Path | None = None,
 ):
     """
-    Renders matplotlib figure showing observation photos
-      with individual attention weights
+    Renders matplotlib figure showing
+    observation photos with individual attention weights
     and a bar chart of the attention distribution across photos in the bag.
     """
     import matplotlib.pyplot as plt
@@ -156,6 +179,9 @@ def plot_misclassified_observation(
         ax = fig.add_subplot(rows, cols, idx + 1)
         w = weights[idx] if idx < len(weights) else 0.0
         img_path = paths[idx] if idx < len(paths) else None
+
+        if img_path and image_dir:
+            img_path = f"{str(image_dir).rstrip('/')}/{Path(img_path).name}"
 
         if img_path and Path(img_path).exists():
             try:
@@ -205,12 +231,12 @@ def review_misclassifications(
     db_path: str | Path | None = None,
     dataset_df: pd.DataFrame | None = None,
     image_dir: str | Path | None = None,
+    rebase_existing: bool = True,
 ):
     """
     Launches an interactive ipywidgets GUI for
     Jupyter Notebooks to explore misclassifications.
-    Falls back to returning resolved report if
-    ipywidgets or display is unavailable.
+    Falls back to returning resolved report if ipywidgets or display is unavailable.
     """
     if isinstance(report, (str, Path)):
         with open(report) as f:
@@ -218,9 +244,13 @@ def review_misclassifications(
     else:
         report_dict = report
 
-    # Resolve photo paths
+    # Resolve/rebase photo paths
     report_dict = resolve_report_paths(
-        report_dict, db_path=db_path, image_dir=image_dir, dataset_df=dataset_df
+        report_dict,
+        db_path=db_path,
+        image_dir=image_dir,
+        dataset_df=dataset_df,
+        rebase_existing=rebase_existing,
     )
 
     try:
@@ -229,7 +259,8 @@ def review_misclassifications(
     except ImportError:
         print(
             "ipywidgets or IPython display not available. "
-            "Use plot_misclassified_observation(obs_entry, ...)"
+            "Use plot_misclassified_observation(obs_entry, ...) "
+            "directly to render plots."
         )
         return report_dict
 
@@ -278,7 +309,7 @@ def review_misclassifications(
                 import matplotlib.pyplot as plt
 
                 fig, _ = plot_misclassified_observation(
-                    item, label_name=lbl, error_type=err
+                    item, label_name=lbl, error_type=err, image_dir=image_dir
                 )
                 display(fig)
                 plt.close(fig)
