@@ -21,7 +21,6 @@ from .train.factory import (
     get_device,
 )
 from .train.metrics import log_experiment_metadata
-from .train.persistence import load_checkpoint
 from .utils import (
     Config,
     clean_data,
@@ -114,11 +113,14 @@ def train_cmd(args, configs: Config):
 
     # Reinstate model and optimizer state if reload
     if args.reload:
+        raise NotImplementedError("Training reloading not implemented")
+        """
         model, optimizer, start_epoch, eval_metrics, previous_run_id = load_checkpoint(
             configs.paths_params.checkpoint_path, model=model, optimizer=optimizer
         )
         if eval_metrics is not None:
             best_objective = eval_metrics.pr_norm_excess_macro
+        """
 
     else:
         start_epoch = None

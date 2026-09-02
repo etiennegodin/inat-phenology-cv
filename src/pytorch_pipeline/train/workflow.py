@@ -20,7 +20,7 @@ from .metrics import (
     log_epoch_metrics,
 )
 from .patience import patience_counter, stop_condition
-from .persistence import load_checkpoint, save_checkpoint
+from .persistence import Checkpoint
 
 if TYPE_CHECKING:
     from torch import Tensor, device, nn
@@ -279,7 +279,7 @@ def execute(
     criterion: nn.Module,
     checkpoint_path: str,
     training_params: TrainingParams,
-):
+) -> Checkpoint:
     """Execute training pipeline over requested epochs with full logging."""
     best_eval_metrics = {}
     classes_conditions = ClassesObjectiveState(class_count=len(CLASS_ORDER))
@@ -359,14 +359,13 @@ def execute(
         if min(classes_conditions.staleness) == 0:
             logger.info(f"Saving checkpoint for epoch {epoch} to {checkpoint_path}")
             best_eval_metrics = eval_metrics
-            save_checkpoint(
-                checkpoint_path,
-                epoch=epoch,
-                model=model,
-                optimizer=optimizer,
-                eval_metrics=eval_metrics,
-                to_mlflow=False,
+            checkpoint = Checkpoint(
+                model=model, optimizer=optimizer, eval_metrics=best_eval_metrics
             )
+            checkpoint.save(
+                checkpoint_path=checkpoint_path, epoch=epoch, to_mlflow=False
+            )
+
         else:
             logger.info(
                 f"Pr_excess did not improve. "
@@ -376,6 +375,6 @@ def execute(
                 logger.info("Early stopping threshold reached. Terminating training.")
                 break
 
-    checkpoint = load_checkpoint(checkpoint_path, model=model, optimizer=optimizer)
-    log_best_artifacts(checkpoint[3] if checkpoint[3] else best_eval_metrics)
-    return checkpoint[0]
+    checkpoint = Checkpoint.from_file(checkpoint_path, model=model, optimizer=optimizer)
+    log_best_artifacts(checkpoint.eval_metrics)
+    return checkpoint

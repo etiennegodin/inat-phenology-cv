@@ -19,6 +19,12 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
+def get_mlflow_run_id() -> str | None:
+    import mlflow
+
+    return mlflow.active_run().info.run_id if mlflow.active_run() else None
+
+
 def get_current_git_branch():
     try:
         # Runs the git command and decodes the byte output to a string

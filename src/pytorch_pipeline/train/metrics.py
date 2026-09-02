@@ -474,8 +474,13 @@ def log_epoch_metrics(
         )
 
 
-def log_best_artifacts(metrics: EpochMetrics) -> None:
+def log_best_artifacts(metrics: EpochMetrics | None) -> None:
     """Log final best-checkpoint summary metrics and report to MLflow."""
+
+    if metrics is None:
+        logger.warning("Got None as best metrics to log")
+        return None
+
     if not mlflow.active_run():
         return
 
