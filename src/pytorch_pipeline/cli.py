@@ -1,15 +1,17 @@
-from .utils import mlflow_socks_patch  # noqa
+from __future__ import annotations
+
 import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import mlflow
 import yaml
 from dotenv import load_dotenv
 from torch import cuda, nn
 
-from . import train
+from . import train, val
 from .status import status
 from .train.backbone import BACKBONE_REGISTRY
 from .train.dataloader import build_pipeline_dataloaders
@@ -24,8 +26,11 @@ from .train.metrics import log_experiment_metadata
 from .utils import (
     Config,
     clean_data,
+    get_current_git_branch,
+    get_pos_ratios,
     get_pos_weights,
     init_logger,
+    mlflow_socks_patch,  # noqa
     resolve_env_config_path,
     resolve_uri,
     update_dataset,
@@ -44,6 +49,8 @@ from .utils.params import (
 )
 from .utils.system import resolve_hardware_profile
 
+if TYPE_CHECKING:
+    pass
 mlflow.enable_system_metrics_logging()
 mlflow.system_metrics.set_system_metrics_sampling_interval(10)
 mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
@@ -186,6 +193,54 @@ def train_cmd(args, configs: Config):
             mlflow.log_artifact(str(log_path))
 
 
+def val_cmd(args, configs: Config):
+
+    print("Connecting to mlflow")
+    mlflow.set_tracking_uri(resolve_uri())
+    # Set test
+    configs.test = args.test
+    device = get_device()
+    dataset_params = DatasetParams(testing_frac=args.test_frac)
+    configs.dataset_params = dataset_params
+
+    # Construct the model URI
+    model_uri = f"models:/{args.model_name}/{args.model_version}"
+
+    # Load the native PyTorch model
+    model = mlflow.pytorch.load_model(model_uri)
+    print(type(model))
+    quit()
+    datasets = build_datasets(configs, model)
+    _, val_loader, _ = build_pipeline_dataloaders(datasets, configs.dataloaders_params)
+
+    val.execute(model=model, dataloader=val_loader, device=device)
+
+def list_model_cmd(args, configs:Config):
+    from mlflow import MlflowClient
+
+    from pprint import pprint
+    print("Connecting to mlflow")
+
+    mlflow.set_tracking_uri(resolve_uri())
+
+
+    # Initialize the client
+    client = MlflowClient()
+
+    # Search for all registered models
+    registered_models = client.search_registered_models()
+    # Fetch all registered models
+
+    # Print out the names of the models
+    for rm in registered_models:
+        print(f"--- Model: {rm.name} ---")
+        print(f"Creation Timestamp: {rm.creation_timestamp}")
+        print(f"Last Updated: {rm.last_updated_timestamp}")
+        
+        # Iterate through individual versions of the model
+        for version in rm.latest_versions:
+            print(f"  -> Version: {version.version} | Stage: {version.current_stage}")
+
 def test_cmd(args, configs: Config):
     """
 
@@ -238,10 +293,22 @@ def create_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         title="commands", description="Available commands"
     )
+
     # Train command
     train_parser = subparsers.add_parser("train", help="Train model")
     add_train_args(train_parser)
+    add_common_args(train_parser)
     train_parser.set_defaults(func=train_cmd)
+
+    # Val command
+    val_parser = subparsers.add_parser("val", help="Run inference on val set")
+    add_val_args(val_parser)
+    add_common_args(val_parser)
+    val_parser.set_defaults(func=val_cmd)
+
+    # List model command 
+    list_parser = subparsers.add_parser("list", help="List registered models")
+    list_parser.set_defaults(func=list_model_cmd)
 
     # Test command
     test_parser = subparsers.add_parser("test", help="Test model")
@@ -257,6 +324,18 @@ def create_parser() -> argparse.ArgumentParser:
     status_parser.set_defaults(func=status_cmd)
     return parser
 
+def add_common_args(parser: argparse.ArgumentParser):
+    parser.add_argument("--test", "-t", action="store_true", default=False)
+    parser.add_argument(
+        "--test_frac",
+        "-tf",
+        help="Fraction of intial dataset to keep for testing",
+        type=float,
+        default=0.33,
+    )
+def add_val_args(parser: argparse.ArgumentParser):
+    parser.add_argument("--model_version", "-mv", type=int, default=1)
+    parser.add_argument("--model_name", "-mn", type=str, default="cv_inat")
 
 def add_train_args(parser: argparse.ArgumentParser):
 
@@ -269,7 +348,6 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--patience", "-p", type=int, default=3)
     parser.add_argument("--base_lr", "-lr", type=float, default=0.0001)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
-    parser.add_argument("--test", "-t", action="store_true", default=False)
     parser.add_argument("--unfreeze", type=int, default=1)
     parser.add_argument("--experiment_name", "-name", type=str, default="cv_inat_v0.4")
 
@@ -280,13 +358,7 @@ def add_train_args(parser: argparse.ArgumentParser):
         default=42,
         help="Random seed for pipeline reproducibility",
     )
-    parser.add_argument(
-        "--test_frac",
-        "-tf",
-        help="Fraction of intial dataset to keep for testing",
-        type=float,
-        default=0.33,
-    )
+
     parser.add_argument(
         "--log_step_interval",
         type=int,
