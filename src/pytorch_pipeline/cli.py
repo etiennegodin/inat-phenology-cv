@@ -33,10 +33,8 @@ from .utils import (
     mlflow_socks_patch,  # noqa
     resolve_env_config_path,
     resolve_uri,
-    update_dataset,
-    get_current_git_branch,
-    get_pos_ratios,
     seed_everything,
+    update_dataset,
 )
 from .utils.params import (
     DataLoadersParams,
@@ -49,11 +47,13 @@ from .utils.params import (
 )
 from .utils.system import resolve_hardware_profile
 
-if TYPE_CHECKING:
-    pass
 mlflow.enable_system_metrics_logging()
 mlflow.system_metrics.set_system_metrics_sampling_interval(10)
 mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
+
+
+if TYPE_CHECKING:
+    from .train.model import PhenologyModel
 
 
 def train_cmd(args, configs: Config):
@@ -208,21 +208,19 @@ def val_cmd(args, configs: Config):
 
     # Load the native PyTorch model
     model = mlflow.pytorch.load_model(model_uri)
-    print(type(model))
-    quit()
+    model: PhenologyModel
     datasets = build_datasets(configs, model)
     _, val_loader, _ = build_pipeline_dataloaders(datasets, configs.dataloaders_params)
 
-    val.execute(model=model, dataloader=val_loader, device=device)
+    x, y = val.execute(model=model, dataloader=val_loader, device=device)
 
-def list_model_cmd(args, configs:Config):
+
+def list_model_cmd(args, configs: Config):
     from mlflow import MlflowClient
 
-    from pprint import pprint
     print("Connecting to mlflow")
 
     mlflow.set_tracking_uri(resolve_uri())
-
 
     # Initialize the client
     client = MlflowClient()
@@ -236,10 +234,11 @@ def list_model_cmd(args, configs:Config):
         print(f"--- Model: {rm.name} ---")
         print(f"Creation Timestamp: {rm.creation_timestamp}")
         print(f"Last Updated: {rm.last_updated_timestamp}")
-        
+
         # Iterate through individual versions of the model
         for version in rm.latest_versions:
             print(f"  -> Version: {version.version} | Stage: {version.current_stage}")
+
 
 def test_cmd(args, configs: Config):
     """
@@ -306,7 +305,7 @@ def create_parser() -> argparse.ArgumentParser:
     add_common_args(val_parser)
     val_parser.set_defaults(func=val_cmd)
 
-    # List model command 
+    # List model command
     list_parser = subparsers.add_parser("list", help="List registered models")
     list_parser.set_defaults(func=list_model_cmd)
 
@@ -324,6 +323,7 @@ def create_parser() -> argparse.ArgumentParser:
     status_parser.set_defaults(func=status_cmd)
     return parser
 
+
 def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument("--test", "-t", action="store_true", default=False)
     parser.add_argument(
@@ -333,9 +333,12 @@ def add_common_args(parser: argparse.ArgumentParser):
         type=float,
         default=0.33,
     )
+
+
 def add_val_args(parser: argparse.ArgumentParser):
     parser.add_argument("--model_version", "-mv", type=int, default=1)
     parser.add_argument("--model_name", "-mn", type=str, default="cv_inat")
+
 
 def add_train_args(parser: argparse.ArgumentParser):
 

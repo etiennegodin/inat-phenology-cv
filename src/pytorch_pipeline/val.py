@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 
     from .train.model import PhenologyModel
 
-
 logger = logging.getLogger(__name__)
 
 dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
@@ -27,7 +26,6 @@ def execute(
     model: PhenologyModel,
     dataloader: DataLoader,
     device: device,
-    epoch: int,
     as_numpy: bool = False,
 ) -> tuple[np.ndarray | list[float], np.ndarray | list[float]]:
     """Evaluate the model on validation set with rich multi-label metrics."""
@@ -40,7 +38,6 @@ def execute(
 
     pbar = tqdm(
         dataloader,
-        desc=f"Epoch {epoch:02d} [Val]  ",
         leave=False,
         dynamic_ncols=True,
     )
