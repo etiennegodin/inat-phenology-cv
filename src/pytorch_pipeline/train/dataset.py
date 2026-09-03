@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, NewType
 
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
     from ..utils.configs import Config
     from ..utils.params import DatasetParams
     from .model import PhenologyModel
+
+logger = logging.getLogger(__name__)
 
 CacheDataset = NewType("CacheDataset", bool)
 
@@ -230,5 +233,7 @@ def build_datasets(
     test_set = PhenologyDataset.from_profile(
         cache, test_df, val_transform, configs.dataset_params
     )
+
+    logger.debug(f"Dataset type : {type(train_set)}")
 
     return train_set, val_set, test_set

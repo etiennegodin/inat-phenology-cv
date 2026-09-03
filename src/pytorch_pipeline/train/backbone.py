@@ -149,6 +149,7 @@ class BioClipBackbone(Backbone):
                     antialias=True,
                 ),
                 v2.CenterCrop(size=(224, 224)),
+                v2.ToImage(),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(
                     mean=[0.48145466, 0.4578275, 0.40821073],
