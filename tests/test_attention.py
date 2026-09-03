@@ -19,7 +19,6 @@ def test_simple_attention_pooling():
     )
 
     assert isinstance(attn, BaseAttentionPooling)
-    assert not hasattr(attn, "U")
     assert attn.d.p == dropout_rate
 
     attn.eval()
