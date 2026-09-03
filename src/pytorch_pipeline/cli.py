@@ -13,15 +13,15 @@ from torch import cuda, nn
 
 from . import train, val
 from .status import status
-from .train.backbone import BACKBONE_REGISTRY
-from .train.dataloader import build_pipeline_dataloaders
-from .train.dataset import build_datasets
-from .train.factory import (
+from .train import (
+    build_datasets,
+    build_pipeline_dataloaders,
     build_pipeline_model,
     build_pipeline_optimizer,
     build_scheduler,
     get_device,
 )
+from .train.backbone import BACKBONE_REGISTRY
 from .train.metrics import log_experiment_metadata
 from .utils import (
     Config,
@@ -32,6 +32,7 @@ from .utils import (
     init_logger,
     mlflow_socks_patch,  # noqa
     resolve_env_config_path,
+    resolve_hardware_profile,
     resolve_uri,
     seed_everything,
     update_dataset,
@@ -45,7 +46,6 @@ from .utils.params import (
     SchedulerParams,
     TrainingParams,
 )
-from .utils.system import resolve_hardware_profile
 
 mlflow.enable_system_metrics_logging()
 mlflow.system_metrics.set_system_metrics_sampling_interval(10)
