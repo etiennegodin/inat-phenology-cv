@@ -168,4 +168,76 @@ class BioClipBackbone(Backbone):
         return 3, *img_size
 
 
-BACKBONE_REGISTRY = {"efficientnet": EfficientNetBackbone, "bioclip": BioClipBackbone}
+class BioClip2Backbone(Backbone):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        model, self.train_transform, self.val_transform = (
+            open_clip.create_model_and_transforms("hf-hub:imageomics/bioclip-2")
+        )
+        self.train_transform: v2.Compose
+        self.val_transform: v2.Compose
+        self.encoder = model.visual  # image tower only
+        self.freeze()
+        self.set_output_dim()
+
+    def encode(self, input: Tensor) -> Tensor:
+        # Normalising clip embeddings for scale sensitive attention pooling
+        embeddings = self.encoder(input)
+        return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+
+    def get_transforms(self, version="v2") -> tuple[v2.Compose, v2.Compose]:
+        if version != "v2":
+            return self.train_transform, self.val_transform
+
+        v2_train_transform = v2.Compose(
+            [
+                v2.RandomResizedCrop(
+                    size=(224, 224),
+                    scale=(0.9, 1.0),
+                    ratio=(0.75, 1.3333),
+                    interpolation=InterpolationMode.BICUBIC,
+                    antialias=True,
+                ),
+                v2.RandomHorizontalFlip(p=0.5),
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(
+                    mean=[0.48145466, 0.4578275, 0.40821073],
+                    std=[0.26862954, 0.26130258, 0.27577711],
+                ),
+            ]
+        )
+
+        v2_val_transforms = v2.Compose(
+            [
+                v2.Resize(
+                    size=224,
+                    interpolation=InterpolationMode.BICUBIC,
+                    max_size=None,
+                    antialias=True,
+                ),
+                v2.CenterCrop(size=(224, 224)),
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(
+                    mean=[0.48145466, 0.4578275, 0.40821073],
+                    std=[0.26862954, 0.26130258, 0.27577711],
+                ),
+            ]
+        )
+
+        return v2_train_transform, v2_val_transforms
+
+    def get_trainable_blocks(self) -> nn.ModuleList:
+        return self.encoder.transformer.resblocks
+
+    def get_dummy_input_shape(self) -> tuple[int, int, int]:
+        img_size: tuple = tuple(self.encoder.image_size)
+        return 3, *img_size
+
+
+BACKBONE_REGISTRY = {
+    "efficientnet": EfficientNetBackbone,
+    "bioclip": BioClipBackbone,
+    "bioclip2": BioClip2Backbone,
+}
