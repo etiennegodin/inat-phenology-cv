@@ -379,8 +379,8 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--attention_dropout",
         type=float,
-        default=0.1,
-        help="Dropout probability for attention weights (default: 0.1)",
+        default=0.0,
+        help="Dropout probability for attention weights (default: 0.0)",
     )
 
 
