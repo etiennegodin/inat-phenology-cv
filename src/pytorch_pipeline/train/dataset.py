@@ -163,33 +163,52 @@ def split_dataset(
     df: pd.DataFrame, params: DatasetParams, seed: int = 42
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
-    # Collapse to one observation per row
-    obs_df = df.drop_duplicates(subset=[params.idx_col])
+    # Collapse to one observation per row and sort deterministically
+    obs_df = (
+        df.drop_duplicates(subset=[params.idx_col])
+        .sort_values(by=params.idx_col)
+        .reset_index(drop=True)
+    )
     train_idx = obs_df.sample(frac=params.train_frac, random_state=seed)
     val_idx = obs_df.drop(train_idx.index).sample(
         frac=params.val_frac / (1 - params.train_frac), random_state=seed
     )
     test_idx = obs_df.drop(train_idx.index).drop(val_idx.index)
 
-    train_df = df[df[params.idx_col].isin(train_idx[params.idx_col])]
-    val_df = df[df[params.idx_col].isin(val_idx[params.idx_col])]
-    test_df = df[df[params.idx_col].isin(test_idx[params.idx_col])]
+    train_df = (
+        df[df[params.idx_col].isin(train_idx[params.idx_col])]
+        .sort_values(by=params.idx_col)
+        .reset_index(drop=True)
+    )
+    val_df = (
+        df[df[params.idx_col].isin(val_idx[params.idx_col])]
+        .sort_values(by=params.idx_col)
+        .reset_index(drop=True)
+    )
+    test_df = (
+        df[df[params.idx_col].isin(test_idx[params.idx_col])]
+        .sort_values(by=params.idx_col)
+        .reset_index(drop=True)
+    )
     return (train_df, val_df, test_df)
 
 
 def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
     df = get_df_from_table(paths.db_path, "cv_photos2")
     df["path"] = paths.image_dir + "/" + df[params.photo_idx_col].astype(str) + ".jpg"
+    df = df.sort_values(by=[params.idx_col, params.photo_idx_col]).reset_index(
+        drop=True
+    )
     return df
 
 
 def reduce_dataset(df, params: DatasetParams, seed: int = 42) -> pd.DataFrame:
     # Sample obs id from fraction
     test_idx = df.sample(frac=params.testing_frac, random_state=seed)
-    # Keep photos only from sampled observations
-    df = df[df[params.idx_col].isin(test_idx[params.idx_col])]
+    # Keep sampled observations
+    df = df[df[params.idx_col].isin(test_idx[params.idx_col])].reset_index(drop=True)
     print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
-    print(f"{test_idx.shape[0]} observations with {df.shape[0]} images")
+    print(f"{test_idx.shape[0]} observations kept")
     return df
 
 
@@ -198,10 +217,6 @@ def build_datasets(
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
 
     df = get_samples(configs.paths_params, configs.dataset_params)
-
-    # Reduce data set size if testing
-    if configs.test:
-        df = reduce_dataset(df, configs.dataset_params, seed=seed)
 
     # Get mean image ratio on raw df
     mean_image_ratio = get_mean_img_ratio(df)
@@ -216,7 +231,13 @@ def build_datasets(
         df.groupby(configs.dataset_params.idx_col)
         .agg({"path": list, configs.dataset_params.label_col: "first"})
         .reset_index(drop=False)
+        .sort_values(by=configs.dataset_params.idx_col)
+        .reset_index(drop=True)
     )
+
+    # Reduce dataset size if testing
+    if configs.test:
+        df = reduce_dataset(df, configs.dataset_params, seed=seed)
 
     # Create splits
     train_df, val_df, test_df = split_dataset(df, configs.dataset_params, seed=seed)

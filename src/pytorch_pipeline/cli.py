@@ -209,8 +209,10 @@ def val_cmd(args, configs: Config):
     # Load the native PyTorch model
     model = mlflow.pytorch.load_model(model_uri)
     model: PhenologyModel
-    datasets = build_datasets(configs, model)
-    _, val_loader, _ = build_pipeline_dataloaders(datasets, configs.dataloaders_params)
+    datasets = build_datasets(configs, model, seed=args.seed)
+    _, val_loader, _ = build_pipeline_dataloaders(
+        datasets, configs.dataloaders_params, seed=args.seed
+    )
 
     x, y = val.execute(model=model, dataloader=val_loader, device=device)
 
@@ -333,6 +335,13 @@ def add_common_args(parser: argparse.ArgumentParser):
         type=float,
         default=0.33,
     )
+    parser.add_argument(
+        "--seed",
+        "-s",
+        type=int,
+        default=42,
+        help="Random seed for pipeline reproducibility",
+    )
 
 
 def add_val_args(parser: argparse.ArgumentParser):
@@ -353,14 +362,6 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--reload", "-r", action="store_true", default=False)
     parser.add_argument("--unfreeze", type=int, default=1)
     parser.add_argument("--experiment_name", "-name", type=str, default="cv_inat_v0.4")
-
-    parser.add_argument(
-        "--seed",
-        "-s",
-        type=int,
-        default=42,
-        help="Random seed for pipeline reproducibility",
-    )
 
     parser.add_argument(
         "--log_step_interval",

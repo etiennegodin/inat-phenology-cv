@@ -46,6 +46,47 @@ def test_split_dataset_determinism():
     assert not train1["observation_id"].equals(train3["observation_id"])
 
 
+def test_split_dataset_shuffled_row_order_determinism():
+    data = {
+        "observation_id": list(range(100)),
+        "label": [[1, 0, 0]] * 100,
+        "path": [["/path/to/img.jpg"]] * 100,
+    }
+    df_sorted = pd.DataFrame(data)
+    df_shuffled = df_sorted.sample(frac=1.0, random_state=999).reset_index(drop=True)
+
+    params = DatasetParams(train_frac=0.8, val_frac=0.1, test_frac=0.1)
+
+    train1, val1, test1 = split_dataset(df_sorted, params, seed=42)
+    train2, val2, test2 = split_dataset(df_shuffled, params, seed=42)
+
+    pd.testing.assert_frame_equal(train1, train2)
+    pd.testing.assert_frame_equal(val1, val2)
+    pd.testing.assert_frame_equal(test1, test2)
+
+
+def test_reduce_dataset_observation_level_sampling():
+    from pytorch_pipeline.train.dataset import reduce_dataset
+
+    # Create dummy observations with different numbers of photos
+    obs_data = {
+        "observation_id": list(range(100)),
+        "label": [[1, 0, 0]] * 100,
+        "path": [["/img1.jpg"]] * 50
+        + [["/img1.jpg", "/img2.jpg", "/img3.jpg", "/img4.jpg", "/img5.jpg"]] * 50,
+    }
+    df = pd.DataFrame(obs_data)
+    params = DatasetParams(testing_frac=0.33)
+
+    reduced_df = reduce_dataset(df, params, seed=42)
+    assert len(reduced_df) == 33
+    # Check that both single-photo and
+    # multi-photo observations are sampled proportionately
+    single_photo_count = (reduced_df["path"].str.len() == 1).sum()
+    multi_photo_count = (reduced_df["path"].str.len() == 5).sum()
+    assert abs(single_photo_count - multi_photo_count) <= 5
+
+
 def test_max_images_batch_sampler_determinism():
     bag_sizes = [2, 5, 1, 4, 3, 6, 2, 1, 5, 3]
     sampler1 = MaxImagesBatchSampler(bag_sizes, max_images=6, shuffle=True, seed=42)
