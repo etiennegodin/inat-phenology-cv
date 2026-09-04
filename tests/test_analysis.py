@@ -196,3 +196,95 @@ def test_resolve_report_paths_rebase_colab_paths():
         "/home/etienne/projects/inat-phenology-cv/data/images/10001.jpg",
         "/home/etienne/projects/inat-phenology-cv/data/images/10002.jpg",
     ]
+
+
+def test_review_label_issues_returns_entries():
+    """review_label_issues resolves paths and returns entry dicts."""
+    from pytorch_pipeline.review import review_label_issues
+
+    obs_ids = [601, 602]
+    df = pd.DataFrame(
+        {
+            "observation_id": [601, 602],
+            "path": [["/img/601a.jpg", "/img/601b.jpg"], ["/img/602a.jpg"]],
+        }
+    )
+    result = review_label_issues(obs_ids, label_name="Flowering", dataset_df=df)
+
+    assert len(result) == 2
+    assert result[0]["obs_id"] == 601
+    assert result[0]["paths"] == ["/img/601a.jpg", "/img/601b.jpg"]
+    assert result[1]["obs_id"] == 602
+    assert result[1]["paths"] == ["/img/602a.jpg"]
+
+
+def test_review_label_issues_empty():
+    """review_label_issues handles an empty obs_ids list gracefully."""
+    from pytorch_pipeline.review import review_label_issues
+
+    result = review_label_issues([])
+    assert result == []
+
+
+def test_review_label_issues_no_paths():
+    """review_label_issues returns entries with empty paths when no source given."""
+    from pytorch_pipeline.review import review_label_issues
+
+    result = review_label_issues([999])
+    assert len(result) == 1
+    assert result[0]["obs_id"] == 999
+    assert result[0].get("paths", []) == []
+
+
+def test_review_label_issues_preserves_order():
+    """review_label_issues preserves the ranked order of obs_ids."""
+    from pytorch_pipeline.review import review_label_issues
+
+    obs_ids = [700, 701, 702]
+    df = pd.DataFrame(
+        {
+            "observation_id": [700, 701, 702],
+            "path": [["/img/700.jpg"], ["/img/701.jpg"], ["/img/702.jpg"]],
+        }
+    )
+    result = review_label_issues(obs_ids, dataset_df=df)
+
+    assert [r["obs_id"] for r in result] == [700, 701, 702]
+
+
+def test_review_label_issues_with_prob_and_target():
+    """review_label_issues enriches entries with prob and
+    target when inference outputs provided."""
+    from pytorch_pipeline.review import review_label_issues
+
+    all_obs_ids = [800, 801, 802]
+    raw_labels = np.array([[1, 0, 0], [0, 1, 0], [1, 1, 0]], dtype=float)
+    raw_preds = np.array([[0.9, 0.1, 0.2], [0.3, 0.8, 0.1], [0.7, 0.6, 0.05]])
+
+    flagged_obs_ids = [802, 800]  # cleanlab ranked order
+    df = pd.DataFrame(
+        {
+            "observation_id": [800, 801, 802],
+            "path": [["/img/800.jpg"], ["/img/801.jpg"], ["/img/802.jpg"]],
+        }
+    )
+
+    result = review_label_issues(
+        obs_ids=flagged_obs_ids,
+        label_name="Flowering",
+        class_idx=0,
+        all_obs_ids=all_obs_ids,
+        raw_labels=raw_labels,
+        raw_preds=raw_preds,
+        dataset_df=df,
+    )
+
+    assert len(result) == 2
+    # First entry: obs_id=802, class_idx=0 -> label=1, pred=0.7
+    assert result[0]["obs_id"] == 802
+    assert result[0]["target"] == 1
+    assert abs(result[0]["prob"] - 0.7) < 1e-6
+    # Second entry: obs_id=800, class_idx=0 -> label=1, pred=0.9
+    assert result[1]["obs_id"] == 800
+    assert result[1]["target"] == 1
+    assert abs(result[1]["prob"] - 0.9) < 1e-6

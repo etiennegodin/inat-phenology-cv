@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -325,3 +327,154 @@ def review_misclassifications(
     )
     display(controls)
     return report_dict
+
+
+def review_label_issues(
+    obs_ids: list[int],
+    label_name: str = "",
+    db_path: str | Path | None = None,
+    dataset_df: "pd.DataFrame | None" = None,
+    image_dir: str | Path | None = None,
+    table_name: str = "cv_photos2",
+    all_obs_ids: "list[int] | None" = None,
+    raw_labels: "np.ndarray | None" = None,
+    raw_preds: "np.ndarray | None" = None,
+    class_idx: int | None = None,
+) -> list[dict]:
+    """
+    Launches an interactive ipywidgets GUI to browse a ranked list of
+    observations flagged by a cleanlab label-issue audit.
+
+    Parameters
+    ----------
+    obs_ids : list[int]
+        Ordered list of observation IDs to display. Typically the per-class
+        ``issues[i]`` list produced by the cleanlab notebook, which maps
+        ranked indices directly to observation IDs.
+    label_name : str
+        Human-readable label name shown in plot titles (e.g. ``"Flowering"``).
+    db_path : str | Path | None
+        Path to a DuckDB database used to resolve photo paths.
+    dataset_df : pd.DataFrame | None
+        DataFrame with ``observation_id`` and ``path`` columns as an
+        alternative (or supplementary) path source.
+    image_dir : str | Path | None
+        Root directory to prepend / rebase photo paths.
+    table_name : str
+        DuckDB table name, defaults to ``"cv_photos2"``.
+    all_obs_ids : list[int] | None
+        Full list of observation IDs returned by ``val.execute`` (same order
+        as ``raw_labels`` / ``raw_preds`` rows). Required to look up ``prob``
+        and ``target`` for each flagged observation.
+    raw_labels : np.ndarray | None
+        Label array of shape ``(N, n_classes)`` returned by ``val.execute``.
+    raw_preds : np.ndarray | None
+        Prediction probability array of shape ``(N, n_classes)`` returned by
+        ``val.execute``.
+    class_idx : int | None
+        Column index into ``raw_labels`` / ``raw_preds`` corresponding to the
+        class being reviewed (e.g. ``0`` for Flowering).
+
+    Returns
+    -------
+    list[dict]
+        Resolved observation entry dicts (``obs_id``, ``paths``, ``weights``,
+        and optionally ``prob`` / ``target``), in the same order as
+        ``obs_ids``. Falls back to this list when ipywidgets or IPython
+        display is unavailable.
+
+    Examples
+    --------
+    >>> from pytorch_pipeline.review import review_label_issues
+    >>> # issues[0] is the Flowering class — obs IDs ranked by cleanlab
+    >>> review_label_issues(
+    ...     obs_ids=issues[0],
+    ...     label_name="Flowering",
+    ...     class_idx=0,
+    ...     all_obs_ids=obs_ids,
+    ...     raw_labels=raw_labels,
+    ...     raw_preds=raw_preds,
+    ...     db_path="/abs/path/to/cv_raw.duckdb",
+    ...     image_dir="/abs/path/to/images",
+    ... )
+    """
+    if not obs_ids:
+        print("obs_ids list is empty — nothing to display.")
+        return []
+
+    # Build lookup from obs_id -> inference row index if raw data provided
+    can_enrich = (
+        all_obs_ids is not None
+        and raw_labels is not None
+        and raw_preds is not None
+        and class_idx is not None
+    )
+    obs_id_to_idx: dict[int, int] = {}
+    if can_enrich:
+        obs_id_to_idx = {int(oid): i for i, oid in enumerate(all_obs_ids)}
+
+    # Build a synthetic single-class report to reuse resolve_report_paths
+    entries_init = []
+    for oid in obs_ids:
+        entry: dict = {"obs_id": int(oid), "weights": []}
+        if can_enrich:
+            row_idx = obs_id_to_idx.get(int(oid))
+            if row_idx is not None:
+                entry["prob"] = float(raw_preds[row_idx, class_idx])
+                entry["target"] = int(raw_labels[row_idx, class_idx])
+        entries_init.append(entry)
+
+    synthetic_report = {"_cleanlab": {"fp": entries_init, "fn": []}}
+    resolved = resolve_report_paths(
+        synthetic_report,
+        db_path=db_path,
+        image_dir=image_dir,
+        dataset_df=dataset_df,
+        table_name=table_name,
+        rebase_existing=True,
+    )
+    entries = resolved["_cleanlab"]["fp"]
+
+    try:
+        import ipywidgets as widgets
+        from IPython.display import clear_output, display
+    except ImportError:
+        print(
+            "ipywidgets or IPython display not available. "
+            "Use plot_misclassified_observation(obs_entry, ...) "
+            "directly to render plots."
+        )
+        return entries
+
+    n = len(entries)
+    obs_slider = widgets.IntSlider(
+        min=0,
+        max=n - 1,
+        step=1,
+        description=f"Issue (/{n}):",
+        style={"description_width": "initial"},
+    )
+    out = widgets.Output()
+
+    def render_figure(*args):
+        with out:
+            clear_output(wait=True)
+            idx = obs_slider.value
+            if 0 <= idx < len(entries):
+                import matplotlib.pyplot as plt
+
+                fig, _ = plot_misclassified_observation(
+                    entries[idx],
+                    label_name=label_name,
+                    error_type="cleanlab",
+                    image_dir=image_dir,
+                )
+                display(fig)
+                plt.close(fig)
+
+    obs_slider.observe(render_figure, names="value")
+    render_figure()
+
+    controls = widgets.VBox([obs_slider, out])
+    display(controls)
+    return entries
