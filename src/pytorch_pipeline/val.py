@@ -27,7 +27,7 @@ def execute(
     dataloader: DataLoader,
     device: device,
     as_numpy: bool = False,
-) -> tuple[np.ndarray | list[float], np.ndarray | list[float]]:
+) -> tuple[list[int], np.ndarray | list[float], np.ndarray | list[float]]:
     """Evaluate the model on validation set with rich multi-label metrics."""
 
     all_labels = []
@@ -64,5 +64,5 @@ def execute(
     if as_numpy:
         all_labels_np = torch.cat(all_labels).numpy()
         all_preds_raw_np = torch.cat(all_preds_raw).numpy()
-        return all_labels_np, all_preds_raw_np
-    return all_labels, all_preds_raw
+        return all_obs_ids, all_labels_np, all_preds_raw_np
+    return all_obs_ids, all_labels, all_preds_raw
