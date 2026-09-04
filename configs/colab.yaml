@@ -2,8 +2,14 @@ paths :
   root : '/content/inat-phenology-cv'
   data_root : '/content/inat-phenology-cv/data'
   image_dir : '/content/images'
-  db_path : '/content/data/cv_raw.duckdb'
+  db_path : '/content/data/cv_photos3.parquet'
   checkpoint_path : '/content/drive/MyDrive/inat-phenology-cv/checkpoints'
+
+dataset_params:
+  source_table : "cv_photos3"
+  idx_col: "observation_id"
+  photo_idx_col: "photo_id"
+  label_col: "label"
 
 dataloader_params:
     batch_size: 256

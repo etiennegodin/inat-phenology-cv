@@ -89,12 +89,13 @@ class PathsParams:
 
 @dataclass
 class DatasetParams:
-    train_frac: float = 0.8
-    val_frac: float = 0.1
-    test_frac: float = 0.1
+    source_table: str
     idx_col: str = "observation_id"
     photo_idx_col: str = "photo_id"
     label_col: str = "label"
+    train_frac: float = 0.8
+    val_frac: float = 0.1
+    test_frac: float = 0.1
     testing_frac: float = 0.33
 
     def __post_init__(self):

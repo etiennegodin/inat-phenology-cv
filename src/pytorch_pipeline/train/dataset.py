@@ -194,7 +194,7 @@ def split_dataset(
 
 
 def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
-    df = get_df_from_table(paths.db_path, "cv_photos2")
+    df = get_df_from_table(paths.db_path, params.source_table)
     df["path"] = paths.image_dir + "/" + df[params.photo_idx_col].astype(str) + ".jpg"
     df = df.sort_values(by=[params.idx_col, params.photo_idx_col]).reset_index(
         drop=True

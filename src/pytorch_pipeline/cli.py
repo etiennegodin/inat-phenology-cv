@@ -75,9 +75,6 @@ def train_cmd(args, configs: Config):
     mlflow.set_tracking_uri(resolve_uri())
 
     print("Initalizing experiment")
-    # // Dataset params
-    dataset_params = DatasetParams(testing_frac=args.test_frac)
-    configs.dataset_params = dataset_params
 
     # // Optimiser params
     optim_params = OptimizerParams(
@@ -157,7 +154,7 @@ def train_cmd(args, configs: Config):
         mlflow.log_dict(configs.to_dict(), "configs.json")
         mlflow.log_params(model_params.to_dict())
         mlflow.log_params(training_params.to_dict())
-        mlflow.log_params(dataset_params.to_dict())
+        mlflow.log_params(configs.dataset_params.to_dict())
         mlflow.log_params(configs.dataloaders_params.to_dict())
         mlflow.log_params(optim_params.to_dict())
         mlflow.log_params(scheduler_params.to_dict())
@@ -200,8 +197,6 @@ def val_cmd(args, configs: Config):
     # Set test
     configs.test = args.test
     device = get_device()
-    dataset_params = DatasetParams(testing_frac=args.test_frac)
-    configs.dataset_params = dataset_params
 
     # Construct the model URI
     model_uri = f"models:/{args.model_name}/{args.model_version}"
@@ -400,12 +395,16 @@ def main():
     with open(config_path, "r") as file:
         env_configs = yaml.safe_load(file)
     paths_params = PathsParams(**env_configs["paths"])
+    dataset_params = DatasetParams(
+        **env_configs["dataset_params"], testing_frac=args.test_frac
+    )
     dataloader_params = DataLoadersParams(**env_configs["dataloader_params"])
     hardware_profile = resolve_hardware_profile()
     configs = Config(
         config_path,
         paths_params=paths_params,
         dataloaders_params=dataloader_params,
+        dataset_params=dataset_params,
         hardware_profile=hardware_profile,
         git_branch=get_current_git_branch(),
     )
