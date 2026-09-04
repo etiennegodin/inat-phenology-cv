@@ -112,11 +112,11 @@ def test_resolve_report_paths_from_duckdb(tmp_path):
     with duckdb.connect(str(db_file)) as con:
         con.execute(
             """
-            CREATE TABLE cv_photos2 (
+            CREATE TABLE my_table (
                 observation_id BIGINT,
                 photo_id BIGINT
             );
-            INSERT INTO cv_photos2 VALUES (301, 1001), (301, 1002);
+            INSERT INTO my_table VALUES (301, 1001), (301, 1002);
             """
         )
 
@@ -128,7 +128,7 @@ def test_resolve_report_paths_from_duckdb(tmp_path):
     }
 
     resolved = resolve_report_paths(
-        report, db_path=db_file, table_name="cv_photos2", image_dir="/data/images"
+        report, db_path=db_file, table_name="my_table", image_dir="/data/images"
     )
     assert resolved["flowers"]["fp"][0]["paths"] == [
         "/data/images/1001.jpg",
