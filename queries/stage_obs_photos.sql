@@ -1,6 +1,5 @@
 -- photos --
 CREATE OR REPLACE TABLE staged.photos AS
-
 WITH unpacked AS (
 SELECT
     o.id AS observation_id,
@@ -8,7 +7,6 @@ SELECT
 
 FROM staged.observations o
 )
-
 SELECT
     observation_id,
     id AS photo_id,
