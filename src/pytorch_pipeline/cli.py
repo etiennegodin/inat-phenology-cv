@@ -11,7 +11,7 @@ import yaml
 from dotenv import load_dotenv
 from torch import cuda, nn
 
-from . import train, val
+from . import train
 from .status import status
 from .train import (
     build_datasets,
@@ -209,7 +209,20 @@ def val_cmd(args, configs: Config):
         datasets, configs.dataloaders_params, seed=args.seed
     )
 
-    x, y = val.execute(model=model, dataloader=val_loader, device=device)
+    pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights, reduction="none")
+
+    eval_metrics, _ = train.evaluate(
+        model=model,
+        dataloader=val_loader,
+        criterion=criterion,
+        device=device,
+        epoch=0,
+        pos_ratios=get_pos_ratios(datasets[1]),
+    )
+    from pprint import pprint
+
+    pprint(eval_metrics)
 
 
 def list_model_cmd(args, configs: Config):

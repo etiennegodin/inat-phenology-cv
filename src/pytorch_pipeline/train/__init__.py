@@ -6,7 +6,7 @@ from .factory import (
     build_scheduler,
     get_device,
 )
-from .workflow import execute
+from .workflow import evaluate, execute
 
 __all__ = [
     "build_pipeline_dataloaders",
@@ -16,4 +16,5 @@ __all__ = [
     "build_pipeline_model",
     "build_pipeline_optimizer",
     "build_scheduler",
+    "evaluate",
 ]
