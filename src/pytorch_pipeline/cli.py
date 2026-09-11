@@ -132,7 +132,11 @@ def train_cmd(args, configs: Config):
 
     training_params = TrainingParams(
         epochs=args.epochs,
-        patience=args.patience,
+        stopping_patience=args.stopping_patience,
+        unfreezing_patience=args.unfreezing_patience,
+        unfreezing_cooldown=args.unfreezing_cooldown,
+        block_per_stage=args.block_per_stage,
+        max_stages=args.max_stages,
         start_epoch=start_epoch,
         best_objective=best_objective,
         seed=args.seed,
@@ -365,7 +369,11 @@ def add_train_args(parser: argparse.ArgumentParser):
     )
     parser.add_argument("--epochs", "-n", type=int, default=10)
     parser.add_argument("--warmup_epochs", "-w", type=int, default=3)
-    parser.add_argument("--patience", "-p", type=int, default=3)
+    parser.add_argument("--stopping_patience", "-sp", type=int, default=3)
+    parser.add_argument("--unfreezing_patience", "-up", type=int, default=2)
+    parser.add_argument("--unfreezing_cooldown", type=int, default=3)
+    parser.add_argument("--max_stages", type=int, default=3)
+    parser.add_argument("--block_per_stage", type=int, default=3)
     parser.add_argument("--base_lr", "-lr", type=float, default=0.0001)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
     parser.add_argument("--unfreeze", type=int, default=1)

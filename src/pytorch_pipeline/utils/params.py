@@ -7,7 +7,11 @@ from pathlib import Path
 @dataclass
 class TrainingParams:
     epochs: int
-    patience: int
+    stopping_patience: int
+    unfreezing_patience: int
+    unfreezing_cooldown: int
+    max_stages: int
+    block_per_stage: int
     start_epoch: int | None
     best_objective: float
     seed: int = 42

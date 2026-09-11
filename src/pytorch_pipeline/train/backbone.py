@@ -17,9 +17,20 @@ if TYPE_CHECKING:
 class Backbone(nn.Module, ABC):
     encoder: nn.Module
     output_dim: int
+    trainable_block_count: int
 
     def __init__(self) -> None:
+        self.trainable_block_count = len(self.get_trainable_blocks())
         super().__init__()
+
+    def unfreeze_block(self, block_depth: int):
+        assert block_depth <= self.trainable_block_count, (
+            f"Unfreezing target of block depth {block_depth} is "
+            f"larger than available blocks {self.trainable_block_count} "
+        )
+        for block in self.get_trainable_blocks()[:block_depth]:
+            for p in block.parameters(recurse=True):
+                p.requires_grad = True
 
     def freeze(self):
         """Freeze all backbone parameters"""

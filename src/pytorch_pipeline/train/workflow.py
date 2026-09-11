@@ -10,8 +10,9 @@ import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
-from ..utils.configs import CLASS_ORDER, ClassesObjectiveState
+from ..utils import CLASS_ORDER
 from .analysis import error_analysis, log_error_analysis
+from .flow_control import ClassesObjectiveState, TrainingState
 from .metrics import (
     EpochMetrics,
     compute_metrics,
@@ -19,7 +20,6 @@ from .metrics import (
     log_best_artifacts,
     log_epoch_metrics,
 )
-from .patience import patience_counter, stop_condition
 from .persistence import Checkpoint
 
 if TYPE_CHECKING:
@@ -282,12 +282,17 @@ def execute(
 ) -> Checkpoint:
     """Execute training pipeline over requested epochs with full logging."""
     best_eval_metrics = {}
-    classes_conditions = ClassesObjectiveState(class_count=len(CLASS_ORDER))
+
+    training_state = TrainingState(
+        classes_states=ClassesObjectiveState(class_count=len(CLASS_ORDER)),
+        training_params=training_params,
+    )
+
     log_step_interval = getattr(training_params, "log_step_interval", 10)
 
     logger.info(
         f"Starting training run: total epochs={training_params.epochs}, "
-        f"patience={training_params.patience}, device={device.type}"
+        f"patience={training_params.stopping_patience}, device={device.type}"
     )
 
     for epoch in range(training_params.epochs):
@@ -351,12 +356,12 @@ def execute(
             f"Compute: {eval_times[1]:.1f}s"
         )
 
-        classes_conditions = patience_counter(
-            eval_metrics.pr_norm_excess_per_class(), classes_conditions
+        training_state.patience_counter(
+            classes_metric=eval_metrics.pr_norm_excess_per_class()
         )
 
-        # If any class improved, checkpoint
-        if min(classes_conditions.staleness) == 0:
+        if training_state.checkpoint_condition():
+            # If any class improved, checkpoint
             logger.info(f"Saving checkpoint for epoch {epoch} to {checkpoint_path}")
             best_eval_metrics = eval_metrics
             checkpoint = Checkpoint(
@@ -366,14 +371,31 @@ def execute(
                 checkpoint_path=checkpoint_path, epoch=epoch, to_mlflow=False
             )
 
-        else:
+        if training_state.stop_condition():
             logger.info(
                 f"Pr_excess did not improve. "
-                f"Patience: {classes_conditions} / {training_params.patience}"
+                f"Patience: {training_state.classes_states} / "
+                f"{training_params.stopping_patience}"
             )
-            if stop_condition(classes_conditions, training_params.patience):
-                logger.info("Early stopping threshold reached. Terminating training.")
-                break
+            logger.info("Early stopping threshold reached. Terminating training.")
+            break
+
+        if training_state.unfreeze_condition():
+            # Check cooldown
+            if training_state.cooldown_condition(epoch=epoch):
+                continue
+
+            # Check max layers
+            if training_state.max_stages_condition():
+                continue
+
+            training_state.classes_states.reset()
+            training_state.unlocked_stage_count += 1
+            unfreezing_block_depth = min(
+                training_state.unlocked_stage_count * training_params.block_per_stage,
+                model.backbone.trainable_block_count,
+            )
+            model.backbone.unfreeze_block(unfreezing_block_depth)
 
     checkpoint = Checkpoint.from_file(checkpoint_path, model=model, optimizer=optimizer)
     log_best_artifacts(checkpoint.eval_metrics)
