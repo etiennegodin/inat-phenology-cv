@@ -133,6 +133,8 @@ class TrainingState:
             else:
                 self.classes_states.staleness[i] += 1
 
+        logger.debug(self.classes_states)
+
     def stop_condition(self) -> bool:
         """Evaluate staleness of each class and returns wether to stop
 

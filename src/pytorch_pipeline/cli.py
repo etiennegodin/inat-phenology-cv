@@ -135,7 +135,7 @@ def train_cmd(args, configs: Config):
         stopping_patience=args.stopping_patience,
         unfreezing_patience=args.unfreezing_patience,
         unfreezing_cooldown=args.unfreezing_cooldown,
-        starting_block= args.start_unfreezed,
+        starting_block=args.start_unfreezed,
         block_per_stage=args.block_per_stage,
         max_stages=args.max_stages,
         start_epoch=start_epoch,
@@ -157,6 +157,7 @@ def train_cmd(args, configs: Config):
         print(f"{'=' * 60}\n")
 
         mlflow.log_dict(configs.to_dict(), "configs.json")
+        mlflow.log_params({"git_branch": configs.git_branch})
         mlflow.log_params(model_params.to_dict())
         mlflow.log_params(training_params.to_dict())
         mlflow.log_params(configs.dataset_params.to_dict())

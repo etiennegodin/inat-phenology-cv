@@ -62,6 +62,8 @@ def train_one_epoch(
     all_obs_weights = {}
     for c in CLASS_ORDER:
         all_obs_weights[c] = []
+    logger.debug("")
+    logger.debug(f"{'-' * 20} EPOCH {epoch} {'-' * 20} \n")
 
     pbar = tqdm(
         dataloader,
@@ -148,6 +150,7 @@ def train_one_epoch(
         for k, v in classes_loss.items():
             c_loss = v / len(dataloader)
             mlflow.log_metric(f"train/{k}_loss", c_loss, step=epoch)
+
     logger.debug(
         f"Epoch {epoch} Train: Loss={train_loss:.6f} | "
         f"Total Imgs={np.sum(img_per_batch)} | Total Obs={len(dataloader)}"

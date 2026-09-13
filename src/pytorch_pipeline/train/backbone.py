@@ -31,7 +31,7 @@ class Backbone(nn.Module, ABC):
         # Show which blocks i trainable
         for i, block in enumerate(self.get_trainable_blocks()):
             trainable = any(p.requires_grad for p in block.parameters())
-            logger.debug(f"Block {i}: trainable={trainable}")
+            logger.debug(f"Block {i}: trainable = {trainable}")
 
     def set_trainable_block_count(self):
         self.trainable_block_count = len(self.get_trainable_blocks())
