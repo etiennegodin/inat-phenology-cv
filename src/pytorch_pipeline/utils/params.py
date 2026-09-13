@@ -8,19 +8,20 @@ from pathlib import Path
 class TrainingParams:
     epochs: int
     stopping_patience: int
+    unfreeze: bool
     unfreezing_patience: int
     unfreezing_cooldown: int
-    starting_block : int
+    starting_block: int
     max_stages: int
     block_per_stage: int
     start_epoch: int | None
     best_objective: float
-    backbone_decay : float = 0.95
+    backbone_decay: float = 0.95
     seed: int = 42
     log_step_interval: int = 10
     pos_ratios: list[float] = field(default_factory=list[float])
 
-    def get_depth_ratio(self, block_depth:int):
+    def get_depth_ratio(self, block_depth: int):
         return self.backbone_decay**block_depth
 
     def to_dict(self):

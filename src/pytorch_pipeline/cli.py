@@ -133,6 +133,7 @@ def train_cmd(args, configs: Config):
     training_params = TrainingParams(
         epochs=args.epochs,
         stopping_patience=args.stopping_patience,
+        unfreeze=args.unfreeze,
         unfreezing_patience=args.unfreezing_patience,
         unfreezing_cooldown=args.unfreezing_cooldown,
         starting_block=args.start_unfreezed,
