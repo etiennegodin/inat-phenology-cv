@@ -144,6 +144,7 @@ def train_cmd(args, configs: Config):
         seed=args.seed,
         log_step_interval=args.log_step_interval,
         pos_ratios=get_pos_ratios(datasets[1]),
+        backbone_decay=args.backbone_decay,
     )
 
     # Set configs params
@@ -379,6 +380,7 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--max-stages", type=int, default=3)
     parser.add_argument("--block-per-stage", type=int, default=1)
     parser.add_argument("--base-lr", "-lr", type=float, default=0.0001)
+    parser.add_argument("--backbone-decay", type=float, default=0.90)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
     parser.add_argument("--unfreeze", type=bool, default=True)
     parser.add_argument("--experiment-name", "-name", type=str, default="cv_inat_v0.4")

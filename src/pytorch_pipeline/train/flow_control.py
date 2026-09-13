@@ -225,7 +225,7 @@ class TrainingState:
     def cooldown_condition(self, stage_state: StageUnfreezeState, epoch: int):
         c = (
             epoch - stage_state.unlocked_epoch
-            < self.training_params.unfreezing_cooldown
+            <= self.training_params.unfreezing_cooldown
         )
         if c:
             logger.debug(

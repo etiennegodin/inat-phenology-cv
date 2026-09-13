@@ -16,13 +16,13 @@ class TrainingParams:
     block_per_stage: int
     start_epoch: int | None
     best_objective: float
-    backbone_decay: float = 0.95
+    backbone_decay: float = 0.9
     seed: int = 42
     log_step_interval: int = 10
     pos_ratios: list[float] = field(default_factory=list[float])
 
     def get_depth_ratio(self, block_depth: int):
-        return self.backbone_decay**block_depth
+        return self.backbone_decay ** (block_depth - 1)
 
     def to_dict(self):
         return asdict(self)
