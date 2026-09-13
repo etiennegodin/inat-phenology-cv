@@ -42,6 +42,7 @@ class Backbone(nn.Module, ABC):
         optimizer: Optimizer,
         lr: float = 1.0,
     ):
+        logger.debug(f"Unfreezing stage {stage_state.name}")
         stage_params = []
         all_blocks = self.get_trainable_blocks()
         blocks = [all_blocks[i] for i in stage_state.blocks]

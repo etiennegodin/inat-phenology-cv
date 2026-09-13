@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import mlflow
@@ -426,6 +427,9 @@ def execute(
                     if group.get("name") == stage.name:
                         group["lr"] = lr
                         break
+
+        if mlflow.active_run():
+            mlflow.log_artifact(str(Path.cwd() / "log.log"))
 
     checkpoint = Checkpoint.from_file(checkpoint_path, model=model, optimizer=optimizer)
     log_best_artifacts(checkpoint.eval_metrics)
