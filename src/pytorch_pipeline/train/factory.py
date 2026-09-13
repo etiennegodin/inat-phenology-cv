@@ -38,16 +38,13 @@ def build_pipeline_model(
     blocks = model.backbone.get_trainable_blocks()
 
     # Unfreeze last block
-    if model_params.last_blocks > 0:
+    if model_params.start_unfreezed > 0:
         logger.debug("Unfreezing backbone parameters")
-        for block in blocks[-model_params.last_blocks :]:
+        for block in blocks[-model_params.start_unfreezed :]:
             unfreeze(block)
 
-    # Show which blocks i trainable
-    for i, block in enumerate(blocks):
-        trainable = any(p.requires_grad for p in block.parameters())
-        logger.debug(f"Block {i}: trainable={trainable}")
-
+    model.backbone.log_trainable_blocks()
+    
     model.to(device)
     return model
 
@@ -87,17 +84,19 @@ def build_pipeline_optimizer(
     # each with its own named LR) instead of pooling.
     return optim.Adam(
         [
-            {
+            {   "name" : "backbone",
                 "params": [
                     p for p in model.backbone.encoder.parameters() if p.requires_grad
                 ],
                 "lr": params.backbone_lr,
             },
             {
+                "name" : "attention",
                 "params": attention_params,
                 "lr": params.attention_lr,
             },
             {
+                "name" : "classifier_head",
                 "params": head_params,
                 "lr": params.head_lr,
             },

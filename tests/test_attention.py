@@ -63,7 +63,7 @@ def test_model_gated_attention_selection():
         head_dropout_prob=0.1,
         attention_neurons=16,
         attention_dropout_prob=0.2,
-        last_blocks=0,
+        start_unfreezed=0,
         gated=True,
     )
     model_gated = build_pipeline_model(device, params_gated)
@@ -79,7 +79,7 @@ def test_model_gated_attention_selection():
         head_dropout_prob=0.1,
         attention_neurons=16,
         attention_dropout_prob=0.35,
-        last_blocks=0,
+        start_unfreezed=0,
         gated=False,
     )
     model_simple = build_pipeline_model(device, params_simple)

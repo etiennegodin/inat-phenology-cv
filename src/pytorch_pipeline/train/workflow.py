@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from ..utils import CLASS_ORDER
 from .analysis import error_analysis, log_error_analysis
-from .flow_control import ClassesObjectiveState, TrainingState
+from .flow_control import ClassesObjectiveState, TrainingState, create_stage_states
 from .metrics import (
     EpochMetrics,
     compute_metrics,
@@ -279,6 +279,7 @@ def execute(
     criterion: nn.Module,
     checkpoint_path: str,
     training_params: TrainingParams,
+
 ) -> Checkpoint:
     """Execute training pipeline over requested epochs with full logging."""
     best_eval_metrics = {}
@@ -287,6 +288,8 @@ def execute(
         classes_states=ClassesObjectiveState(class_count=len(CLASS_ORDER)),
         training_params=training_params,
     )
+
+    training_state.stages_states = create_stage_states(training_params=training_params, trainable_block_count = len(model.backbone.get_trainable_blocks()) - training_params.starting_block)
 
     log_step_interval = getattr(training_params, "log_step_interval", 10)
 
@@ -381,21 +384,38 @@ def execute(
             break
 
         if training_state.unfreeze_condition():
-            # Check cooldown
-            if training_state.cooldown_condition(epoch=epoch):
-                continue
-
-            # Check max layers
+            # Check max layers condition 
             if training_state.max_stages_condition():
+                logger.debug(f"Hit max stage to unlock, continuing training")
                 continue
 
-            training_state.classes_states.reset()
-            training_state.unlocked_stage_count += 1
-            unfreezing_block_depth = min(
-                training_state.unlocked_stage_count * training_params.block_per_stage,
-                model.backbone.trainable_block_count,
-            )
-            model.backbone.unfreeze_block(unfreezing_block_depth)
+            # First unlock 
+            if training_state.unlocked_stage_count == 0:
+                training_state.classes_states.reset()
+                stage = training_state.stages_states[0]
+                stage.unlocked = True
+                stage.unlocked_epoch = epoch
+                model.backbone.unfreeze_stage(stage, optimizer=optimizer)
+
+            # Check cooldown
+            else:
+                if not training_state.cooldown_condition(training_state.get_latest_stage_state(), epoch=epoch):
+                    training_state.classes_states.reset()
+                    training_state.unlocked_stage_count += 1
+                    new_stage = training_state.stages_states[training_state.unlocked_stage_count]
+                    new_stage.unlocked_epoch = epoch
+                    new_stage.unlocked = True
+                    model.backbone.unfreeze_stage(new_stage, optimizer=optimizer)
+
+        # Set lr for each unlocked stage 
+        for i, stage in enumerate(training_state.stages_states): 
+            if stage.unlocked:
+                if training_state.cooldown_condition(stage, epoch=epoch):
+                    lr = stage.get_warmup_lr(epoch)
+                else:
+                    lr = scheduler.get_last_lr()[0] * training_params.get_depth_ratio(i)
+                optimizer.param_groups[stage.name]['lr'] = lr
+
 
     checkpoint = Checkpoint.from_file(checkpoint_path, model=model, optimizer=optimizer)
     log_best_artifacts(checkpoint.eval_metrics)

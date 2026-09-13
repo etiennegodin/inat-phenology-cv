@@ -10,13 +10,18 @@ class TrainingParams:
     stopping_patience: int
     unfreezing_patience: int
     unfreezing_cooldown: int
+    starting_block : int
     max_stages: int
     block_per_stage: int
     start_epoch: int | None
     best_objective: float
+    backbone_decay : float = 0.95
     seed: int = 42
     log_step_interval: int = 10
     pos_ratios: list[float] = field(default_factory=list[float])
+
+    def get_depth_ratio(self, block_depth:int):
+        return self.backbone_decay**block_depth
 
     def to_dict(self):
         return asdict(self)
@@ -55,7 +60,7 @@ class ModelParams:
     head_dropout_prob: float = 0.5
     attention_neurons: int = 128
     attention_dropout_prob: float = 0.1
-    last_blocks: int = 1
+    start_unfreezed: int = 1
     gated: bool = True
 
     def to_dict(self):

@@ -96,7 +96,7 @@ def train_cmd(args, configs: Config):
         head_dropout_prob=0.5,
         attention_neurons=128,
         attention_dropout_prob=args.attention_dropout,
-        last_blocks=args.unfreeze,
+        start_unfreezed=args.start_unfreezed,
         gated=args.gated,
     )
 
@@ -135,6 +135,7 @@ def train_cmd(args, configs: Config):
         stopping_patience=args.stopping_patience,
         unfreezing_patience=args.unfreezing_patience,
         unfreezing_cooldown=args.unfreezing_cooldown,
+        starting_block= args.start_unfreezed,
         block_per_stage=args.block_per_stage,
         max_stages=args.max_stages,
         start_epoch=start_epoch,
@@ -368,16 +369,17 @@ def add_train_args(parser: argparse.ArgumentParser):
         "--backbone", type=str, choices=backbone_models, default=backbone_models[0]
     )
     parser.add_argument("--epochs", "-n", type=int, default=10)
-    parser.add_argument("--warmup_epochs", "-w", type=int, default=3)
-    parser.add_argument("--stopping_patience", "-sp", type=int, default=3)
-    parser.add_argument("--unfreezing_patience", "-up", type=int, default=2)
-    parser.add_argument("--unfreezing_cooldown", type=int, default=3)
-    parser.add_argument("--max_stages", type=int, default=3)
-    parser.add_argument("--block_per_stage", type=int, default=3)
-    parser.add_argument("--base_lr", "-lr", type=float, default=0.0001)
+    parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
+    parser.add_argument("--start_unfreezed", type=int, default=1)
+    parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
+    parser.add_argument("--unfreezing-patience", "-up", type=int, default=2)
+    parser.add_argument("--unfreezing-cooldown", type=int, default=3)
+    parser.add_argument("--max-stages", type=int, default=3)
+    parser.add_argument("--block-per-stage", type=int, default=1)
+    parser.add_argument("--base-lr", "-lr", type=float, default=0.0001)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
-    parser.add_argument("--unfreeze", type=int, default=1)
-    parser.add_argument("--experiment_name", "-name", type=str, default="cv_inat_v0.4")
+    parser.add_argument("--unfreeze", type=bool, default=True)
+    parser.add_argument("--experiment-name", "-name", type=str, default="cv_inat_v0.4")
 
     parser.add_argument(
         "--log_step_interval",
