@@ -6,7 +6,9 @@ from ..utils.configs import CLASS_ORDER
 from ..utils.params import TrainingParams
 
 if TYPE_CHECKING:
-    pass
+    from torch.optim import Optimizer
+
+    from .model import PhenologyModel
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ class ClassesObjectiveState:
 
     def reset(self):
         self.staleness = [0 for _ in self.staleness]
+        logger.debug(f"Reseting class states: {self.staleness}")
 
     def to_dict(self):
         return asdict(self)
@@ -101,6 +104,47 @@ class TrainingState:
     def get_latest_stage_state(self) -> StageUnfreezeState | None:
         unlocked = self.unlocked_stages
         return unlocked[-1] if unlocked else None
+
+    def unfreeze(
+        self, epoch: int, model: PhenologyModel, optimizer: Optimizer, last_lr: float
+    ):
+        latest_stage = self.get_latest_stage_state()
+
+        if self.unfreeze_condition():
+            # Check max layers condition
+            if self.max_stages_condition():
+                logger.debug("Hit max stage to unlock, skip unfreezing")
+            else:
+                # First unlock
+                if not self.stages_states[0].unlocked:
+                    self.classes_states.reset()
+                    stage = self.stages_states[0]
+                    stage.unlocked = True
+                    stage.unlocked_epoch = epoch
+                    model.backbone.unfreeze_stage(stage, optimizer=optimizer)
+
+                # Check cooldown
+                else:
+                    if not self.cooldown_condition(latest_stage, epoch=epoch):
+                        self.classes_states.reset()
+                        new_stage = self.stages_states[self.unlocked_stage_count]
+                        new_stage.unlocked_epoch = epoch
+                        new_stage.unlocked = True
+                        model.backbone.unfreeze_stage(new_stage, optimizer=optimizer)
+
+        # Set lr for each unlocked stage
+        for i, stage in enumerate(self.stages_states):
+            if stage.unlocked:
+                target_lr = last_lr * self.training_params.get_depth_ratio(i)
+                if self.cooldown_condition(stage, epoch=epoch):
+                    lr = target_lr * stage.get_warmup_lr(epoch)
+                    self.classes_states.reset()
+                else:
+                    lr = target_lr
+                for group in optimizer.param_groups:
+                    if group.get("name") == stage.name:
+                        group["lr"] = lr
+                        break
 
     def patience_counter(
         self,
@@ -177,15 +221,25 @@ class TrainingState:
         return min(self.classes_states.staleness) == 0
 
     def cooldown_condition(self, stage_state: StageUnfreezeState, epoch: int):
-        return (
+        c = (
             epoch - stage_state.unlocked_epoch
             < self.training_params.unfreezing_cooldown
         )
+        if c:
+            logger.debug(
+                f"{stage_state.name} still in cooldown, "
+                f"{epoch - stage_state.unlocked_epoch} / "
+                f"{self.training_params.unfreezing_cooldown}"
+            )
+        return c
 
     def max_stages_condition(self) -> bool:
-        return self.unlocked_stage_count >= min(
+        c = self.unlocked_stage_count >= min(
             self.training_params.max_stages, len(self.stages_states)
         )
+        if c:
+            logger.debug(f"Max stages reached: {self.unlocked_stage_count}")
+        return c
 
     def to_dict(self):
         d = asdict(self)

@@ -380,8 +380,6 @@ def execute(
                 checkpoint_path=checkpoint_path, epoch=epoch, to_mlflow=False
             )
 
-        latest_stage = training_state.get_latest_stage_state()
-
         if training_state.stop_condition():
             logger.info(
                 f"Pr_excess did not improve. "
@@ -391,50 +389,11 @@ def execute(
             logger.info("Early stopping threshold reached. Terminating training.")
             break
 
-        if training_state.unfreeze_condition():
-            # Check max layers condition
-            if training_state.max_stages_condition():
-                logger.debug("Hit max stage to unlock, skip unfreezing")
-            else:
-                # First unlock
-                if not training_state.stages_states[0].unlocked:
-                    training_state.classes_states.reset()
-                    stage = training_state.stages_states[0]
-                    stage.unlocked = True
-                    stage.unlocked_epoch = epoch
-                    model.backbone.unfreeze_stage(stage, optimizer=optimizer)
-
-                # Check cooldown
-                else:
-                    if not training_state.cooldown_condition(latest_stage, epoch=epoch):
-                        training_state.classes_states.reset()
-                        new_stage = training_state.stages_states[
-                            training_state.unlocked_stage_count
-                        ]
-                        new_stage.unlocked_epoch = epoch
-                        new_stage.unlocked = True
-                        model.backbone.unfreeze_stage(new_stage, optimizer=optimizer)
-                    else:
-                        logger.debug(
-                            f"Unfreeze condition met, {latest_stage.name} "
-                            "still in cooldown. Continuing"
-                        )
-                        training_state.classes_states.reset()
-
-        # Set lr for each unlocked stage
-        for i, stage in enumerate(training_state.stages_states):
-            if stage.unlocked:
-                target_lr = scheduler.get_last_lr()[
-                    0
-                ] * training_params.get_depth_ratio(i)
-                if training_state.cooldown_condition(stage, epoch=epoch):
-                    lr = target_lr * stage.get_warmup_lr(epoch)
-                else:
-                    lr = target_lr
-                for group in optimizer.param_groups:
-                    if group.get("name") == stage.name:
-                        group["lr"] = lr
-                        break
+        if training_params.unfreeze:
+            last_lr = scheduler.get_last_lr()[0]
+            training_state.unfreeze(
+                epoch=epoch, model=model, optimizer=optimizer, last_lr=last_lr
+            )
 
         save_log()
 
