@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-def create_stage_states(training_params:TrainingParams, trainable_block_count:int):
+
+def create_stage_states(training_params: TrainingParams, trainable_block_count: int):
     block_per_stage = training_params.block_per_stage
     stage_count = training_params.max_stages
     stages = []
@@ -19,12 +20,14 @@ def create_stage_states(training_params:TrainingParams, trainable_block_count:in
     blocks.reverse()
 
     for i in range(0, len(blocks), block_per_stage):
-        stages.append(StageUnfreezeState(
-            name = f"unfreezed_stage_{i}", 
-            local_warmup_len=training_params.unfreezing_cooldown,
-            blocks = blocks[i:i+block_per_stage])
+        stages.append(
+            StageUnfreezeState(
+                name=f"unfreezed_stage_{i}",
+                local_warmup_len=training_params.unfreezing_cooldown,
+                blocks=blocks[i : i + block_per_stage],
             )
-        
+        )
+
     return stages[:stage_count]
 
 
@@ -52,25 +55,30 @@ class ClassesObjectiveState:
 
 @dataclass
 class StageUnfreezeState:
-    name : str
+    name: str
     local_warmup_len: int
-    blocks : list[int]
-    unlocked : bool = False
+    blocks: list[int]
+    unlocked: bool = False
     unlocked_epoch: int = 0
 
-    def get_warmup_lr(self, epoch:int, start_factor :float = 0.1, end_factor:float = 1.0):
-        """Simple linear interpolation for warmup lr
+    def get_warmup_lr(
+        self, epoch: int, start_factor: float = 0.1, end_factor: float = 1.0
+    ) -> float:
+        """Simple linear interpolation for warmup lr factor
 
         Args:
-            x (int): Epoch
-            start_factor (float, optional): _description_. Defaults to 0.1.
-            end_factor (float, optional): _description_. Defaults to 1.0.
+            epoch (int): Epoch
+            start_factor (float, optional): Warmup starting factor. Defaults to 0.1.
+            end_factor (float, optional): Warmup ending factor. Defaults to 1.0.
 
         Returns:
-            _type_: _description_
+            float: Warmup factor
         """
         x = epoch - self.unlocked_epoch
-        return start_factor + (x / self.local_warmup_len-1) * (end_factor - start_factor)
+        if self.local_warmup_len <= 1:
+            return end_factor
+        progress = min(1.0, max(0.0, x / (self.local_warmup_len - 1)))
+        return start_factor + progress * (end_factor - start_factor)
 
     def to_dict(self):
         return asdict(self)
@@ -80,11 +88,19 @@ class StageUnfreezeState:
 class TrainingState:
     classes_states: ClassesObjectiveState
     training_params: TrainingParams
-    unlocked_stage_count: int = 0
     stages_states: list[StageUnfreezeState] = field(default_factory=list)
 
-    def get_latest_stage_state(self) -> StageUnfreezeState:
-        return self.stages_states[self.unlocked_stage_count]
+    @property
+    def unlocked_stages(self) -> list[StageUnfreezeState]:
+        return [s for s in self.stages_states if s.unlocked]
+
+    @property
+    def unlocked_stage_count(self) -> int:
+        return len(self.unlocked_stages)
+
+    def get_latest_stage_state(self) -> StageUnfreezeState | None:
+        unlocked = self.unlocked_stages
+        return unlocked[-1] if unlocked else None
 
     def patience_counter(
         self,
@@ -152,8 +168,12 @@ class TrainingState:
             < self.training_params.unfreezing_cooldown
         )
 
-    def max_stages_condition(self):
-        return self.unlocked_stage_count >= self.training_params.max_stages
-                
+    def max_stages_condition(self) -> bool:
+        return self.unlocked_stage_count >= min(
+            self.training_params.max_stages, len(self.stages_states)
+        )
+
     def to_dict(self):
-        return asdict(self)
+        d = asdict(self)
+        d["unlocked_stage_count"] = self.unlocked_stage_count
+        return d

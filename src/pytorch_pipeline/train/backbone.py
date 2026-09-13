@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
-import itertools
-import logging
 
 import open_clip
 import timm
@@ -18,6 +17,7 @@ if TYPE_CHECKING:
     from torch.optim import Optimizer
 
 logger = logging.getLogger(__name__)
+
 
 class Backbone(nn.Module, ABC):
     encoder: nn.Module
@@ -36,27 +36,31 @@ class Backbone(nn.Module, ABC):
     def set_trainable_block_count(self):
         self.trainable_block_count = len(self.get_trainable_blocks())
 
-    def unfreeze_stage(self, stage_state: StageUnfreezeState, optimizer: Optimizer):
+    def unfreeze_stage(
+        self,
+        stage_state: StageUnfreezeState,
+        optimizer: Optimizer,
+        lr: float = 1.0,
+    ):
         stage_params = []
-        blocks = self.get_trainable_blocks()[stage_state.blocks[0]:stage_state.blocks[-1]]
+        all_blocks = self.get_trainable_blocks()
+        blocks = [all_blocks[i] for i in stage_state.blocks]
 
-        for block in blocks:     
-            for p in  block.parameters(recurse=True):
+        for block in blocks:
+            for p in block.parameters(recurse=True):
                 p.requires_grad = True
                 stage_params.append(p)
-        
+
         optimizer.add_param_group(
-                {   "name" : stage_state.name,
-                "params": [
-                    stage_params
-                ],
-                "lr": 1.0,
+            {
+                "name": stage_state.name,
+                "params": stage_params,
+                "lr": lr,
             },
         )
 
-        # Log 
+        # Log
         self.log_trainable_blocks()
-        
 
     def freeze(self):
         """Freeze all backbone parameters"""
@@ -151,7 +155,6 @@ class BioClipBackbone(Backbone):
         self.set_output_dim()
         self.set_trainable_block_count()
 
-
     def encode(self, input: Tensor) -> Tensor:
         # Normalising clip embeddings for scale sensitive attention pooling
         embeddings = self.encoder(input)
@@ -220,7 +223,6 @@ class BioClip2Backbone(Backbone):
         self.freeze()
         self.set_output_dim()
         self.set_trainable_block_count()
-
 
     def encode(self, input: Tensor) -> Tensor:
         # Normalising clip embeddings for scale sensitive attention pooling
