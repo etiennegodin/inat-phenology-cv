@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import mlflow
@@ -11,7 +10,7 @@ import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
-from ..utils import CLASS_ORDER
+from ..utils import CLASS_ORDER, save_log
 from .analysis import error_analysis, log_error_analysis
 from .flow_control import ClassesObjectiveState, TrainingState, create_stage_states
 from .metrics import (
@@ -381,6 +380,8 @@ def execute(
                 checkpoint_path=checkpoint_path, epoch=epoch, to_mlflow=False
             )
 
+        latest_stage = training_state.get_latest_stage_state()
+
         if training_state.stop_condition():
             logger.info(
                 f"Pr_excess did not improve. "
@@ -393,28 +394,32 @@ def execute(
         if training_state.unfreeze_condition():
             # Check max layers condition
             if training_state.max_stages_condition():
-                logger.debug("Hit max stage to unlock, continuing training")
-                continue
-
-            # First unlock
-            if not training_state.stages_states[0].unlocked:
-                training_state.classes_states.reset()
-                stage = training_state.stages_states[0]
-                stage.unlocked = True
-                stage.unlocked_epoch = epoch
-                model.backbone.unfreeze_stage(stage, optimizer=optimizer)
-
-            # Check cooldown
+                logger.debug("Hit max stage to unlock, skip unfreezing")
             else:
-                latest_stage = training_state.get_latest_stage_state()
-                if not training_state.cooldown_condition(latest_stage, epoch=epoch):
+                # First unlock
+                if not training_state.stages_states[0].unlocked:
                     training_state.classes_states.reset()
-                    new_stage = training_state.stages_states[
-                        training_state.unlocked_stage_count
-                    ]
-                    new_stage.unlocked_epoch = epoch
-                    new_stage.unlocked = True
-                    model.backbone.unfreeze_stage(new_stage, optimizer=optimizer)
+                    stage = training_state.stages_states[0]
+                    stage.unlocked = True
+                    stage.unlocked_epoch = epoch
+                    model.backbone.unfreeze_stage(stage, optimizer=optimizer)
+
+                # Check cooldown
+                else:
+                    if not training_state.cooldown_condition(latest_stage, epoch=epoch):
+                        training_state.classes_states.reset()
+                        new_stage = training_state.stages_states[
+                            training_state.unlocked_stage_count
+                        ]
+                        new_stage.unlocked_epoch = epoch
+                        new_stage.unlocked = True
+                        model.backbone.unfreeze_stage(new_stage, optimizer=optimizer)
+                    else:
+                        logger.debug(
+                            f"Unfreeze condition met, {latest_stage.name} "
+                            "still in cooldown. Continuing"
+                        )
+                        training_state.classes_states.reset()
 
         # Set lr for each unlocked stage
         for i, stage in enumerate(training_state.stages_states):
@@ -431,9 +436,9 @@ def execute(
                         group["lr"] = lr
                         break
 
-        if mlflow.active_run():
-            mlflow.log_artifact(str(Path.cwd() / "log.log"))
+        save_log()
 
-    checkpoint = Checkpoint.from_file(checkpoint_path, model=model, optimizer=optimizer)
+    save_log()
+    checkpoint = Checkpoint.from_file(checkpoint_path, model=model)
     log_best_artifacts(checkpoint.eval_metrics)
     return checkpoint

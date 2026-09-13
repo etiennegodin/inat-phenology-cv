@@ -145,12 +145,17 @@ class TrainingState:
         Returns:
             bool: Stop run boolean
         """
-        return (
-            min(self.classes_states.staleness) >= self.training_params.stopping_patience
-        )
+        c = min(self.classes_states.staleness) >= self.training_params.stopping_patience
+        if c:
+            logger.debug(
+                "Stop condition reached, "
+                f"patience = {self.training_params.stopping_patience} "
+                f"state = {self.classes_states}"
+            )
+        return c
 
     def unfreeze_condition(self, stale_class_ratio: float = 0.66) -> bool:
-        return (
+        c = (
             sum(
                 [
                     c >= self.training_params.unfreezing_patience
@@ -160,6 +165,13 @@ class TrainingState:
             / len(self.classes_states.staleness)
             >= stale_class_ratio
         )
+        if c:
+            logger.debug(
+                f"Unfreeze condition reached, "
+                f"patience = {self.training_params.unfreezing_patience} "
+                f"state = {self.classes_states}"
+            )
+        return c
 
     def checkpoint_condition(self) -> bool:
         return min(self.classes_states.staleness) == 0

@@ -19,6 +19,13 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
+def save_log():
+    import mlflow
+
+    if mlflow.active_run():
+        mlflow.log_artifact(str(Path.cwd() / "log.log"))
+
+
 def get_mlflow_run_id() -> str | None:
     import mlflow
 
