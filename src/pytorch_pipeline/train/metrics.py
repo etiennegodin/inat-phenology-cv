@@ -484,6 +484,8 @@ def log_best_artifacts(metrics: EpochMetrics | None) -> None:
     if not mlflow.active_run():
         return
 
+    mlflow.log_dict(metrics.to_dict(), "best_metrics.json")
+
     best_scalars = {
         "best/val_loss": metrics.val_loss,
         "best/val_roc_auc_macro": metrics.roc_auc_macro,
