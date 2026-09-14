@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import mlflow
+import torch
 
 from .train.persistence import Checkpoint
 from .utils import resolve_uri
@@ -19,9 +20,14 @@ def register_model(
     checkpoint_path: str,
     model_name: str = "my_cool_model",
     model_params: ModelParams | dict | None = None,
+    device_type: str = "cuda",
 ):
+    device = torch.device(device_type)
     checkpoint = Checkpoint.from_file(
-        checkpoint_path=checkpoint_path, run_id=run_id, model_params=model_params
+        checkpoint_path=checkpoint_path,
+        run_id=run_id,
+        model_params=model_params,
+        device=device,
     )
     try:
         # Re-open the finished run context to safely package and upload the model flavor

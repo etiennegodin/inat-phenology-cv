@@ -35,6 +35,7 @@ class Checkpoint:
         model: PhenologyModel | None = None,
         model_params: ModelParams | dict | None = None,
         optimizer: Optimizer | None = None,
+        device: torch.device | None = None,
     ) -> Checkpoint:
         """Reinstates a full Checkpoint object from a raw checkpoint file
 
@@ -65,6 +66,9 @@ class Checkpoint:
             # Fallback for PyTorch versions prior to weights_only parameter
             checkpoint_dict = torch.load(checkpoint_file)
 
+        if device is None:
+            device = get_device()
+
         # Try to re-instanciate model if not provied
         if model is None:
             # If model params is not provided, read it back from checkpoint
@@ -79,10 +83,10 @@ class Checkpoint:
             elif isinstance(model_params, dict):
                 model_params = ModelParams(**model_params)
 
-            device = get_device()
             model = build_pipeline_model(device, model_params)
 
         model.load_state_dict(checkpoint_dict["model_state_dict"])
+        model.to(device)
         run_id = checkpoint_dict.get("run_id", None)
         start_epoch = checkpoint_dict.get("epoch", 0)
 

@@ -25,6 +25,11 @@ def get_device() -> torch.device:
     return torch.device(d)
 
 
+def set_device(d: str = "cuda") -> torch.device:
+    print(f"Running on {d}")
+    return torch.device(d)
+
+
 def build_pipeline_model(
     device: torch.device, model_params: ModelParams
 ) -> PhenologyModel:
@@ -44,7 +49,7 @@ def build_pipeline_model(
             unfreeze(block)
 
     model.backbone.log_trainable_blocks()
-    
+
     model.to(device)
     return model
 
@@ -84,19 +89,20 @@ def build_pipeline_optimizer(
     # each with its own named LR) instead of pooling.
     return optim.Adam(
         [
-            {   "name" : "backbone",
+            {
+                "name": "backbone",
                 "params": [
                     p for p in model.backbone.encoder.parameters() if p.requires_grad
                 ],
                 "lr": params.backbone_lr,
             },
             {
-                "name" : "attention",
+                "name": "attention",
                 "params": attention_params,
                 "lr": params.attention_lr,
             },
             {
-                "name" : "classifier_head",
+                "name": "classifier_head",
                 "params": head_params,
                 "lr": params.head_lr,
             },

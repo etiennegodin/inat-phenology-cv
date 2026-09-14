@@ -3,7 +3,6 @@ from .db import (
     get_df_from_table,
     get_model_evaluations,
     log_model_evaluation,
-    update_dataset,
 )
 from .logger import init_logger
 from .misc import (
@@ -26,7 +25,6 @@ __all__ = [
     "clean_data",
     "get_pos_weights",
     "get_df_from_table",
-    "update_dataset",
     "log_model_evaluation",
     "get_model_evaluations",
     "init_logger",
