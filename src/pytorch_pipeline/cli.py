@@ -382,7 +382,12 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--base-lr", "-lr", type=float, default=0.0001)
     parser.add_argument("--backbone-decay", type=float, default=0.90)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
-    parser.add_argument("--unfreeze", type=bool, default=True)
+    parser.add_argument(
+        "--unfreeze",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enables progressive backbone unfreezing. Use --no-unfreeze to disable",
+    )
     parser.add_argument("--experiment-name", "-name", type=str, default="cv_inat_v0.4")
 
     parser.add_argument(
