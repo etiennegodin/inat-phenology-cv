@@ -16,7 +16,7 @@ class TrainingParams:
     block_per_stage: int
     start_epoch: int | None
     best_objective: float
-    accumulation_steps: int
+    accumulation_steps: int = 1
     backbone_decay: float = 0.9
     seed: int = 42
     log_step_interval: int = 10
@@ -101,7 +101,7 @@ class PathsParams:
 
 @dataclass
 class DatasetParams:
-    source_table: str
+    source_table: str = "cv_photos3"
     idx_col: str = "observation_id"
     photo_idx_col: str = "photo_id"
     label_col: str = "label"

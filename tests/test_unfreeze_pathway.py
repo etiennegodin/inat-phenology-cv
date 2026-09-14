@@ -79,6 +79,7 @@ def test_unfreeze_pathway_multiepoch_simulation():
         start_epoch=None,
         best_objective=0.0,
         backbone_decay=0.9,
+        unfreeze=True,
     )
 
     model_params = ModelParams(backbone="efficientnet", start_unfreezed=1)
