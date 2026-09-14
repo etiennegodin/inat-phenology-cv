@@ -212,7 +212,7 @@ def val_cmd(args, configs: Config):
     model_uri = f"models:/{args.model_name}/{args.model_version}"
 
     # Load the native PyTorch model
-    model = mlflow.pytorch.load_model(model_uri)
+    model = mlflow.pytorch.load_model(model_uri, map_location=device)
     model: PhenologyModel
     model.to(device)
     datasets = build_datasets(configs, model, seed=args.seed)
