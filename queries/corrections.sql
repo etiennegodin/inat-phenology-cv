@@ -26,4 +26,11 @@ SELECT
 FROM staged.label t1
 LEFT JOIN staged.corrections t2 ON t1.observation_id = t2.observation_id;
 
+-- Flag uncertain to remove
+CREATE OR REPLACE TABLE staged.uncertain AS
+SELECT
+observation_id
+FROM staged.label_corrected
+WHERE list_contains(label, -1)
+
 -- Re-export to main_cv_photos
