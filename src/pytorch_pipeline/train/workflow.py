@@ -365,6 +365,8 @@ def execute(
             f"Compute: {eval_times[1]:.1f}s"
         )
 
+        logger.debug(f"Eval metrics: {eval_metrics.pr_norm_excess_per_class()}")
+
         training_state.patience_counter(
             classes_metric=eval_metrics.pr_norm_excess_per_class()
         )
