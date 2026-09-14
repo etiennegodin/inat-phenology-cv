@@ -219,5 +219,5 @@ mlruns/
 *.sh
 *.zip
 .env
-to_do.md
+notes/
 AGENTS.md

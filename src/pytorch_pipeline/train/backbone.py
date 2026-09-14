@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -10,16 +11,57 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 from torchvision.transforms import InterpolationMode, v2
 
+from .flow_control import StageUnfreezeState
+
 if TYPE_CHECKING:
-    pass
+    from torch.optim import Optimizer
+
+logger = logging.getLogger(__name__)
 
 
 class Backbone(nn.Module, ABC):
     encoder: nn.Module
     output_dim: int
+    trainable_block_count: int
 
     def __init__(self) -> None:
         super().__init__()
+
+    def log_trainable_blocks(self):
+        # Show which blocks i trainable
+        for i, block in enumerate(self.get_trainable_blocks()):
+            trainable = any(p.requires_grad for p in block.parameters())
+            logger.debug(f"Block {i}: trainable = {trainable}")
+
+    def set_trainable_block_count(self):
+        self.trainable_block_count = len(self.get_trainable_blocks())
+
+    def unfreeze_stage(
+        self,
+        stage_state: StageUnfreezeState,
+        optimizer: Optimizer,
+        lr: float = 1.0,
+    ):
+        logger.debug(f"Unfreezing stage {stage_state.name}")
+        stage_params = []
+        all_blocks = self.get_trainable_blocks()
+        blocks = [all_blocks[i] for i in stage_state.blocks]
+
+        for block in blocks:
+            for p in block.parameters(recurse=True):
+                p.requires_grad = True
+                stage_params.append(p)
+
+        optimizer.add_param_group(
+            {
+                "name": stage_state.name,
+                "params": stage_params,
+                "lr": lr,
+            },
+        )
+
+        # Log
+        self.log_trainable_blocks()
 
     def freeze(self):
         """Freeze all backbone parameters"""
@@ -65,6 +107,7 @@ class EfficientNetBackbone(Backbone):
         )
         self.freeze()
         self.set_output_dim()
+        self.set_trainable_block_count()
 
     def encode(self, input: Tensor) -> Tensor:
         return self.encoder(input)
@@ -111,6 +154,7 @@ class BioClipBackbone(Backbone):
         self.encoder = model.visual  # image tower only
         self.freeze()
         self.set_output_dim()
+        self.set_trainable_block_count()
 
     def encode(self, input: Tensor) -> Tensor:
         # Normalising clip embeddings for scale sensitive attention pooling
@@ -179,6 +223,7 @@ class BioClip2Backbone(Backbone):
         self.encoder = model.visual  # image tower only
         self.freeze()
         self.set_output_dim()
+        self.set_trainable_block_count()
 
     def encode(self, input: Tensor) -> Tensor:
         # Normalising clip embeddings for scale sensitive attention pooling

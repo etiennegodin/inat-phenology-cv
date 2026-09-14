@@ -18,7 +18,7 @@ def create_dummy_model():
         head_dropout_prob=0.1,
         attention_neurons=16,
         attention_dropout_prob=0.1,
-        last_blocks=0,
+        start_unfreezed=0,
     )
     return build_pipeline_model(device, model_params)
 

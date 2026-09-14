@@ -9,12 +9,14 @@ from .misc import (
     get_pos_weights,
     resolve_env_config_path,
     resolve_uri,
+    save_log,
     unfreeze,
 )
 from .seed import seed_everything, seed_worker
 from .system import resolve_hardware_profile
 
 __all__ = [
+    "save_log",
     "clean_data",
     "get_pos_weights",
     "get_df_from_table",

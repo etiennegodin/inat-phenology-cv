@@ -7,12 +7,23 @@ from pathlib import Path
 @dataclass
 class TrainingParams:
     epochs: int
-    patience: int
+    stopping_patience: int
+    unfreeze: bool
+    unfreezing_patience: int
+    unfreezing_cooldown: int
+    starting_block: int
+    max_stages: int
+    block_per_stage: int
     start_epoch: int | None
     best_objective: float
+    accumulation_steps: int = 1
+    backbone_decay: float = 0.9
     seed: int = 42
     log_step_interval: int = 10
     pos_ratios: list[float] = field(default_factory=list[float])
+
+    def get_depth_ratio(self, block_depth: int):
+        return self.backbone_decay ** (block_depth + 1)
 
     def to_dict(self):
         return asdict(self)
@@ -51,7 +62,7 @@ class ModelParams:
     head_dropout_prob: float = 0.5
     attention_neurons: int = 128
     attention_dropout_prob: float = 0.1
-    last_blocks: int = 1
+    start_unfreezed: int = 1
     gated: bool = True
 
     def to_dict(self):
@@ -66,6 +77,7 @@ class DataLoadersParams:
     pin_memory: bool
     persistent_workers: bool
     use_max_images: bool
+    gradient_accumulation_steps: int = 1
 
     def to_dict(self):
         return asdict(self)
@@ -89,7 +101,7 @@ class PathsParams:
 
 @dataclass
 class DatasetParams:
-    source_table: str
+    source_table: str = "cv_photos3"
     idx_col: str = "observation_id"
     photo_idx_col: str = "photo_id"
     label_col: str = "label"

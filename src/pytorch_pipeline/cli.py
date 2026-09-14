@@ -96,7 +96,7 @@ def train_cmd(args, configs: Config):
         head_dropout_prob=0.5,
         attention_neurons=128,
         attention_dropout_prob=args.attention_dropout,
-        last_blocks=args.unfreeze,
+        start_unfreezed=args.start_unfreezed,
         gated=args.gated,
     )
 
@@ -132,12 +132,20 @@ def train_cmd(args, configs: Config):
 
     training_params = TrainingParams(
         epochs=args.epochs,
-        patience=args.patience,
+        stopping_patience=args.stopping_patience,
+        unfreeze=args.unfreeze,
+        unfreezing_patience=args.unfreezing_patience,
+        unfreezing_cooldown=args.unfreezing_cooldown,
+        starting_block=args.start_unfreezed,
+        block_per_stage=args.block_per_stage,
+        max_stages=args.max_stages,
         start_epoch=start_epoch,
         best_objective=best_objective,
         seed=args.seed,
         log_step_interval=args.log_step_interval,
         pos_ratios=get_pos_ratios(datasets[1]),
+        backbone_decay=args.backbone_decay,
+        accumulation_steps=configs.dataloaders_params.gradient_accumulation_steps,
     )
 
     # Set configs params
@@ -152,6 +160,7 @@ def train_cmd(args, configs: Config):
         print(f"{'=' * 60}\n")
 
         mlflow.log_dict(configs.to_dict(), "configs.json")
+        mlflow.log_params({"git_branch": configs.git_branch})
         mlflow.log_params(model_params.to_dict())
         mlflow.log_params(training_params.to_dict())
         mlflow.log_params(configs.dataset_params.to_dict())
@@ -364,12 +373,23 @@ def add_train_args(parser: argparse.ArgumentParser):
         "--backbone", type=str, choices=backbone_models, default=backbone_models[0]
     )
     parser.add_argument("--epochs", "-n", type=int, default=10)
-    parser.add_argument("--warmup_epochs", "-w", type=int, default=3)
-    parser.add_argument("--patience", "-p", type=int, default=3)
-    parser.add_argument("--base_lr", "-lr", type=float, default=0.0001)
+    parser.add_argument("--start_unfreezed", type=int, default=1)
+    parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
+    parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
+    parser.add_argument("--unfreezing-patience", "-up", type=int, default=3)
+    parser.add_argument("--unfreezing-cooldown", type=int, default=3)
+    parser.add_argument("--max-stages", type=int, default=3)
+    parser.add_argument("--block-per-stage", type=int, default=1)
+    parser.add_argument("--base-lr", "-lr", type=float, default=0.0001)
+    parser.add_argument("--backbone-decay", type=float, default=0.90)
     parser.add_argument("--reload", "-r", action="store_true", default=False)
-    parser.add_argument("--unfreeze", type=int, default=1)
-    parser.add_argument("--experiment_name", "-name", type=str, default="cv_inat_v0.4")
+    parser.add_argument(
+        "--unfreeze",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enables progressive backbone unfreezing",
+    )
+    parser.add_argument("--experiment-name", "-name", type=str, default="cv_inat_v0.4")
 
     parser.add_argument(
         "--log_step_interval",
