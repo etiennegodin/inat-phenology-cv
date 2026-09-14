@@ -20,6 +20,7 @@ from .train import (
     build_pipeline_optimizer,
     build_scheduler,
     get_device,
+    set_device,
 )
 from .train.backbone import BACKBONE_REGISTRY
 from .train.metrics import log_experiment_metadata
@@ -205,7 +206,7 @@ def val_cmd(args, configs: Config):
     mlflow.set_tracking_uri(resolve_uri())
     # Set test
     configs.test = args.test
-    device = get_device()
+    device = set_device(args.device)
 
     # Construct the model URI
     model_uri = f"models:/{args.model_name}/{args.model_version}"
@@ -213,6 +214,7 @@ def val_cmd(args, configs: Config):
     # Load the native PyTorch model
     model = mlflow.pytorch.load_model(model_uri)
     model: PhenologyModel
+    model.to(device)
     datasets = build_datasets(configs, model, seed=args.seed)
     _, val_loader, _ = build_pipeline_dataloaders(
         datasets, configs.dataloaders_params, seed=args.seed
@@ -376,6 +378,7 @@ def add_common_args(parser: argparse.ArgumentParser):
 def add_val_args(parser: argparse.ArgumentParser):
     parser.add_argument("--model_version", "-mv", type=int, default=1)
     parser.add_argument("--model_name", "-mn", type=str, default="cv_inat")
+    parser.add_argument("--device", "-d", type=str, default="cuda")
     parser.add_argument(
         "--eval_db_path",
         type=str,

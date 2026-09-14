@@ -58,16 +58,19 @@ class Checkpoint:
         """
         if run_id is None:
             run_id = get_mlflow_run_id()
-        checkpoint_file = f"{checkpoint_path}/{run_id}.pth"
-        try:
-            checkpoint_dict = torch.load(checkpoint_file, weights_only=False)
-
-        except TypeError:
-            # Fallback for PyTorch versions prior to weights_only parameter
-            checkpoint_dict = torch.load(checkpoint_file)
 
         if device is None:
             device = get_device()
+
+        checkpoint_file = f"{checkpoint_path}/{run_id}.pth"
+        try:
+            checkpoint_dict = torch.load(
+                checkpoint_file, weights_only=False, map_location=device
+            )
+
+        except TypeError:
+            # Fallback for PyTorch versions prior to weights_only parameter
+            checkpoint_dict = torch.load(checkpoint_file, map_location=device)
 
         # Try to re-instanciate model if not provied
         if model is None:
