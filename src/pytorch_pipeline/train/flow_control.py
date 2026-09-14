@@ -140,7 +140,6 @@ class TrainingState:
                 target_lr = last_lr * self.training_params.get_depth_ratio(i)
                 if self.cooldown_condition(stage, epoch=epoch):
                     lr = target_lr * stage.get_warmup_lr(epoch)
-                    self.classes_states.reset()
                 else:
                     lr = target_lr
                 for group in optimizer.param_groups:

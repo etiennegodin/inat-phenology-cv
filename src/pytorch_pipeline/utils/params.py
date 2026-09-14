@@ -22,7 +22,7 @@ class TrainingParams:
     pos_ratios: list[float] = field(default_factory=list[float])
 
     def get_depth_ratio(self, block_depth: int):
-        return self.backbone_decay ** (block_depth - 1)
+        return self.backbone_decay ** (block_depth + 1)
 
     def to_dict(self):
         return asdict(self)
