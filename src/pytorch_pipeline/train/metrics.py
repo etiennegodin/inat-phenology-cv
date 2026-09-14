@@ -491,7 +491,15 @@ def log_best_artifacts(metrics: EpochMetrics | None) -> None:
         "best/val_roc_auc_macro": metrics.roc_auc_macro,
         "best/val_pr_auc_macro": metrics.pr_auc_macro,
         "best/val_f1_macro_best": metrics.f1_macro_best,
+        "best/pr_norm_excess_macro": metrics.pr_norm_excess_macro,
+        "best/pr_auc_macro": metrics.pr_auc_macro,
     }
+
+    # Log best per class
+    for c in CLASS_ORDER:
+        best_scalars[f"best/pr_norm_excess_{c}"] = metrics.pr_norm_excess[c]
+        best_scalars[f"best/pr_auc_{c}"] = metrics.pr_auc[c]
+
     mlflow.log_metrics(best_scalars)
 
     rows = _build_per_class_report(metrics)

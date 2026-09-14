@@ -68,7 +68,12 @@ Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etien
 - Seedind for determinism
 - v2 transforms support
 
+### 🔲 v0.9 — Backbone unfreezing
 
-### 🔲 v0.9 — Optuna set up
+- Backbone progressive unfreezing
+- Cleanlab label correction on val set top-n errors
+
+
+### 🔲 v1.0 — Optuna set up
 
 - Optuna tuning set up
