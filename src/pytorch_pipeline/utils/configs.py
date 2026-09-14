@@ -31,6 +31,7 @@ class Config:
     dataloaders_params: DataLoadersParams
     hardware_profile: HardwareProfile
     git_branch: str
+    git_hash: str
     dataset_params: DatasetParams = field(default_factory=DatasetParams)
     model_params: ModelParams = field(init=False)
     training_params: TrainingParams = field(init=False)

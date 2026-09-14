@@ -27,6 +27,7 @@ from .utils import (
     Config,
     clean_data,
     get_current_git_branch,
+    get_git_hash,
     get_pos_ratios,
     get_pos_weights,
     init_logger,
@@ -161,6 +162,7 @@ def train_cmd(args, configs: Config):
 
         mlflow.log_dict(configs.to_dict(), "configs.json")
         mlflow.log_params({"git_branch": configs.git_branch})
+        mlflow.log_params({"git_hash": configs.git_hash})
         mlflow.log_params(model_params.to_dict())
         mlflow.log_params(training_params.to_dict())
         mlflow.log_params(configs.dataset_params.to_dict())
@@ -440,6 +442,7 @@ def main():
         dataset_params=dataset_params,
         hardware_profile=hardware_profile,
         git_branch=get_current_git_branch(),
+        git_hash=get_git_hash(),
     )
 
     # Execute command
