@@ -4,7 +4,7 @@ paths :
   image_dir : '/home/etienne/projects/inat-phenology-cv/data/images'
   db_path : '/home/etienne/projects/inat-phenology-cv/data/cv_photos4.parquet'
   checkpoint_path : '/home/etienne/projects/inat-phenology-cv/data/checkpoints'
-  eval_db_path : "'/home/etienne/projects/inat-phenology-cv/data/model_evaluations.duckdb"
+  eval_db_path : "/home/etienne/projects/inat-phenology-cv/data/model_evaluations.duckdb"
 
 dataset_params:
   source_table : "cv_photos4"
