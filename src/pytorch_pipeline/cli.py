@@ -25,7 +25,6 @@ from .train.backbone import BACKBONE_REGISTRY
 from .train.metrics import log_experiment_metadata
 from .utils import (
     Config,
-    clean_data,
     get_current_git_branch,
     get_git_hash,
     get_pos_ratios,
@@ -37,7 +36,6 @@ from .utils import (
     resolve_hardware_profile,
     resolve_uri,
     seed_everything,
-    update_dataset,
 )
 from .utils.params import (
     DataLoadersParams,
@@ -52,7 +50,6 @@ from .utils.params import (
 mlflow.enable_system_metrics_logging()
 mlflow.system_metrics.set_system_metrics_sampling_interval(10)
 mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
-
 
 if TYPE_CHECKING:
     from .train.model import PhenologyModel
@@ -321,12 +318,6 @@ def test_cmd(args, configs: Config):
     """
 
 
-def update_cmd(args, configs: Config):
-    # Clean and update dataset
-    clean_data(configs.paths_params.image_dir)
-    update_dataset(configs.paths_params)
-
-
 def status_cmd(args, configs: Config):
     status(configs)
 
@@ -357,10 +348,6 @@ def create_parser() -> argparse.ArgumentParser:
     test_parser = subparsers.add_parser("test", help="Test model")
     # add_train_args(train_parser)
     test_parser.set_defaults(func=test_cmd)
-
-    # Update command
-    update_parser = subparsers.add_parser("update", help="Update source dataset")
-    update_parser.set_defaults(func=update_cmd)
 
     # Status command
     status_parser = subparsers.add_parser("status", help="Pipeline status")
