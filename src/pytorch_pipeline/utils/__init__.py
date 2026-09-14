@@ -1,5 +1,10 @@
 from .configs import CLASS_ORDER, LABEL_MAPPING, Config
-from .db import get_df_from_table, update_dataset
+from .db import (
+    get_df_from_table,
+    get_model_evaluations,
+    log_model_evaluation,
+    update_dataset,
+)
 from .logger import init_logger
 from .misc import (
     clean_data,
@@ -22,6 +27,8 @@ __all__ = [
     "get_pos_weights",
     "get_df_from_table",
     "update_dataset",
+    "log_model_evaluation",
+    "get_model_evaluations",
     "init_logger",
     "Config",
     "resolve_env_config_path",

@@ -90,7 +90,7 @@ class PathsParams:
     image_dir: str
     db_path: str
     checkpoint_path: str
-    source_db_path: str = "/home/etienne/projects/inatML/data/inat_raw.duckdb"
+    eval_db_path: str
 
     def __post_init__(self):
         Path(self.checkpoint_path).mkdir(parents=True, exist_ok=True)

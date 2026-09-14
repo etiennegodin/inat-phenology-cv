@@ -150,7 +150,7 @@ class TrainingState:
     def patience_counter(
         self,
         classes_metric: list[float],
-        min_delta: float = 0.003,
+        min_delta: float = 0.0015,
     ) -> None:
         """Worst class still improving patience.
         Compares each class newest metric to previous best and updates staleness.

@@ -4,6 +4,7 @@ paths :
   image_dir : '/content/images'
   db_path : '/content/data/cv_photos3.parquet'
   checkpoint_path : '/content/drive/MyDrive/inat-phenology-cv/checkpoints'
+  eval_db_path : '/content/drive/MyDrive/inat-phenology-cv/data/model_evaluations.duckdb'
 
 dataset_params:
   source_table : "cv_photos3"

@@ -31,6 +31,7 @@ from .utils import (
     get_pos_ratios,
     get_pos_weights,
     init_logger,
+    log_model_evaluation,
     mlflow_socks_patch,  # noqa
     resolve_env_config_path,
     resolve_hardware_profile,
@@ -235,6 +236,28 @@ def val_cmd(args, configs: Config):
 
     pprint(eval_metrics)
 
+    if not getattr(args, "no_db", False):
+        eval_db_path = (
+            getattr(args, "eval_db_path", None) or configs.paths_params.eval_db_path
+        )
+        dataset_path = configs.paths_params.db_path
+        dataset_table = configs.dataset_params.source_table
+
+        eval_id = log_model_evaluation(
+            eval_db_path=eval_db_path,
+            model_name=args.model_name,
+            model_version=args.model_version,
+            dataset_path=dataset_path,
+            dataset_table=dataset_table,
+            seed=args.seed,
+            is_test_mode=args.test,
+            metrics=eval_metrics,
+        )
+        print(
+            f"\n[DB] Model evaluation results committed to "
+            f"'{eval_db_path}' (eval_id: {eval_id})"
+        )
+
 
 def list_model_cmd(args, configs: Config):
     from mlflow import MlflowClient
@@ -366,6 +389,18 @@ def add_common_args(parser: argparse.ArgumentParser):
 def add_val_args(parser: argparse.ArgumentParser):
     parser.add_argument("--model_version", "-mv", type=int, default=1)
     parser.add_argument("--model_name", "-mn", type=str, default="cv_inat")
+    parser.add_argument(
+        "--eval_db_path",
+        type=str,
+        default=None,
+        help="Path to DuckDB database for logging model evaluation results",
+    )
+    parser.add_argument(
+        "--no_db",
+        action="store_true",
+        default=False,
+        help="Disable committing evaluation results to the DuckDB database",
+    )
 
 
 def add_train_args(parser: argparse.ArgumentParser):
