@@ -374,10 +374,7 @@ def add_train_args(parser: argparse.ArgumentParser):
     )
     parser.add_argument("--epochs", "-n", type=int, default=10)
     parser.add_argument("--start_unfreezed", type=int, default=1)
-
     parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
-    parser.add_argument("--start_unfreezed", type=int, default=1)
-
     parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
     parser.add_argument("--unfreezing-patience", "-up", type=int, default=3)
     parser.add_argument("--unfreezing-cooldown", type=int, default=3)
