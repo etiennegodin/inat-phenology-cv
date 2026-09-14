@@ -183,6 +183,7 @@ def log_model_evaluation(
         con.execute(
             f"INSERT INTO model_evaluations ({col_sql}) VALUES ({placeholders})", vals
         )
+        con.close()
 
     return eval_id
 
