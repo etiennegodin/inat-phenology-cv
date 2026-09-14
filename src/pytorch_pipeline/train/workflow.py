@@ -47,6 +47,7 @@ def train_one_epoch(
     optimizer: Optimizer,
     criterion: nn.Module,
     device: device,
+    accumulation_steps: int,
     log_step_interval: int = 10,
 ) -> tuple[float, tuple[float, float]]:
     """Train the model for one epoch with progress tracking and step logging."""
@@ -72,6 +73,11 @@ def train_one_epoch(
     )
 
     t0 = time.time()
+
+    optimizer.zero_grad(set_to_none=True)
+
+    n_batches = len(dataloader)
+
     for step, (images, labels, obs_ids) in enumerate(pbar):
         indices = [img.size(0) for img in images]
         total_img = sum(indices)
@@ -87,26 +93,34 @@ def train_one_epoch(
         images = [t.to(device) for t in images]
         labels = labels.to(device)
 
-        optimizer.zero_grad(set_to_none=True)
+        # True if this micro-batch completes an accumulation window,
+        # or if it's the final (possibly partial) batch of the epoch.
+        is_step_boundary = ((step + 1) % accumulation_steps == 0) or (
+            step + 1 == n_batches
+        )
 
-        # to_do add switch if scaler is needed for amp of previous cards vs new ones
         if device.type == "cuda":
             with autocast_mode.autocast(device_type=device.type, dtype=dtype):
                 predictions, class_weights = model(images)
                 raw_loss = criterion(predictions, labels)
                 class_loss = torch.mean(raw_loss, dim=0)
                 for i, c in enumerate(CLASS_ORDER):
-                    classes_loss[c] += class_loss[i].item()
+                    classes_loss[c] += class_loss[i].item()  # unscaled, for logging
                 loss = torch.mean(class_loss, dim=0)
 
-                # Scale if fp16
+                scaled_loss = loss / accumulation_steps  # normalize BEFORE backward
+
                 if scaler is not None:
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
+                    scaler.scale(scaled_loss).backward()
+                    if is_step_boundary:
+                        scaler.step(optimizer)
+                        scaler.update()
+                        optimizer.zero_grad(set_to_none=True)
                 else:
-                    loss.backward()
-                    optimizer.step()
+                    scaled_loss.backward()
+                    if is_step_boundary:
+                        optimizer.step()
+                        optimizer.zero_grad(set_to_none=True)
             torch.cuda.synchronize()
         else:
             predictions, class_weights = model(images)
@@ -115,8 +129,12 @@ def train_one_epoch(
             for i, c in enumerate(CLASS_ORDER):
                 classes_loss[c] += class_loss[i].item()
             loss = torch.mean(class_loss, dim=0)
-            loss.backward()
-            optimizer.step()
+
+            scaled_loss = loss / accumulation_steps
+            scaled_loss.backward()
+            if is_step_boundary:
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
 
         t0 = time.time()
         compute_time += t0 - t1
@@ -322,6 +340,7 @@ def execute(
             criterion=criterion,
             device=device,
             log_step_interval=log_step_interval,
+            accumulation_steps=training_params.accumulation_steps,
         )
 
         scheduler.step()

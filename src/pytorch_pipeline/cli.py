@@ -145,6 +145,7 @@ def train_cmd(args, configs: Config):
         log_step_interval=args.log_step_interval,
         pos_ratios=get_pos_ratios(datasets[1]),
         backbone_decay=args.backbone_decay,
+        accumulation_steps=configs.dataloaders_params.gradient_accumulation_steps,
     )
 
     # Set configs params
@@ -372,8 +373,11 @@ def add_train_args(parser: argparse.ArgumentParser):
         "--backbone", type=str, choices=backbone_models, default=backbone_models[0]
     )
     parser.add_argument("--epochs", "-n", type=int, default=10)
+    parser.add_argument("--start_unfreezed", type=int, default=1)
+
     parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
     parser.add_argument("--start_unfreezed", type=int, default=1)
+
     parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
     parser.add_argument("--unfreezing-patience", "-up", type=int, default=3)
     parser.add_argument("--unfreezing-cooldown", type=int, default=3)
@@ -386,7 +390,7 @@ def add_train_args(parser: argparse.ArgumentParser):
         "--unfreeze",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Enables progressive backbone unfreezing. Use --no-unfreeze to disable",
+        help="Enables progressive backbone unfreezing",
     )
     parser.add_argument("--experiment-name", "-name", type=str, default="cv_inat_v0.4")
 

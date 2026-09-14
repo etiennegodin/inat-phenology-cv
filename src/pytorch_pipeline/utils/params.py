@@ -16,6 +16,7 @@ class TrainingParams:
     block_per_stage: int
     start_epoch: int | None
     best_objective: float
+    accumulation_steps: int
     backbone_decay: float = 0.9
     seed: int = 42
     log_step_interval: int = 10
@@ -76,6 +77,7 @@ class DataLoadersParams:
     pin_memory: bool
     persistent_workers: bool
     use_max_images: bool
+    gradient_accumulation_steps: int = 1
 
     def to_dict(self):
         return asdict(self)
