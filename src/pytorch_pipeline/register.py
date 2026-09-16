@@ -13,7 +13,7 @@ from PIL import Image
 
 from .train.factory import build_pipeline_model
 from .train.persistence import Checkpoint
-from .utils import CLASS_ORDER, resolve_uri
+from .utils import resolve_uri
 from .utils.params import ModelParams
 
 if TYPE_CHECKING:
@@ -88,9 +88,6 @@ class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
     def predict(
         self, context, model_input: pd.DataFrame, params: dict[str, Any] | None = None
     ):
-        observations_attention_weights: dict[str, list[torch.Tensor]] = {}
-        for c in CLASS_ORDER:
-            observations_attention_weights[c] = []
         # Load images
         observations_ids = []
         image_bags = []
@@ -102,15 +99,21 @@ class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
 
         # Inference
         with torch.inference_mode():
-            predictions, class_weights = self.model(image_bags)
+            predictions, class_weights = self.model.forward(image_bags)
 
         # Class predictions
         preds_raw = torch.sigmoid(predictions).detach().float().cpu().numpy()
         preds_bin = (preds_raw >= self.class_thresholds).astype(int)
 
+        observations_attention_weights = []
         # Attention weights
-        for class_name, batch_weights in class_weights.items():
-            observations_attention_weights[class_name].extend(batch_weights)
+        for o in range(preds_bin.shape[0]):
+            obs_dict = {}
+            for class_name, batch_weights in class_weights.items():
+                obs_dict[class_name] = (
+                    batch_weights[o].detach().cpu().squeeze(-1).tolist()
+                )
+            observations_attention_weights.append(obs_dict)
 
         return preds_bin, observations_attention_weights
 
