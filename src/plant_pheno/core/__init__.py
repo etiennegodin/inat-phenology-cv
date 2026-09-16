@@ -5,7 +5,8 @@ from .backbone import (
     BioClipBackbone,
     EfficientNetBackbone,
 )
-from .checkpoint import Checkpoint
+
+# from .checkpoint import Checkpoint
 from .device import get_device, set_device
 from .model import AttentionBranch, PhenologyModel, build_pipeline_model
 
@@ -15,7 +16,6 @@ __all__ = [
     "BioClipBackbone",
     "BioClip2Backbone",
     "EfficientNetBackbone",
-    "Checkpoint",
     "get_device",
     "set_device",
     "AttentionBranch",

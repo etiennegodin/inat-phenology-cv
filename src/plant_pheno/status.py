@@ -1,4 +1,4 @@
-from .configs import Config
+from .config import Config
 from .train.dataset import get_samples
 
 

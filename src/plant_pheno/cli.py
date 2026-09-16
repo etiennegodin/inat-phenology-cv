@@ -27,7 +27,7 @@ from .config import (
 from .core.device import get_device, set_device
 from .core.model import BACKBONE_REGISTRY, build_pipeline_model
 from .data import log_model_evaluation
-from .infra import init_logger, mlflow_socks_patch, seed_everything  # noqa
+from .infra import init_logger, mlflow_socks_patch, resolve_uri, seed_everything  # noqa
 from .status import status
 from .train import (
     build_datasets,
@@ -42,7 +42,6 @@ from .utils import (
     get_pos_ratios,
     get_pos_weights,
     resolve_env_config_path,
-    resolve_uri,
 )
 
 if TYPE_CHECKING:
