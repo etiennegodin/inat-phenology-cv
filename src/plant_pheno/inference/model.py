@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from PIL import Image
 
+from ..config import ModelParams
 from ..core import build_pipeline_model
 
 if TYPE_CHECKING:
@@ -16,7 +17,6 @@ if TYPE_CHECKING:
     import torch
     from torchvision.transforms.v2 import Compose
 
-    from ..config import ModelParams
     from ..core.model import PhenologyModel
 
 

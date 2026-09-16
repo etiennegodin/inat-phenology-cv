@@ -66,6 +66,7 @@ def register_model(
                         "model_params": str(model_params_path),
                         "class_thresholds": str(class_thresholds_path),
                     },
+                    registered_model_name=model_name,
                 )
 
             print(f"Successfully converted .pth and registered it to {run_id}")
