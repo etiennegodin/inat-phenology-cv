@@ -385,7 +385,7 @@ def review_label_issues(
 
     Examples
     --------
-    >>> from pytorch_pipeline.review import review_label_issues
+    >>> from plant_pheno.review import review_label_issues
     >>> # issues[0] is the Flowering class — obs IDs ranked by cleanlab
     >>> review_label_issues(
     ...     obs_ids=issues[0],

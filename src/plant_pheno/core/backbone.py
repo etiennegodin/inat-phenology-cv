@@ -11,10 +11,10 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 from torchvision.transforms import InterpolationMode, v2
 
-from .flow_control import StageUnfreezeState
-
 if TYPE_CHECKING:
     from torch.optim import Optimizer
+
+    from ..train.flow_control import StageUnfreezeState  #
 
 logger = logging.getLogger(__name__)
 

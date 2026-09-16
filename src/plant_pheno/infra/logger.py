@@ -22,7 +22,7 @@ def init_logger(log_file: Path, level: int = logging.INFO) -> logging.Logger:
 
     console_formatter = logging.Formatter("%(levelname)s: %(message)s")
 
-    pkg_logger = logging.getLogger("pytorch_pipeline")
+    pkg_logger = logging.getLogger("plant_pheno")
     pkg_logger.setLevel(logging.DEBUG)
 
     # Avoid duplicate handlers if init_logger is called multiple times

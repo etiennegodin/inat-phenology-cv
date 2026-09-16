@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from torch import Tensor, device
     from torch.utils.data import DataLoader
 
-    from .train.model import PhenologyModel
+    from .core.model import PhenologyModel
 
 logger = logging.getLogger(__name__)
 

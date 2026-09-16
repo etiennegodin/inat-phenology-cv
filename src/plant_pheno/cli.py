@@ -13,33 +13,8 @@ from mlflow import MlflowException
 from torch import cuda, nn
 
 from . import train
-from .status import status
-from .train import (
-    build_datasets,
-    build_pipeline_dataloaders,
-    build_pipeline_model,
-    build_pipeline_optimizer,
-    build_scheduler,
-    get_device,
-    set_device,
-)
-from .train.backbone import BACKBONE_REGISTRY
-from .train.metrics import log_experiment_metadata
-from .utils import (
+from .config import (
     Config,
-    get_current_git_branch,
-    get_git_hash,
-    get_pos_ratios,
-    get_pos_weights,
-    init_logger,
-    log_model_evaluation,
-    mlflow_socks_patch,  # noqa
-    resolve_env_config_path,
-    resolve_hardware_profile,
-    resolve_uri,
-    seed_everything,
-)
-from .utils.params import (
     DataLoadersParams,
     DatasetParams,
     ModelParams,
@@ -47,14 +22,34 @@ from .utils.params import (
     PathsParams,
     SchedulerParams,
     TrainingParams,
+    resolve_hardware_profile,
 )
+from .core.device import get_device, set_device
+from .core.model import BACKBONE_REGISTRY, build_pipeline_model
+from .data import log_model_evaluation
+from .infra import init_logger, mlflow_socks_patch, resolve_uri, seed_everything  # noqa
+from .status import status
+from .train import (
+    build_datasets,
+    build_pipeline_dataloaders,
+    build_pipeline_optimizer,
+    build_scheduler,
+    log_experiment_metadata,
+)
+from .utils import (
+    get_current_git_branch,
+    get_git_hash,
+    get_pos_ratios,
+    get_pos_weights,
+    resolve_env_config_path,
+)
+
+if TYPE_CHECKING:
+    from .core.model import PhenologyModel
 
 mlflow.enable_system_metrics_logging()
 mlflow.system_metrics.set_system_metrics_sampling_interval(10)
 mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
-
-if TYPE_CHECKING:
-    from .train.model import PhenologyModel
 
 
 def train_cmd(args, configs: Config):

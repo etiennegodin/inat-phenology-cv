@@ -4,54 +4,15 @@ import itertools
 import logging
 from typing import TYPE_CHECKING
 
-import torch
 from torch import optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
-
-from ..utils.misc import unfreeze
-from .model import PhenologyModel
 
 if TYPE_CHECKING:
     from torch import nn, optim
 
-    from ..utils.params import ModelParams, OptimizerParams, SchedulerParams
+    from ..config.params import OptimizerParams, SchedulerParams
 
 logger = logging.getLogger(__name__)
-
-
-def get_device() -> torch.device:
-    d = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Running on {d}")
-    return torch.device(d)
-
-
-def set_device(d: str = "cuda") -> torch.device:
-    print(f"Running on {d}")
-    return torch.device(d)
-
-
-def build_pipeline_model(
-    device: torch.device, model_params: ModelParams
-) -> PhenologyModel:
-    """Instantiate model and unfreezes backbone last params
-
-    Returns:
-        nn.Module: _description_
-    """
-    model = PhenologyModel(model_params)
-
-    blocks = model.backbone.get_trainable_blocks()
-
-    # Unfreeze last block
-    if model_params.start_unfreezed > 0:
-        logger.debug("Unfreezing backbone parameters")
-        for block in blocks[-model_params.start_unfreezed :]:
-            unfreeze(block)
-
-    model.backbone.log_trainable_blocks()
-
-    model.to(device)
-    return model
 
 
 def build_scheduler(optimizer: optim.Optimizer, params: SchedulerParams, eta_min=1e-7):

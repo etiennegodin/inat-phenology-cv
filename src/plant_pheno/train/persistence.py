@@ -11,16 +11,16 @@ from typing import TYPE_CHECKING
 import mlflow
 import torch
 
-from ..utils.misc import get_mlflow_run_id
-from ..utils.params import ModelParams
-from .factory import build_pipeline_model, get_device
+from ..config.params import ModelParams
+from ..core import build_pipeline_model, get_device
+from ..core.model import PhenologyModel
+from ..infra import get_mlflow_run_id
 from .metrics import EpochMetrics, log_best_artifacts
-from .model import PhenologyModel
 
 if TYPE_CHECKING:
     from torch.optim import Optimizer
 
-    from .model import PhenologyModel
+    from ..core.model import PhenologyModel
 
 logger = logging.getLogger(__name__)
 

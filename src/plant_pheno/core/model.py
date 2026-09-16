@@ -1,18 +1,22 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..utils.configs import CLASS_ORDER
+from ..config import CLASS_ORDER
+from ..utils.misc import unfreeze
 from .backbone import BACKBONE_REGISTRY, Backbone
 
 if TYPE_CHECKING:
     from torch import nn
 
     from ..utils.params import ModelParams
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAttentionPooling(nn.Module):
@@ -154,3 +158,27 @@ class PhenologyModel(nn.Module):
         predictions = torch.stack(class_predictions, dim=1)
 
         return predictions, class_attention_weights
+
+
+def build_pipeline_model(
+    device: torch.device, model_params: ModelParams
+) -> PhenologyModel:
+    """Instantiate model and unfreezes backbone last params
+
+    Returns:
+        nn.Module: _description_
+    """
+    model = PhenologyModel(model_params)
+
+    blocks = model.backbone.get_trainable_blocks()
+
+    # Unfreeze last block
+    if model_params.start_unfreezed > 0:
+        logger.debug("Unfreezing backbone parameters")
+        for block in blocks[-model_params.start_unfreezed :]:
+            unfreeze(block)
+
+    model.backbone.log_trainable_blocks()
+
+    model.to(device)
+    return model

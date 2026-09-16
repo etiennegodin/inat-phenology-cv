@@ -11,16 +11,13 @@ from PIL import Image, UnidentifiedImageError
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from pytorch_pipeline.utils.params import DatasetParams
-
-from ..utils import get_df_from_table
-from ..utils.system import HardwareProfile
+from ..config import DatasetParams, HardwareProfile
+from ..data import get_df_from_table
 
 if TYPE_CHECKING:
     from torchvision.transforms.v2 import Compose
 
-    from ..utils.configs import Config
-    from ..utils.params import DatasetParams
+    from ..config import Config, DatasetParams
 
 logger = logging.getLogger(__name__)
 

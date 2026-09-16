@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -12,14 +14,6 @@ from .params import (
     TrainingParams,
 )
 from .system import HardwareProfile
-
-LABEL_MAPPING = {
-    0: "Flowering",
-    1: "Fruiting",
-    2: "Flower_Budding",
-}
-
-CLASS_ORDER = ["Flowering", "Fruiting", "Flower_Budding"]
 
 logger = logging.getLogger(__name__)
 

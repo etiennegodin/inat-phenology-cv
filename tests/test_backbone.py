@@ -1,7 +1,7 @@
 import torch
 
-from pytorch_pipeline.train.backbone import EfficientNetBackbone
-from pytorch_pipeline.train.flow_control import StageUnfreezeState
+from plant_pheno.core.backbone import EfficientNetBackbone
+from plant_pheno.train.flow_control import StageUnfreezeState
 
 
 def test_unfreeze_stage_registers_parameters():

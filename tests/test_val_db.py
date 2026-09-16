@@ -5,8 +5,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from pytorch_pipeline.train.metrics import EpochMetrics
-from pytorch_pipeline.utils.db import get_model_evaluations, log_model_evaluation
+from plant_pheno.data import get_model_evaluations, log_model_evaluation
+from plant_pheno.train.metrics import EpochMetrics
 
 
 @pytest.fixture

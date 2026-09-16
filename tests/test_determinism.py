@@ -5,10 +5,10 @@ import pandas as pd
 import torch
 from torchvision.transforms import v2
 
-from pytorch_pipeline.train.batch_sampler import MaxImagesBatchSampler
-from pytorch_pipeline.train.dataset import split_dataset
-from pytorch_pipeline.utils.params import DatasetParams
-from pytorch_pipeline.utils.seed import seed_everything, seed_worker
+from plant_pheno.config import DatasetParams
+from plant_pheno.infra.seed import seed_everything, seed_worker
+from plant_pheno.train.batch_sampler import MaxImagesBatchSampler
+from plant_pheno.train.dataset import split_dataset
 
 
 def test_seed_everything():
@@ -66,7 +66,7 @@ def test_split_dataset_shuffled_row_order_determinism():
 
 
 def test_reduce_dataset_observation_level_sampling():
-    from pytorch_pipeline.train.dataset import reduce_dataset
+    from plant_pheno.train.dataset import reduce_dataset
 
     # Create dummy observations with different numbers of photos
     obs_data = {
