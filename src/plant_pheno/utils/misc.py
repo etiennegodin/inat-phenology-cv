@@ -26,12 +26,6 @@ def save_log():
         mlflow.log_artifact(str(Path.cwd() / "log.log"))
 
 
-def get_mlflow_run_id() -> str | None:
-    import mlflow
-
-    return mlflow.active_run().info.run_id if mlflow.active_run() else None
-
-
 def get_current_git_branch():
     try:
         # Runs the git command and decodes the byte output to a string
@@ -72,15 +66,6 @@ def get_git_hash(short=False):
 
 def format_dict(d: dict) -> str:
     return pprint.pformat(d, indent=4)
-
-
-def resolve_uri() -> str:
-    uri = os.getenv(
-        "MLFLOW_TRACKING_URI",
-        "http://localhost:5000",
-    )
-    logger.debug(uri)
-    return uri
 
 
 def resolve_env_config_path() -> Path:
