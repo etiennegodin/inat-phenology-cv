@@ -30,6 +30,7 @@ mlflow.set_tracking_uri(resolve_uri())
 
 class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
     model_params: ModelParams
+    classes = list[str]
     class_thresholds: np.ndarray
     device: torch.device
     model: PhenologyModel
@@ -66,6 +67,7 @@ class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
         with open(context.artifacts["class_thresholds"]) as f:
             threshold_dict = json.load(f)
 
+        self.classes = [[v for v in threshold_dict.keys()]]
         self.class_thresholds = np.array([v for v in threshold_dict.values()])
 
         # Rebuild model from params
@@ -134,19 +136,27 @@ def register_model(
     )
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Model
-            model_state_dict_path = Path(temp_dir) / "model_state_dict.pt"
-            torch.save(checkpoint.model.state_dict(), model_state_dict_path)
+            print("Opening temp folder")
 
             # Model params
             model_params_path = Path(temp_dir) / "model_params.json"
             with model_params_path.open("w", encoding="utf-8") as f:
                 json.dump(checkpoint.model.params.to_dict(), f, indent=2)
 
+            print("Retrieved model params")
+
             # Class thresholds
             class_thresholds_path = Path(temp_dir) / "class_thresholds.json"
             with class_thresholds_path.open("w", encoding="utf-8") as f:
                 json.dump(checkpoint.eval_metrics.best_thresh, f, indent=2)
+
+            print("Retrieved class thresholds")
+
+            # Model
+            model_state_dict_path = Path(temp_dir) / "model_state_dict.pt"
+            torch.save(checkpoint.model.state_dict(), model_state_dict_path)
+
+            print("Retrieved artifacts")
 
             with mlflow.start_run(run_id=run_id):
                 model_info = mlflow.pyfunc.log_model(
@@ -156,7 +166,6 @@ def register_model(
                         "model_params": str(model_params_path),
                         "class_thresholds": str(class_thresholds_path),
                     },
-                    registered_model_name=model_name,
                 )
 
             print(f"Successfully converted .pth and registered it to {run_id}")
