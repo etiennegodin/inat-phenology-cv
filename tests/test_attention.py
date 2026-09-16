@@ -1,12 +1,12 @@
 import torch
-from plant_pheno.utils.params import ModelParams
 
+from plant_pheno.config import ModelParams
+from plant_pheno.core import build_pipeline_model
 from plant_pheno.core.model import (
     AttentionPooling,
     BaseAttentionPooling,
     GatedAttentionPooling,
 )
-from plant_pheno.train.factory import build_pipeline_model
 
 
 def test_simple_attention_pooling():

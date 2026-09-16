@@ -1,6 +1,6 @@
 import torch
 
-from plant_pheno.train.backbone import EfficientNetBackbone
+from plant_pheno.core.backbone import EfficientNetBackbone
 from plant_pheno.train.flow_control import StageUnfreezeState
 
 

@@ -5,8 +5,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from plant_pheno.data import get_model_evaluations, log_model_evaluation
 from plant_pheno.train.metrics import EpochMetrics
-from plant_pheno.utils.db import get_model_evaluations, log_model_evaluation
 
 
 @pytest.fixture

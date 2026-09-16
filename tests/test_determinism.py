@@ -3,9 +3,9 @@ import random
 import numpy as np
 import pandas as pd
 import torch
-from plant_pheno.utils.params import DatasetParams
 from torchvision.transforms import v2
 
+from plant_pheno.config import DatasetParams
 from plant_pheno.infra.seed import seed_everything, seed_worker
 from plant_pheno.train.batch_sampler import MaxImagesBatchSampler
 from plant_pheno.train.dataset import split_dataset

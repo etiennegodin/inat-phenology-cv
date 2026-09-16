@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from plant_pheno.config import DatasetParams
 from plant_pheno.review import (
     plot_misclassified_observation,
     resolve_report_paths,
@@ -12,7 +13,6 @@ from plant_pheno.review import (
 )
 from plant_pheno.train.analysis import error_analysis
 from plant_pheno.train.dataset import UncachedPhenologyDataset
-from plant_pheno.utils.params import DatasetParams
 
 
 class DummyMetrics:

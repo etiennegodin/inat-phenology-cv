@@ -1,8 +1,14 @@
 import pytest
 import torch
 
+from plant_pheno.config import (
+    ModelParams,
+    OptimizerParams,
+    SchedulerParams,
+    TrainingParams,
+)
+from plant_pheno.core import build_pipeline_model
 from plant_pheno.train.factory import (
-    build_pipeline_model,
     build_pipeline_optimizer,
     build_scheduler,
 )
@@ -11,12 +17,6 @@ from plant_pheno.train.flow_control import (
     StageUnfreezeState,
     TrainingState,
     create_stage_states,
-)
-from plant_pheno.utils.params import (
-    ModelParams,
-    OptimizerParams,
-    SchedulerParams,
-    TrainingParams,
 )
 
 
