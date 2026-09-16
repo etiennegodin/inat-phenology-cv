@@ -8,25 +8,35 @@ where = ["src"]
 [project]
 name = "plant_pheno"
 version = "0.0.1"
-description = "Pytorch inat vision"
+description = "Plant phenology classification with transfer learning"
 authors = [{ name="Etienne Godin", email="etiennegodin@duck.com" }]
 
+
+# Base dependencies — sufficient for inference
 dependencies = [
+    "torch",
+    "torchvision",
+    "timm",
+    "open-clip-torch",
+    "pyyaml",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# Full training dependencies
+train = [
     "pandas>=2.2,<2.4",
     "matplotlib>=3.10,<3.11",
     "duckdb>=1.5,<1.6",
     "optuna>=4.8,<4.9",
     "scikit-learn>=1.7,<1.8",
     "mlflow>=3.11,<3.12",
-    "open-clip-torch",
     "seaborn",
-    'pyyaml',
-    "tqdm",
     "python-dotenv",
 ]
 
-[project.optional-dependencies]
 dev = [
+    "pytorch_pipeline[train]",  # dev includes train
     "pytest",
     "pytest-cov",
     "pytest-dependency",
@@ -34,10 +44,9 @@ dev = [
     "dvc",
     "jupyterlab",
     "pre-commit",
-    "ipykernel",          # Required for VS Code Jupyter to work correctly
+    "ipykernel",
     "ipywidgets",
-    "cleanlab"
-
+    "cleanlab",
 ]
 
 [project.scripts]   # <-- entry point CLI
