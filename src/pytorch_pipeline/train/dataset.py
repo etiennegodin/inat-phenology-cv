@@ -17,9 +17,10 @@ from ..utils import get_df_from_table
 from ..utils.system import HardwareProfile
 
 if TYPE_CHECKING:
+    from torchvision.transforms.v2 import Compose
+
     from ..utils.configs import Config
     from ..utils.params import DatasetParams
-    from .model import PhenologyModel
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +214,7 @@ def reduce_dataset(df, params: DatasetParams, seed: int = 42) -> pd.DataFrame:
 
 
 def build_datasets(
-    configs: Config, model: PhenologyModel, seed: int = 42
+    configs: Config, transforms: tuple[Compose, Compose], seed: int = 42
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
 
     df = get_samples(configs.paths_params, configs.dataset_params)
@@ -243,7 +244,7 @@ def build_datasets(
     train_df, val_df, test_df = split_dataset(df, configs.dataset_params, seed=seed)
 
     # Get backbone specific transforms
-    train_transform, val_transform = model.backbone.get_transforms()
+    train_transform, val_transform = transforms
 
     train_set = PhenologyDataset.from_profile(
         cache, train_df, train_transform, configs.dataset_params

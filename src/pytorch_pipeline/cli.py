@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import mlflow
 import yaml
 from dotenv import load_dotenv
+from mlflow import MlflowException
 from torch import cuda, nn
 
 from . import train
@@ -107,7 +108,7 @@ def train_cmd(args, configs: Config):
     model = build_pipeline_model(device, model_params)
     optimizer = build_pipeline_optimizer(model, optim_params)
     scheduler = build_scheduler(optimizer, scheduler_params)
-    datasets = build_datasets(configs, model, seed=args.seed)
+    datasets = build_datasets(configs, model.backbone.get_transforms(), seed=args.seed)
     train_loader, val_loader, _ = build_pipeline_dataloaders(
         datasets, configs.dataloaders_params, seed=args.seed
     )
@@ -211,11 +212,20 @@ def val_cmd(args, configs: Config):
     # Construct the model URI
     model_uri = f"models:/{args.model_name}/{args.model_version}"
 
-    # Load the native PyTorch model
-    model = mlflow.pytorch.load_model(model_uri, map_location=device)
-    model: PhenologyModel
-    model.to(device)
-    datasets = build_datasets(configs, model, seed=args.seed)
+    # Load the model
+    try:
+        # Fall back to legacy models
+        python_model: PhenologyModel = mlflow.pytorch.load_model(
+            model_uri, map_location=device
+        )
+        python_model.to(device)
+    except MlflowException:
+        model = mlflow.pyfunc.load_model(model_uri)
+        python_model: PhenologyModel = model._model_impl.python_model.model
+
+    datasets = build_datasets(
+        configs, python_model.backbone.get_transforms(), seed=args.seed
+    )
     _, val_loader, _ = build_pipeline_dataloaders(
         datasets, configs.dataloaders_params, seed=args.seed
     )
@@ -224,7 +234,7 @@ def val_cmd(args, configs: Config):
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights, reduction="none")
 
     eval_metrics, _ = train.evaluate(
-        model=model,
+        model=python_model,
         dataloader=val_loader,
         criterion=criterion,
         device=device,
