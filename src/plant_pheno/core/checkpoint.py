@@ -11,11 +11,12 @@ from typing import TYPE_CHECKING
 import mlflow
 import torch
 
-from ..config.params import ModelParams
-from ..core import build_pipeline_model, get_device
+from ..config import ModelParams
 from ..core.model import PhenologyModel
 from ..utils.misc import get_mlflow_run_id
+from .device import get_device
 from .metrics import EpochMetrics, log_best_artifacts
+from .model import build_pipeline_model
 
 if TYPE_CHECKING:
     from torch.optim import Optimizer

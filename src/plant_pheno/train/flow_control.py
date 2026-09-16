@@ -4,13 +4,13 @@ import logging
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING
 
-from ..utils.configs import CLASS_ORDER
-from ..utils.params import TrainingParams
+from ..config import CLASS_ORDER
 
 if TYPE_CHECKING:
     from torch.optim import Optimizer
 
-    from .model import PhenologyModel
+    from ..config import TrainingParams
+    from ..core.model import PhenologyModel
 
 logger = logging.getLogger(__name__)
 

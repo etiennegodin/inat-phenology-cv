@@ -11,18 +11,17 @@ import numpy as np
 import torch
 from PIL import Image
 
-from .train.factory import build_pipeline_model
+from .core import build_pipeline_model
 from .train.persistence import Checkpoint
 from .utils import resolve_uri
-from .utils.params import ModelParams
 
 if TYPE_CHECKING:
     import pandas as pd
     import torch
     from torchvision.transforms.v2 import Compose
 
-    from .train.model import PhenologyModel
-    from .utils.params import ModelParams
+    from .config import ModelParams
+    from .core.model import PhenologyModel
 
 # Set mlflow uri
 mlflow.set_tracking_uri(resolve_uri())

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 import mlflow
 import numpy as np
 
-from ..utils import LABEL_MAPPING
+from ..config import LABEL_MAPPING
 
 if TYPE_CHECKING:
     import torch

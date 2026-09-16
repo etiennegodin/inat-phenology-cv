@@ -22,13 +22,13 @@ from sklearn.metrics import (
     roc_curve,
 )
 
+from ..config import CLASS_ORDER, LABEL_MAPPING
 from ..utils import format_dict
-from ..utils.configs import CLASS_ORDER, LABEL_MAPPING
 
 if TYPE_CHECKING:
     from torch.utils.data import Dataset
 
-    from .model import PhenologyModel
+    from ..core.model import PhenologyModel
 
 logger = logging.getLogger(__name__)
 

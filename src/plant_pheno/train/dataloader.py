@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 import torch
 from torch.utils.data import DataLoader
 
-from ..utils.seed import seed_worker
+from ..infra.seed import seed_worker
 from .batch_sampler import MaxImagesBatchSampler
 
 if TYPE_CHECKING:
-    from ..utils.params import DataLoadersParams
+    from ..config import DataLoadersParams
     from .dataset import PhenologyDataset
 
 

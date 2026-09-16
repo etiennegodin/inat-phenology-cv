@@ -10,7 +10,8 @@ import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
-from ..utils import CLASS_ORDER, save_log
+from ..config import CLASS_ORDER
+from ..infra import save_log
 from .analysis import error_analysis, log_error_analysis
 from .flow_control import ClassesObjectiveState, TrainingState, create_stage_states
 from .metrics import (
@@ -27,12 +28,11 @@ if TYPE_CHECKING:
     from torch.optim import Optimizer
     from torch.utils.data import DataLoader
 
-    from ..utils.params import TrainingParams
-    from .model import PhenologyModel
+    from ..config import TrainingParams
+    from ..core import PhenologyModel
 
 
 logger = logging.getLogger(__name__)
-
 
 dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 scaler = None

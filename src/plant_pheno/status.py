@@ -1,5 +1,5 @@
+from .configs import Config
 from .train.dataset import get_samples
-from .utils.configs import Config
 
 
 def status(configs: Config):
