@@ -11,7 +11,7 @@ from PIL import Image, UnidentifiedImageError
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from pytorch_pipeline.utils.params import DatasetParams
+from plant_pheno.utils.params import DatasetParams
 
 from ..utils import get_df_from_table
 from ..utils.system import HardwareProfile

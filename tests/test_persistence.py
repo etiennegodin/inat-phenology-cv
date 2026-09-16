@@ -1,12 +1,12 @@
 import torch
 
-from pytorch_pipeline.train.factory import (
+from plant_pheno.train.factory import (
     build_pipeline_model,
     build_pipeline_optimizer,
 )
-from pytorch_pipeline.train.metrics import EpochMetrics
-from pytorch_pipeline.train.persistence import Checkpoint, CheckpointSaver
-from pytorch_pipeline.utils.params import ModelParams, OptimizerParams
+from plant_pheno.train.metrics import EpochMetrics
+from plant_pheno.train.persistence import Checkpoint, CheckpointSaver
+from plant_pheno.utils.params import ModelParams, OptimizerParams
 
 
 def create_dummy_model():

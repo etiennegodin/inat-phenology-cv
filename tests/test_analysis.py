@@ -5,14 +5,14 @@ import numpy as np
 import pandas as pd
 import torch
 
-from pytorch_pipeline.review import (
+from plant_pheno.review import (
     plot_misclassified_observation,
     resolve_report_paths,
     review_misclassifications,
 )
-from pytorch_pipeline.train.analysis import error_analysis
-from pytorch_pipeline.train.dataset import UncachedPhenologyDataset
-from pytorch_pipeline.utils.params import DatasetParams
+from plant_pheno.train.analysis import error_analysis
+from plant_pheno.train.dataset import UncachedPhenologyDataset
+from plant_pheno.utils.params import DatasetParams
 
 
 class DummyMetrics:
@@ -200,7 +200,7 @@ def test_resolve_report_paths_rebase_colab_paths():
 
 def test_review_label_issues_returns_entries():
     """review_label_issues resolves paths and returns entry dicts."""
-    from pytorch_pipeline.review import review_label_issues
+    from plant_pheno.review import review_label_issues
 
     obs_ids = [601, 602]
     df = pd.DataFrame(
@@ -220,7 +220,7 @@ def test_review_label_issues_returns_entries():
 
 def test_review_label_issues_empty():
     """review_label_issues handles an empty obs_ids list gracefully."""
-    from pytorch_pipeline.review import review_label_issues
+    from plant_pheno.review import review_label_issues
 
     result = review_label_issues([])
     assert result == []
@@ -228,7 +228,7 @@ def test_review_label_issues_empty():
 
 def test_review_label_issues_no_paths():
     """review_label_issues returns entries with empty paths when no source given."""
-    from pytorch_pipeline.review import review_label_issues
+    from plant_pheno.review import review_label_issues
 
     result = review_label_issues([999])
     assert len(result) == 1
@@ -238,7 +238,7 @@ def test_review_label_issues_no_paths():
 
 def test_review_label_issues_preserves_order():
     """review_label_issues preserves the ranked order of obs_ids."""
-    from pytorch_pipeline.review import review_label_issues
+    from plant_pheno.review import review_label_issues
 
     obs_ids = [700, 701, 702]
     df = pd.DataFrame(
@@ -255,7 +255,7 @@ def test_review_label_issues_preserves_order():
 def test_review_label_issues_with_prob_and_target():
     """review_label_issues enriches entries with prob and
     target when inference outputs provided."""
-    from pytorch_pipeline.review import review_label_issues
+    from plant_pheno.review import review_label_issues
 
     all_obs_ids = [800, 801, 802]
     raw_labels = np.array([[1, 0, 0], [0, 1, 0], [1, 1, 0]], dtype=float)

@@ -1,18 +1,18 @@
 import pytest
 import torch
 
-from pytorch_pipeline.train.factory import (
+from plant_pheno.train.factory import (
     build_pipeline_model,
     build_pipeline_optimizer,
     build_scheduler,
 )
-from pytorch_pipeline.train.flow_control import (
+from plant_pheno.train.flow_control import (
     ClassesObjectiveState,
     StageUnfreezeState,
     TrainingState,
     create_stage_states,
 )
-from pytorch_pipeline.utils.params import (
+from plant_pheno.utils.params import (
     ModelParams,
     OptimizerParams,
     SchedulerParams,

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [project]
-name = "pytorch_pipeline"
+name = "plant_pheno"
 version = "0.0.1"
 description = "Pytorch inat vision"
 authors = [{ name="Etienne Godin", email="etiennegodin@duck.com" }]
@@ -41,7 +41,7 @@ dev = [
 ]
 
 [project.scripts]   # <-- entry point CLI
-torch_pipe = "pytorch_pipeline.cli:main"
+torch_pipe = "plant_pheno.cli:main"
 
 [tool.ruff]
 line-length = 88
@@ -65,7 +65,7 @@ python_version = "3.11"
 strict = true
 
 [tool.pytest.ini_options]
-addopts = "--cov=src/pytorch_pipeline --cov-report=term-missing --cov-report=html -s"
+addopts = "--cov=src/plant_pheno --cov-report=term-missing --cov-report=html -s"
 [tool.sqlfluff.core]
 dialect = "duckdb"
 templater = "placeholder"

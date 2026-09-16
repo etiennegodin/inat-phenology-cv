@@ -1,4 +1,4 @@
-from pytorch_pipeline.train.batch_sampler import MaxImagesBatchSampler
+from plant_pheno.train.batch_sampler import MaxImagesBatchSampler
 
 
 def test_max_images_batch_sampler_len():

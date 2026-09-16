@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pytorch_pipeline.train.metrics import (
+from plant_pheno.train.metrics import (
     compute_attention_values,
     compute_metrics,
     find_optimal_threshold,
