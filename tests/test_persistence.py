@@ -5,7 +5,7 @@ from pytorch_pipeline.train.factory import (
     build_pipeline_optimizer,
 )
 from pytorch_pipeline.train.metrics import EpochMetrics
-from pytorch_pipeline.train.persistence import Checkpoint
+from pytorch_pipeline.train.persistence import Checkpoint, CheckpointSaver
 from pytorch_pipeline.utils.params import ModelParams, OptimizerParams
 
 
@@ -58,7 +58,7 @@ def test_save_and_load_full_checkpoint(tmp_path):
     ckpt = Checkpoint(model=model, optimizer=optimizer, eval_metrics=metrics)
 
     ckpt_dir = str(tmp_path)
-    ckpt.save(ckpt_dir, epoch=2)
+    ckpt.save(ckpt_dir, epoch=2, save_optimizer=True)
 
     # Reload checkpoint
     reloaded_ckpt = Checkpoint.from_file(
@@ -102,7 +102,7 @@ def test_save_and_load_checkpoint_no_metrics(tmp_path):
     ckpt = Checkpoint(model=model, optimizer=optimizer, eval_metrics=None)
 
     ckpt_dir = str(tmp_path)
-    ckpt.save(ckpt_dir, epoch=2)
+    ckpt.save(ckpt_dir, epoch=2, save_optimizer=True)
 
     # Reload checkpoint
     reloaded_ckpt = Checkpoint.from_file(
@@ -155,9 +155,64 @@ def test_checkpoint_to_dict(tmp_path):
     metrics = create_dummy_metrics()
 
     ckpt = Checkpoint(model=model, optimizer=optimizer, eval_metrics=metrics)
-    d = ckpt.to_dict()
+    d_no_opt = ckpt.to_dict(save_optimizer=False)
+    assert "model_state_dict" in d_no_opt
+    assert "model_params" in d_no_opt
+    assert "eval_metrics" in d_no_opt
+    assert "optimizer_state_dict" not in d_no_opt
 
-    assert "model_state_dict" in d
-    assert "model_params" in d
-    assert "optimizer_state_dict" in d
-    assert "eval_metrics" in d
+    d_with_opt = ckpt.to_dict(save_optimizer=True)
+    assert "optimizer_state_dict" in d_with_opt
+
+
+def test_checkpoint_saver_async(tmp_path):
+    model = create_dummy_model()
+    optimizer = build_pipeline_optimizer(model, OptimizerParams())
+    metrics = create_dummy_metrics()
+
+    ckpt = Checkpoint(model=model, optimizer=optimizer, eval_metrics=metrics)
+    saver = CheckpointSaver()
+    ckpt_dir = str(tmp_path)
+
+    saver.save(
+        checkpoint=ckpt,
+        checkpoint_path=ckpt_dir,
+        epoch=1,
+        save_optimizer=False,
+        async_transfer=True,
+    )
+    saver.wait()
+
+    reloaded = Checkpoint.from_file(ckpt_dir, model=model)
+    assert reloaded.model is not None
+    assert reloaded.eval_metrics.val_loss == 0.42
+
+
+def test_checkpoint_size_reduction(tmp_path):
+    model = create_dummy_model()
+    optimizer = build_pipeline_optimizer(model, OptimizerParams())
+    # Perform a dummy step so optimizer populates state dict
+    for p in model.parameters():
+        if p.requires_grad:
+            p.grad = torch.zeros_like(p)
+    optimizer.step()
+
+    metrics = create_dummy_metrics()
+    ckpt = Checkpoint(model=model, optimizer=optimizer, eval_metrics=metrics)
+
+    dir_opt = tmp_path / "with_opt"
+    dir_no_opt = tmp_path / "no_opt"
+
+    ckpt.save(str(dir_opt), epoch=1, save_optimizer=True)
+    ckpt.save(str(dir_no_opt), epoch=1, save_optimizer=False)
+
+    files_opt = list(dir_opt.glob("*.pth"))
+    files_no_opt = list(dir_no_opt.glob("*.pth"))
+
+    assert len(files_opt) == 1
+    assert len(files_no_opt) == 1
+
+    size_opt = files_opt[0].stat().st_size
+    size_no_opt = files_no_opt[0].stat().st_size
+
+    assert size_no_opt < size_opt

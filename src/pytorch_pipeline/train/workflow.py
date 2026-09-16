@@ -20,7 +20,7 @@ from .metrics import (
     log_best_artifacts,
     log_epoch_metrics,
 )
-from .persistence import Checkpoint
+from .persistence import Checkpoint, CheckpointSaver
 
 if TYPE_CHECKING:
     from torch import Tensor, device, nn
@@ -303,6 +303,7 @@ def execute(
 ) -> Checkpoint:
     """Execute training pipeline over requested epochs with full logging."""
     best_eval_metrics = {}
+    saver = CheckpointSaver()
 
     training_state = TrainingState(
         classes_states=ClassesObjectiveState(class_count=len(CLASS_ORDER)),
@@ -397,8 +398,13 @@ def execute(
             checkpoint = Checkpoint(
                 model=model, optimizer=optimizer, eval_metrics=best_eval_metrics
             )
-            checkpoint.save(
-                checkpoint_path=checkpoint_path, epoch=epoch, to_mlflow=False
+            saver.save(
+                checkpoint=checkpoint,
+                checkpoint_path=checkpoint_path,
+                epoch=epoch,
+                to_mlflow=False,
+                save_optimizer=False,
+                async_transfer=True,
             )
 
         if training_state.stop_condition():
@@ -419,6 +425,7 @@ def execute(
         save_log()
 
     save_log()
+    saver.wait()
     checkpoint = Checkpoint.from_file(checkpoint_path, model=model)
     log_best_artifacts(checkpoint.eval_metrics)
     return checkpoint
