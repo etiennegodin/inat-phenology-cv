@@ -125,7 +125,7 @@ class PhenologyModel(nn.Module):
             x (_type_): _description_
 
         Returns:
-            tuple[torch.Tensor, list[list[torch.Tensor]] ]:
+            tuple[torch.Tensor, list[list[torch.Tensor]]]:
         """
         indices = []
         class_predictions = []
