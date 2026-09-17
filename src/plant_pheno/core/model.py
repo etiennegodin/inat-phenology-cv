@@ -14,7 +14,7 @@ from .backbone import BACKBONE_REGISTRY, Backbone
 if TYPE_CHECKING:
     from torch import nn
 
-    from ..utils.params import ModelParams
+    from ..config.params import ModelParams
 
 logger = logging.getLogger(__name__)
 
