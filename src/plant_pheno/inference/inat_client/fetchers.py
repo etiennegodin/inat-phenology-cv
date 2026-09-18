@@ -104,4 +104,7 @@ class MockFetcher:
         self.fixture = fixture
 
     async def fetch(self, session: aiohttp.ClientSession, url: str, params: dict):
-        return self.fixture
+        print(url)
+        async with session.get(url, params=params, timeout=10) as response:
+            print(response.url)
+            return await response.json()

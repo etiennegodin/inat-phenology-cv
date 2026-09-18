@@ -15,6 +15,12 @@ class NullWriter:
     def __init__(self, limit: Union[int, None] = None):
         self.limit = limit
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return self
+
     async def write(self, results: list[dict]):
         logger.info("Init null writer task")
         if self.limit is not None:
@@ -55,7 +61,11 @@ class DuckDbWriter:
                 source_id = item["_source_id"]  # resolved in base
                 is_empty = item.get("_empty", False)
                 self.con.execute(
-                    f"INSERT INTO {self.table_name} VALUES (?, ?, ?, ?)",
+                    f"""
+                    INSERT INTO {self.table_name}
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT (raw_id) DO NOTHING
+                    """,
                     (
                         source_id,
                         None
