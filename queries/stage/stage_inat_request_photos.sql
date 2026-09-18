@@ -1,4 +1,5 @@
--- photos --
+CREATE SCHEMA IF NOT EXISTS staged;
+
 CREATE OR REPLACE TABLE staged.inat_request_photos AS
 WITH unpacked AS (
 SELECT

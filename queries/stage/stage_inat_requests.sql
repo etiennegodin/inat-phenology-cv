@@ -1,5 +1,4 @@
-
-
+CREATE SCHEMA IF NOT EXISTS staged;
 INSERT INTO staged.inat_requests
 (id,uuid,photos)
 

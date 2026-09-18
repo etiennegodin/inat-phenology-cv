@@ -6,10 +6,15 @@ from pathlib import Path
 
 @dataclass
 class IngestPhotosParams:
-    extension: str = "jpg"
+    extensions: list[str] = field(default_factory=list[str])
     size: str = "medium"
     item_id: str = "photo_id"
     label: str = field(init=False)
+
+    def __post_init__(self):
+        if self.extensions == []:
+            self.extensions = [".jpg", ".jpeg", ".png"]
+        pass
 
 
 @dataclass

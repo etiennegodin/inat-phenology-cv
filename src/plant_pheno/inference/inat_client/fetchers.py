@@ -58,12 +58,33 @@ class BinaryFetcher(BaseRateLimiterFetcher):
     Generic fetcher for raw binary data (e.g. photos).
     """
 
+    def __init__(
+        self,
+        fallback_extensions: list[str],
+        rate: int = 60,
+        period: int = 60,
+        max_retries: int = 3,
+        base_delay: float = 2,
+        max_delay: float = 60,
+        backoff_factor: float = 2,
+    ):
+        super().__init__(
+            rate, period, max_retries, base_delay, max_delay, backoff_factor
+        )
+        self.fallback_extensions = fallback_extensions
+
     async def fetch(self, session: aiohttp.ClientSession, url: str):
         async def _handle_binary(response: aiohttp.ClientResponse):
             response.raise_for_status()
             return await response.read()
 
-        return await self._fetch_with_retries(session, url, _handle_binary, timeout=30)
+        return await self._fetch_with_retries(
+            session,
+            url,
+            _handle_binary,
+            timeout=30,
+            fallback_extensions=self.fallback_extensions,
+        )
 
 
 class MockFetcher:
