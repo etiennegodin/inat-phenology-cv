@@ -1,0 +1,42 @@
+OBSERVATIONS_FIELDS = {
+    "comments_count": True,
+    "community_taxon_id": True,
+    "description": True,
+    "faves_count": True,
+    "id": True,
+    "identifications": {
+        "body": True,
+        "category": True,
+        "created_at": True,
+        "current": True,
+        "disagreement": True,
+        "own_observation": True,
+        "previous_observation_taxon_id": True,
+        "taxon_id": True,
+        "user": {
+            "id": True,
+            "identifications_count": True,
+            "login": True,
+            "observations_count": True,
+            "species_count": True,
+        },
+        "uuid": True,
+        "vision": True,
+    },
+    "identifications_count": True,
+    "observation_photos": True,
+    "outlinks": True,
+    "owners_identification_from_vision": True,
+    "place_ids": True,
+    "reviewed_by": True,
+    "tags": True,
+    "taxon_geoprivacy": True,
+    "user": {"created_at": True, "id": True, "orcid": True},
+}
+
+PHENOLOGY_FIELDS = {
+    "controlled_attribute": {"id": True, "label": True},
+    "controlled_value": {"id": True, "label": True},
+    "count": True,
+    "month_of_year": True,
+}

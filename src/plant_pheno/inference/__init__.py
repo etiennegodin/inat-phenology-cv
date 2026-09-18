@@ -1,3 +1,3 @@
 from .model import PhenologyPyfunc
-
-__all__ = ["PhenologyPyfunc"]
+from . import inat_client
+__all__ = ["PhenologyPyfunc", "inat_client"]

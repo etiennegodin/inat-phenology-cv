@@ -20,6 +20,11 @@ dependencies = [
     "open-clip-torch",
     "pyyaml",
     "tqdm",
+    "aiohttp",
+    "aiofiles",
+    "aiolimiter",
+    "sqlparams",
+
 ]
 
 [project.optional-dependencies]

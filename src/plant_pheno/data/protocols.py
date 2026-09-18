@@ -1,0 +1,13 @@
+import logging
+from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
+
+
+class DBConnection(Protocol):
+    def execute(
+        self, query: str, params: Any | None = None, script: str | None = None
+    ) -> Any: ...
+    def close(self) -> None: ...
+    def __enter__(self): ...
+    def __exit__(self, *_): ...
