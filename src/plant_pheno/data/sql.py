@@ -116,6 +116,14 @@ class SQLEngine(ABC):
             logger.debug(name)
             self.execute(name)
 
+    def execute_query(self, query: str):
+        self.con.execute(query)
+
+    def fetch_df_query(self, query: str):
+        result = self.con.execute(query)
+        columns = [col[0] for col in result.description]
+        return pd.DataFrame(result.fetchall(), columns=columns)
+
 
 class DuckDbSQL(SQLEngine):
     def __init__(

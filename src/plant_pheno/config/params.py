@@ -5,6 +5,14 @@ from pathlib import Path
 
 
 @dataclass
+class IngestPhotosParams:
+    extension: str = "jpg"
+    size: str = "medium"
+    item_id: str = "photo_id"
+    label: str = field(init=False)
+
+
+@dataclass
 class TrainingParams:
     epochs: int
     stopping_patience: int

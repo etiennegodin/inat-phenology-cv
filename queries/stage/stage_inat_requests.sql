@@ -1,6 +1,8 @@
 
 
-INSERT INTO staged.inat_requests (id,uuid,photos)
+INSERT INTO staged.inat_requests
+(id,uuid,photos)
+
 WITH unpacked AS (
     SELECT obs.*
     FROM (
@@ -21,4 +23,5 @@ SELECT
 id,
 "uuid",
 photos
-FROM unpacked;
+FROM unpacked
+ON CONFLICT DO NOTHING;
