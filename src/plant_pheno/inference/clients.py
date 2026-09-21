@@ -11,6 +11,7 @@ from tqdm.asyncio import tqdm_asyncio
 
 from ..config import OBSERVATIONS_FIELDS, IngestPhotosParams
 from ..data import DuckDBAdapter, DuckDbSQL
+from ..utils import df_img_to_path
 from .base import BaseInferenceClient
 from .inat_client import (
     BinaryFetcher,
@@ -154,13 +155,16 @@ class InatInferenceClient(BaseInferenceClient):
     def execute(
         self, urls: list[str], photos_params: IngestPhotosParams, rate: int = 10
     ):
+        # Pull ids from urls
         obs_ids = self._format_observations_ids(urls)
+
+        # Query observations data and photo id list
         photos_df = self.get_observation_data(obs_ids)
-        print(photos_df)
 
+        # Filter with previously downloaded photos
         filtered_photos_df = self.filter_photo_ids(photos_df)
-        print(filtered_photos_df)
 
+        # Download missing photos for inference
         if filtered_photos_df is not None:
             asyncio.run(
                 self.download_photos_async(
@@ -170,3 +174,18 @@ class InatInferenceClient(BaseInferenceClient):
                     params=photos_params,
                 )
             )
+
+        # Construct images paths
+        df = df_img_to_path(photos_df, self.paths.photo_target_dir, column_name="paths")
+
+        # Collapse df by observation
+        df = (
+            df.groupby("observation_id")
+            .agg({"paths": list})
+            .reset_index(drop=False)
+            .sort_values(by="observation_id")
+            .reset_index(drop=True)
+        )
+
+        x, y = self.model.predict(df)
+        print(x, y)

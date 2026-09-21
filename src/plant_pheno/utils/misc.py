@@ -4,10 +4,12 @@ import pprint
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pandas as pd
 from torch import Tensor, device, nn
 
 if TYPE_CHECKING:
     from ..train.dataset import DatasetParams, PhenologyDataset
+
 
 import logging
 import os
@@ -17,6 +19,18 @@ import numpy as np
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+def df_img_to_path(
+    df: pd.DataFrame,
+    img_dir: str,
+    id_column: str = "observation_id",
+    photo_id_column: str = "photo_id",
+    column_name: str = "path",
+) -> pd.DataFrame:
+    """Formats photo_paths and groups per observation id"""
+    df[column_name] = img_dir + "/" + df[photo_id_column].astype(str) + ".jpg"
+    return df.sort_values(by=[id_column, photo_id_column]).reset_index(drop=True)
 
 
 def save_log():

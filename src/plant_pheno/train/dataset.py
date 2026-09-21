@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from ..config import DatasetParams, HardwareProfile
 from ..data import get_df_from_table
+from ..utils import df_img_to_path
 
 if TYPE_CHECKING:
     from torchvision.transforms.v2 import Compose
@@ -193,11 +194,12 @@ def split_dataset(
 
 def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
     df = get_df_from_table(paths.db_path, params.source_table)
-    df["path"] = paths.image_dir + "/" + df[params.photo_idx_col].astype(str) + ".jpg"
-    df = df.sort_values(by=[params.idx_col, params.photo_idx_col]).reset_index(
-        drop=True
+    return df_img_to_path(
+        df,
+        img_dir=paths.image_dir,
+        id_column=params.idx_col,
+        photo_id_column=params.photo_idx_col,
     )
-    return df
 
 
 def reduce_dataset(df, params: DatasetParams, seed: int = 42) -> pd.DataFrame:
