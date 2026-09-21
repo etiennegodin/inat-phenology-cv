@@ -2,9 +2,6 @@
 CREATE OR REPLACE TABLE main.cv_photos4 AS
 
 WITH base AS(
-
-
-
 SELECT p.observation_id,
     p.photo_id,
     l.label

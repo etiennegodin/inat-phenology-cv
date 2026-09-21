@@ -1,14 +1,14 @@
-CREATE SCHEMA IF NOT EXISTS staged;
+INSERT OR REPLACE INTO staged.img_requests
+(photo_id,observation_id)
 
-CREATE OR REPLACE TABLE staged.inat_request_photos AS
 WITH unpacked AS (
 SELECT
     o.id as observation_id,
     UNNEST(o.photos, RECURSIVE := true)
 
-FROM staged.inat_requests o
+FROM staged.obs_requests o
 )
 SELECT
-    observation_id,
     id AS photo_id,
+    observation_id,
 FROM unpacked

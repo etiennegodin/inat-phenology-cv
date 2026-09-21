@@ -160,11 +160,11 @@ class SQLEngine(ABC):
                 logger.debug(item)
                 self.execute(item)
 
-    def execute_query(self, query: str):
-        self.con.execute(query)
+    def execute_query(self, query: str, params: dict = {}):
+        self.con.execute(query, params)
 
-    def fetch_df_query(self, query: str):
-        result = self.con.execute(query)
+    def fetch_df_query(self, query: str, params: dict = {}):
+        result = self.con.execute(query, params)
         columns = [col[0] for col in result.description]
         return pd.DataFrame(result.fetchall(), columns=columns)
 

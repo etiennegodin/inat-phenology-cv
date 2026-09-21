@@ -1,5 +1,4 @@
-CREATE SCHEMA IF NOT EXISTS staged;
-INSERT INTO staged.inat_requests
+INSERT OR REPLACE INTO staged.obs_requests
 (id,uuid,photos)
 
 WITH unpacked AS (
@@ -15,7 +14,7 @@ WITH unpacked AS (
                 }],
             }'
             ) AS obs
-            FROM raw.inat_api
+            FROM raw.obs_requests
         )
 )
 SELECT
@@ -23,4 +22,3 @@ id,
 "uuid",
 photos
 FROM unpacked
-ON CONFLICT DO NOTHING;

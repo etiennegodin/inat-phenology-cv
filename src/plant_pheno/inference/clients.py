@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import asyncio
+import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
 import aiohttp
@@ -18,12 +22,14 @@ from .inat_client import (
 )
 
 if TYPE_CHECKING:
-    pass
+    import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 class InatInferenceClient(BaseInferenceClient):
-    def _format_observations_ids(self, urls: list[str]):
-        return [u.split(sep="/")[-1] for u in urls]
+    def _format_observations_ids(self, urls: list[str]) -> list[int]:
+        return [int(u.split(sep="/")[-1]) for u in urls]
 
     def _init_sql_api(self, con):
         return DuckDbSQL(con, self.paths.sql_dir)
@@ -74,14 +80,10 @@ class InatInferenceClient(BaseInferenceClient):
 
         writer.close()
 
-    def get_observation_data(self, obs_ids: list[int]):
+    def get_observation_data(self, obs_ids: list[int]) -> pd.DataFrame:
         with DuckDBAdapter(self.paths.inference_db_path) as con:
             sql_api = self._init_sql_api(con)
-            sql_api.execute(
-                script_name="create_api_raw_table",
-                module="api",
-                table_name="raw.inat_api",
-            )
+            sql_api.execute("init", module="inat")
 
             config = EndpointConfig(
                 "observations",
@@ -92,36 +94,79 @@ class InatInferenceClient(BaseInferenceClient):
             )
 
             fetcher = RateLimiterFetcher(rate=10, ignore_not_found=True)
-            with DuckDbWriter(con, "raw.inat_api") as writer:
+            with DuckDbWriter(con, "raw.obs_requests") as writer:
                 client = make_client(config, fetcher, writer)
                 asyncio.run(client.execute(obs_ids))
 
-            sql_api.execute(script_name="stage_inat_requests", module="stage")
-            sql_api.execute(script_name="stage_inat_request_photos", module="stage")
+            sql_api.execute("stage_obs_requests", module="inat")
+            sql_api.execute("stage_img_requests", module="inat")
 
-    def get_missing_photos(self):
-
-        with DuckDBAdapter(self.paths.inference_db_path) as con:
-            sql_api = self._init_sql_api(con)
-            df_photos = sql_api.fetch_df_query(
-                "SELECT photo_id FROM staged.inat_request_photos"
+            # Get photo ids
+            df = sql_api.fetch_df(
+                "get_photo_ids",
+                module="inat",
             )
-        print(df_photos)
-        return df_photos.to_dict("records")
+
+        return df[df["observation_id"].isin(obs_ids)]
+
+    def filter_photo_ids(self, df: pd.DataFrame) -> pd.DataFrame | None:
+        missing = []
+        local = []
+        for p in df["photo_id"].to_list():
+            matches = list(Path(self.paths.photo_target_dir).glob(f"{p}.*"))
+            if matches == []:
+                missing.append(p)
+            else:
+                local.append(p)
+
+        # Update record table
+        logger.info("Updating staged.img_requests with local photo ids")
+        with DuckDBAdapter(self.paths.inference_db_path) as con:
+            if len(local) > 0:
+                placeholders_local = ",".join(["?"] * len(local))
+                con.execute(
+                    f"""
+                UPDATE staged.img_requests
+                SET downloaded = ?
+                WHERE photo_id IN ({placeholders_local})
+                """,
+                    [1, *local],
+                )
+
+            if len(missing) > 0:
+                placeholders_missing = ",".join(["?"] * len(missing))
+                con.execute(
+                    f"""
+                UPDATE staged.img_requests
+                SET downloaded = ?
+                WHERE photo_id IN ({placeholders_missing})
+                """,
+                    [0, *missing],
+                )
+
+        if len(missing) > 0:
+            logger.info("Found missing photo ids")
+            return df[df["photo_id"].isin(missing)]
+
+        logger.info("All requested images are local")
+        return None
 
     def execute(
         self, urls: list[str], photos_params: IngestPhotosParams, rate: int = 10
     ):
         obs_ids = self._format_observations_ids(urls)
-        self.get_observation_data(obs_ids)
+        photos_df = self.get_observation_data(obs_ids)
+        print(photos_df)
 
-        photos_ids = self.get_missing_photos()
+        filtered_photos_df = self.filter_photo_ids(photos_df)
+        print(filtered_photos_df)
 
-        asyncio.run(
-            self.download_photos_async(
-                items=photos_ids,
-                target_dir=self.paths.photo_target_dir,
-                rate=rate,
-                params=photos_params,
+        if filtered_photos_df is not None:
+            asyncio.run(
+                self.download_photos_async(
+                    items=filtered_photos_df.to_dict("records"),
+                    target_dir=self.paths.photo_target_dir,
+                    rate=rate,
+                    params=photos_params,
+                )
             )
-        )
