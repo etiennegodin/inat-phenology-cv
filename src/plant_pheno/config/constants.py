@@ -7,3 +7,8 @@ LABEL_MAPPING = {
 }
 
 CLASS_ORDER = ["Flowering", "Fruiting", "Flower_Budding"]
+
+OBSERVATIONS_FIELDS = {
+    "id": True,
+    "photos": True,
+}

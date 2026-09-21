@@ -104,6 +104,9 @@ class PathsParams:
     db_path: str
     checkpoint_path: str
     eval_db_path: str
+    inference_db_path: str
+    sql_dir: str
+    photo_target_dir: str
 
     def __post_init__(self):
         Path(self.checkpoint_path).mkdir(parents=True, exist_ok=True)

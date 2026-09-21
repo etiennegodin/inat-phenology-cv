@@ -1,10 +1,13 @@
 paths :
-  root : '/content/inat-phenology-cv'
-  data_root : '/content/inat-phenology-cv/data'
-  image_dir : '/content/images'
-  db_path : '/content/data/cv_photos4.parquet'
-  checkpoint_path : '/content/drive/MyDrive/inat-phenology-cv/checkpoints'
-  eval_db_path : '/content/drive/MyDrive/inat-phenology-cv/data/model_evaluations.duckdb'
+  root : "/content/inat-phenology-cv"
+  data_root : "/content/inat-phenology-cv/data"
+  image_dir : "/content/images"
+  db_path : "/content/data/cv_photos4.parquet"
+  checkpoint_path : "/content/drive/MyDrive/inat-phenology-cv/checkpoints"
+  eval_db_path : "/content/drive/MyDrive/inat-phenology-cv/data/model_evaluations.duckdb"
+  inference_db_path : "/content/drive/MyDrive/inat-phenology-cv/data/inference.duckdb"
+  sql_dir : "/content/drive/MyDrive/inat-phenology-cv/queries"
+  photo_target_dir : "/content/data/"
 
 dataset_params:
   source_table : "cv_photos4"

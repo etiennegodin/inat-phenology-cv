@@ -17,6 +17,7 @@ from .config import (
     Config,
     DataLoadersParams,
     DatasetParams,
+    IngestPhotosParams,
     ModelParams,
     OptimizerParams,
     PathsParams,
@@ -27,6 +28,7 @@ from .config import (
 from .core.device import get_device, set_device
 from .core.model import BACKBONE_REGISTRY, build_pipeline_model
 from .data import log_model_evaluation
+from .inference.clients import InatInferenceClient
 from .infra import init_logger, mlflow_socks_patch, resolve_uri, seed_everything  # noqa
 from .status import status
 from .train import (
@@ -196,6 +198,18 @@ def train_cmd(args, configs: Config):
             mlflow.log_artifact(str(log_path))
 
 
+def inference_cmd(args, configs: Config):
+    photo_params = IngestPhotosParams()
+    print(args)
+    client = InatInferenceClient(
+        args.model_name, args.model_version, configs.paths_params
+    )
+    print(client)
+    client.execute(args.urls, photo_params)
+    quit()
+    pass
+
+
 def val_cmd(args, configs: Config):
 
     print("Connecting to mlflow")
@@ -347,6 +361,27 @@ def create_parser() -> argparse.ArgumentParser:
     add_common_args(val_parser)
     val_parser.set_defaults(func=val_cmd)
 
+    # Inference command
+    inference_parser = subparsers.add_parser("predict", help="Run inference")
+    add_inference_args(inference_parser)
+    add_common_args(inference_parser)
+
+    inference_parser.set_defaults(func=inference_cmd)
+    inference_subparsers = inference_parser.add_subparsers(
+        title="source", help="Available modules"
+    )
+
+    inference_inat_parser = inference_subparsers.add_parser(
+        "inat", help="run with inat"
+    )
+    inference_inat_parser.add_argument("--urls", type=parse_comma_list)
+    add_inference_args(inference_inat_parser)
+
+    inference_batch_parser = inference_subparsers.add_parser(
+        "batch", help="Batch inference "
+    )
+    inference_batch_parser.add_argument("--ids", type=parse_comma_list)
+
     # List model command
     list_parser = subparsers.add_parser("list", help="List registered models")
     list_parser.set_defaults(func=list_model_cmd)
@@ -380,9 +415,15 @@ def add_common_args(parser: argparse.ArgumentParser):
     )
 
 
+def add_inference_args(parser: argparse.ArgumentParser):
+    parser.add_argument("--model-version", "-mv", type=int, default=1)
+    parser.add_argument("--model-name", "-mn", type=str, default="cv_pheno_bioclip")
+    parser.add_argument("--device", "-d", type=str, default="cuda")
+
+
 def add_val_args(parser: argparse.ArgumentParser):
-    parser.add_argument("--model_version", "-mv", type=int, default=1)
-    parser.add_argument("--model_name", "-mn", type=str, default="cv_inat")
+    parser.add_argument("--model-version", "-mv", type=int, default=1)
+    parser.add_argument("--model-name", "-mn", type=str, default="cv_inat")
     parser.add_argument("--device", "-d", type=str, default="cuda")
     parser.add_argument(
         "--eval_db_path",
@@ -474,6 +515,7 @@ def main():
         git_branch=get_current_git_branch(),
         git_hash=get_git_hash(),
     )
+    logger.debug("Configs set up")
 
     # Execute command
     if hasattr(args, "func"):
@@ -487,6 +529,10 @@ def main():
         print(f'Unexpected error {e}')
         logger.error(e)
     """
+
+
+def parse_comma_list(s):
+    return [x.strip() for x in s.split(",")]
 
 
 if __name__ == "__main__":

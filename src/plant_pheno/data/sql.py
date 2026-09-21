@@ -19,10 +19,23 @@ logger = logging.getLogger(__name__)
 
 
 class SQLEngine(ABC):
-    def __init__(self, con: DBConnection, sql_dir: Path, ignore_params: bool = False):
+    def __init__(
+        self, con: DBConnection, sql_dir: Path | str, ignore_params: bool = False
+    ):
         self.con = con
         self.sql_dir = Path(sql_dir)
         self.ignore_params = ignore_params
+
+        # Validate directory exists
+        if not self.sql_dir.exists():
+            raise ValueError(f"SQL directory not found: {self.sql_dir}")
+
+        # Cache valid modules (subdirectories containing .sql files)
+        self.modules = {
+            d.name
+            for d in self.sql_dir.iterdir()
+            if d.is_dir() and any(d.glob("*.sql"))
+        }
 
     @abstractmethod
     def _parametrise_query(self, query: str, params: dict) -> tuple[str, list]:
@@ -57,9 +70,20 @@ class SQLEngine(ABC):
         sql = re.sub(r"--[^\n]*", "", sql)
         return sql.strip()
 
-    def _load(self, script_name: str, params: Any, **identifiers) -> tuple[str, Any]:
-        """Shared file loading + params & identifier injection."""
-        path = self.sql_dir / f"{script_name}.sql"
+    def _load(
+        self,
+        script_name: str,
+        module: str | None = None,
+        params: Any = None,
+        **identifiers,
+    ) -> tuple[str, Any]:
+        """Shared file loading sql_dir/[module/]script_name.sql +
+        params & identifier injection."""
+        if module is not None:
+            path = self.sql_dir / module / f"{script_name}.sql"
+        else:
+            path = self.sql_dir / f"{script_name}.sql"
+
         if not path.exists():
             raise FileNotFoundError(f"SQL script not found: {path}")
         query = path.read_text()
@@ -80,9 +104,15 @@ class SQLEngine(ABC):
 
         return identified, values
 
-    def execute(self, script_name: str, params: Any = None, **identifiers) -> None:
+    def execute(
+        self,
+        script_name: str,
+        module: str | None = None,
+        params: Any = None,
+        **identifiers,
+    ) -> None:
         """Run a mutation — CREATE, INSERT, UPDATE. Returns nothing."""
-        query, values = self._load(script_name, params, **identifiers)
+        query, values = self._load(script_name, module, params, **identifiers)
         logger.debug("Executing SQL: %s", script_name)
         start = time.monotonic()
         self.con.execute(query, values, script=script_name)
@@ -92,29 +122,43 @@ class SQLEngine(ABC):
         )
 
     def fetch(
-        self, script_name: str, params: Any = None, **identifiers
+        self,
+        script_name: str,
+        module: str | None = None,
+        params: Any = None,
+        **identifiers,
     ) -> list[dict[Any, Any]]:
         """Run a SELECT — returns rows as dicts."""
-        query, params = self._load(script_name, params, **identifiers)
+        query, params = self._load(script_name, module, params, **identifiers)
         result = self.con.execute(query, params, script=script_name)
         columns = [col[0] for col in result.description]
         return [dict(zip(columns, row)) for row in result.fetchall()]
 
     def fetch_df(
-        self, script_name: str, params: Any = None, **identifiers
+        self,
+        script_name: str,
+        module: str | None = None,
+        params: Any = None,
+        **identifiers,
     ) -> pd.DataFrame:
         """Fetch rows and convert to DataFrame — works with any PEP 249 driver."""
-        query, params = self._load(script_name, params, **identifiers)
+        query, params = self._load(script_name, module, params, **identifiers)
         result = self.con.execute(query, params, script=script_name)
         columns = [col[0] for col in result.description]
         return pd.DataFrame(result.fetchall(), columns=columns)
 
-    def execute_many(self, *script_names: str) -> None:
+    def execute_many(self, *script_names: str | tuple[str, str | None]) -> None:
         """Run multiple scripts in order — useful for staged pipelines."""
         logger.debug(script_names)
-        for name in script_names:
-            logger.debug(name)
-            self.execute(name)
+
+        for item in script_names:
+            if isinstance(script_names, tuple):
+                script_name, module = item
+                logger.debug(script_name)
+                self.execute(script_name, module=module)
+            else:
+                logger.debug(item)
+                self.execute(item)
 
     def execute_query(self, query: str):
         self.con.execute(query)
@@ -127,11 +171,9 @@ class SQLEngine(ABC):
 
 class DuckDbSQL(SQLEngine):
     def __init__(
-        self, adapter: DuckDBAdapter, sql_dir: Path, ignore_params: bool = False
-    ):
-        self.con = adapter
-        self.sql_dir = Path(sql_dir)
-        self.ignore_params = ignore_params
+        self, adapter: DuckDBAdapter, sql_dir: Path | str, ignore_params: bool = False
+    ) -> None:
+        super().__init__(con=adapter, sql_dir=sql_dir, ignore_params=ignore_params)
 
     def _parametrise_query(self, query: str, params: dict) -> tuple[str, list]:
         """Change for sql flavor"""

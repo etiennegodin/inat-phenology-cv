@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .constants import CLASS_ORDER, LABEL_MAPPING
+from .constants import CLASS_ORDER, LABEL_MAPPING, OBSERVATIONS_FIELDS
 from .loader import Config
 from .params import (
     DataLoadersParams,
@@ -17,6 +17,7 @@ from .system import HardwareProfile, resolve_hardware_profile
 __all__ = [
     "CLASS_ORDER",
     "LABEL_MAPPING",
+    "OBSERVATIONS_FIELDS",
     "Config",
     "DataLoadersParams",
     "DatasetParams",
