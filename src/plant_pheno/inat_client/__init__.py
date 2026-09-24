@@ -1,4 +1,3 @@
-from . import registery
 from .clients import BatchEndpointClient, ParametrizedEndpointClient, PhotoClient
 from .config import EndpointConfig, PhotoConfig
 from .factory import make_client
@@ -28,5 +27,4 @@ __all__ = [
     "JsonWriterProtocol",
     "BinaryFetcherProtocol",
     "BinaryWriterProtocol",
-    "registery",
 ]

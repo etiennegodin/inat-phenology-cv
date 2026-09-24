@@ -2,7 +2,7 @@ import logging
 
 import aiohttp
 
-from ...infra.network import BaseRateLimiterFetcher
+from ..infra.network import BaseRateLimiterFetcher
 
 logger = logging.getLogger(__name__)
 
