@@ -9,7 +9,7 @@ import aiohttp
 from pandas.core.api import DataFrame as DataFrame
 from tqdm.asyncio import tqdm_asyncio
 
-from ..config import OBSERVATIONS_FIELDS, IngestPhotosParams
+from ..config import ANCESTOR_ID, OBSERVATIONS_FIELDS, IngestPhotosParams
 from ..data import DuckDBAdapter, DuckDbSQL
 from ..utils import df_img_to_path
 from .base import BaseInferenceClient
@@ -29,6 +29,45 @@ logger = logging.getLogger(__name__)
 
 
 class InatInferenceClient(BaseInferenceClient):
+    def execute(
+        self, urls: list[str], photos_params: IngestPhotosParams, rate: int = 10
+    ):
+        # Pull ids from urls
+        obs_ids = self._format_observations_ids(urls)
+
+        # Query observations data and photo id list
+        self.get_observation_data(obs_ids)
+        photos_df = self.get_photo_ids(obs_ids)
+
+        # Filter with previously downloaded photos and trac
+        filtered_photos_df = self._filter_photo_ids(photos_df)
+
+        # Download missing photos for inference
+        if filtered_photos_df is not None:
+            asyncio.run(
+                self.download_photos_async(
+                    items=filtered_photos_df.to_dict("records"),
+                    target_dir=self.paths.photo_target_dir,
+                    rate=rate,
+                    params=photos_params,
+                )
+            )
+
+        # Construct images paths
+        df = df_img_to_path(photos_df, self.paths.photo_target_dir, column_name="paths")
+
+        # Collapse df by observation
+        df = (
+            df.groupby("observation_id")
+            .agg({"paths": list})
+            .reset_index(drop=False)
+            .sort_values(by="observation_id")
+            .reset_index(drop=True)
+        )
+
+        x, y = self.model.predict(df)
+        print(x, y)
+
     def _format_observations_ids(self, urls: list[str]) -> list[int]:
         return [int(u.split(sep="/")[-1]) for u in urls]
 
@@ -81,7 +120,7 @@ class InatInferenceClient(BaseInferenceClient):
 
         writer.close()
 
-    def get_observation_data(self, obs_ids: list[int]) -> pd.DataFrame:
+    def get_observation_data(self, obs_ids: list[int]):
         with DuckDBAdapter(self.paths.inference_db_path) as con:
             sql_api = self._init_sql_api(con)
             sql_api.execute("init", module="inat")
@@ -100,17 +139,41 @@ class InatInferenceClient(BaseInferenceClient):
                 asyncio.run(client.execute(obs_ids))
 
             sql_api.execute("stage_obs_requests", module="inat")
-            sql_api.execute("stage_img_requests", module="inat")
 
-            # Get photo ids
-            df = sql_api.fetch_df(
-                "get_photo_ids",
-                module="inat",
+    def get_photo_ids(self, obs_ids: list[int]):
+
+        with DuckDBAdapter(self.paths.inference_db_path) as con:
+            sql_api = self._init_sql_api(con)
+            sql_api.execute("init", module="inat")
+
+            # Get observation data
+            df = sql_api.fetch_df_query(
+                """
+                    SELECT *
+                    FROM staged.obs_requests
+                """
             )
 
-        return df[df["observation_id"].isin(obs_ids)]
+            # Keep only flowering plants
+            missing_ids = {ANCESTOR_ID} - set(df["ancestor_ids"])
+            if missing_ids:
+                logger.warning(
+                    f"Observation ids of non flowering plants: {missing_ids}"
+                )
+            df_filtered = df[df["ancestor_ids"].apply(lambda lst: ANCESTOR_ID in lst)]
 
-    def filter_photo_ids(self, df: pd.DataFrame) -> pd.DataFrame | None:
+            # Keep only requested observations
+            df_filtered[df_filtered["observation_id"].isin(obs_ids)]
+            # Get photo data
+            df_img = sql_api.fetch_df_query(
+                """
+                    SELECT *
+                    FROM staged.img_requests
+                """
+            )
+        return df_img.merge(df_filtered, on="observation_id", how="inner")
+
+    def _filter_photo_ids(self, df: pd.DataFrame) -> pd.DataFrame | None:
         missing = []
         local = []
         for p in df["photo_id"].to_list():
@@ -151,41 +214,3 @@ class InatInferenceClient(BaseInferenceClient):
 
         logger.info("All requested images are local")
         return None
-
-    def execute(
-        self, urls: list[str], photos_params: IngestPhotosParams, rate: int = 10
-    ):
-        # Pull ids from urls
-        obs_ids = self._format_observations_ids(urls)
-
-        # Query observations data and photo id list
-        photos_df = self.get_observation_data(obs_ids)
-
-        # Filter with previously downloaded photos
-        filtered_photos_df = self.filter_photo_ids(photos_df)
-
-        # Download missing photos for inference
-        if filtered_photos_df is not None:
-            asyncio.run(
-                self.download_photos_async(
-                    items=filtered_photos_df.to_dict("records"),
-                    target_dir=self.paths.photo_target_dir,
-                    rate=rate,
-                    params=photos_params,
-                )
-            )
-
-        # Construct images paths
-        df = df_img_to_path(photos_df, self.paths.photo_target_dir, column_name="paths")
-
-        # Collapse df by observation
-        df = (
-            df.groupby("observation_id")
-            .agg({"paths": list})
-            .reset_index(drop=False)
-            .sort_values(by="observation_id")
-            .reset_index(drop=True)
-        )
-
-        x, y = self.model.predict(df)
-        print(x, y)

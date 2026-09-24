@@ -8,7 +8,6 @@ LABEL_MAPPING = {
 
 CLASS_ORDER = ["Flowering", "Fruiting", "Flower_Budding"]
 
-OBSERVATIONS_FIELDS = {
-    "id": True,
-    "photos": True,
-}
+OBSERVATIONS_FIELDS = {"id": True, "photos": True, "taxon": {"ancestor_ids": True}}
+
+ANCESTOR_ID = 47125

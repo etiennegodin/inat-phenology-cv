@@ -20,9 +20,11 @@ scrapper_version VARCHAR,
 
 
 CREATE TABLE IF NOT EXISTS staged.obs_requests (
-    id INT PRIMARY KEY,
+    observation_id INT PRIMARY KEY,
     uuid VARCHAR,
-    photos STRUCT(id INT)[]
+    photos STRUCT(id INT)[],
+    taxon INT,
+    ancestor_ids INT[]
     );
 
 CREATE TABLE IF NOT EXISTS staged.img_requests (

@@ -58,7 +58,7 @@ class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
 
     def predict(
         self, context, model_input: pd.DataFrame, params: dict[str, Any] | None = None
-    ):
+    ) -> tuple[tuple[np.ndarray, np.ndarray], list[dict[str, list[float]]]]:
         # Load images
         observations_ids = []
         image_bags = []
@@ -76,17 +76,17 @@ class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
         preds_raw = torch.sigmoid(predictions).detach().float().cpu().numpy()
         preds_bin = (preds_raw >= self.class_thresholds).astype(int)
 
-        observations_attention_weights = []
+        observations_attention_weights: list[dict[str, list[float]]] = []
         # Attention weights
         for o in range(preds_bin.shape[0]):
-            obs_dict = {}
+            obs_dict: dict[str, list] = {}
             for class_name, batch_weights in class_weights.items():
                 obs_dict[class_name] = (
                     batch_weights[o].detach().cpu().squeeze(-1).tolist()
                 )
             observations_attention_weights.append(obs_dict)
 
-        return preds_bin, observations_attention_weights
+        return (preds_bin, preds_raw), observations_attention_weights
 
     def _load_image(self, path):
         image = Image.open(path).convert("RGB")
