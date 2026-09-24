@@ -68,7 +68,7 @@ class InatInferenceClient(BaseInferenceClient):
         )
         logger.debug(df)
 
-        preds_raw, preds_bin, attention_weights = self._predict(df)
+        preds_bin, preds_raw, attention_weights = self._predict(df)
         self._log_predictions(
             df["observation_id"].to_list(),
             preds_raw=preds_raw,
@@ -161,7 +161,7 @@ class InatInferenceClient(BaseInferenceClient):
             df = sql_api.fetch_df_query(
                 """
                     SELECT *
-                    FROM staged.obs_requests
+                    FROM serving.observations
                 """
             )
 
@@ -182,7 +182,7 @@ class InatInferenceClient(BaseInferenceClient):
             df_img = sql_api.fetch_df_query(
                 """
                     SELECT *
-                    FROM staged.img_requests
+                    FROM serving.photos
                 """
             )
 
@@ -201,13 +201,13 @@ class InatInferenceClient(BaseInferenceClient):
                 local.append(p)
 
         # Update record table
-        logger.info("Updating staged.img_requests with local photo ids")
+        logger.info("Updating serving.photos with local photo ids")
         with DuckDBAdapter(self.params.db_path) as con:
             if len(local) > 0:
                 placeholders_local = ",".join(["?"] * len(local))
                 con.execute(
                     f"""
-                UPDATE staged.img_requests
+                UPDATE serving.photos
                 SET downloaded = ?
                 WHERE photo_id IN ({placeholders_local})
                 """,
@@ -218,7 +218,7 @@ class InatInferenceClient(BaseInferenceClient):
                 placeholders_missing = ",".join(["?"] * len(missing))
                 con.execute(
                     f"""
-                UPDATE staged.img_requests
+                UPDATE serving.photos
                 SET downloaded = ?
                 WHERE photo_id IN ({placeholders_missing})
                 """,

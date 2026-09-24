@@ -1,4 +1,4 @@
-INSERT OR REPLACE INTO staged.obs_requests
+INSERT OR REPLACE INTO serving.observations
 (observation_id,uuid,photos, taxon, ancestor_ids)
 
 WITH unpacked AS (
@@ -28,7 +28,7 @@ taxon.ancestor_ids
 FROM unpacked;
 
 
-INSERT OR REPLACE INTO staged.img_requests
+INSERT OR REPLACE INTO serving.photos
 (photo_id,observation_id)
 
 WITH unpacked AS (
@@ -36,7 +36,7 @@ SELECT
     o.observation_id,
     UNNEST(o.photos, RECURSIVE := true)
 
-FROM staged.obs_requests o
+FROM serving.observations o
 )
 SELECT
     id AS photo_id,
