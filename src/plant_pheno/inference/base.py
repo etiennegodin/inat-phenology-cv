@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 import mlflow
+import numpy as np
 
+from ..config import CLASS_ORDER
+from ..data import DuckDBAdapter
 from ..infra import resolve_uri
 
 if TYPE_CHECKING:
@@ -23,6 +27,16 @@ class BaseInferenceClient(ABC):
         self.params = params
         self._load_model()
 
+    @abstractmethod
+    def execute(self, *args, **kwargs):
+        """Construct and validate model input"""
+
+    def _predict(
+        self, model_input
+    ) -> tuple[np.ndarray, np.ndarray, list[dict[str, list[float]]]]:
+        """Validate"""
+        return self.model.predict(model_input)
+
     def _load_model(self):
 
         mlflow.set_tracking_uri(resolve_uri())
@@ -32,10 +46,86 @@ class BaseInferenceClient(ABC):
         # Load the model
         self.model = mlflow.pyfunc.load_model(self.model_uri)
 
-    def _predict(self, model_input):
-        """Validate"""
-        return self.model.predict(model_input)
+    def _log_predictions(
+        self,
+        observation_ids: list[int],
+        preds_raw: np.ndarray,
+        preds_bin: np.ndarray,
+        attention_weights_list: list[dict[str, list]],
+    ):
+        model_id = self._resolve_model_id()
 
-    @abstractmethod
-    def execute(self, *args, **kwargs):
-        """Construct and validate model input"""
+        prediction_rows = []
+        attention_rows = []
+
+        for i, obs_id in enumerate(observation_ids):
+            prediction_id = str(uuid.uuid4())
+
+            prediction_rows.append(
+                (
+                    prediction_id,
+                    obs_id,
+                    model_id,
+                    preds_raw[i].tolist(),
+                    preds_bin[i].tolist(),
+                )
+            )
+            attention_weights = attention_weights_list[i]
+            for class_name in CLASS_ORDER:
+                w = attention_weights[class_name]
+                attention_rows.append((prediction_id, class_name, w))
+
+        with DuckDBAdapter(self.params.db_path) as con:
+            con.executemany(
+                """
+                INSERT INTO serving.predictions
+                    (prediction_id, observation_id, model_id, raw_preds, bin_preds)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                prediction_rows,
+            )
+            con.executemany(
+                """
+                INSERT INTO serving.prediction_attention_weights
+                    (prediction_id, class_name, weights)
+                VALUES (?, ?, ?)
+                """,
+                attention_rows,
+            )
+
+    def _resolve_model_id(self) -> int:
+        """Map this client's loaded model to a row in serving.models,
+        keyed on model_uri. Inserts one the first time this exact model_uri
+        is served from; cached on self so repeat execute() calls on the
+        same client don't re-query."""
+        if getattr(self, "_model_id", None) is not None:
+            return self._model_id
+
+        with DuckDBAdapter(self.params.db_path) as con:
+            row = con.execute(
+                "SELECT model_id FROM serving.models WHERE model_uri = ?",
+                [self.model_uri],
+            ).fetchone()
+
+            if row is None:
+                new_id = con.execute(
+                    "SELECT COALESCE(MAX(model_id), 0) + 1 FROM serving.models"
+                ).fetchone()[0]
+                con.execute(
+                    """
+                    INSERT INTO serving.models
+                        (model_id, model_name, model_version, model_uri, thresholds)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    [
+                        new_id,
+                        self.params.model_name,
+                        self.params.model_version,
+                        self.model_uri,
+                        self.model._model_impl.python_model.class_thresholds,
+                    ],
+                )
+                row = (new_id,)
+
+        self._model_id = row[0]
+        return self._model_id

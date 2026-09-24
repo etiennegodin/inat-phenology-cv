@@ -58,7 +58,7 @@ class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
 
     def predict(
         self, context, model_input: pd.DataFrame, params: dict[str, Any] | None = None
-    ) -> tuple[tuple[np.ndarray, np.ndarray], list[dict[str, list[float]]]]:
+    ) -> tuple[np.ndarray, np.ndarray, list[dict[str, list[float]]]]:
         # Load images
         observations_ids = []
         image_bags = []
@@ -86,7 +86,7 @@ class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
                 )
             observations_attention_weights.append(obs_dict)
 
-        return (preds_bin, preds_raw), observations_attention_weights
+        return preds_bin, preds_raw, observations_attention_weights
 
     def _load_image(self, path):
         image = Image.open(path).convert("RGB")

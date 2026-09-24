@@ -68,8 +68,14 @@ class InatInferenceClient(BaseInferenceClient):
         )
         logger.debug(df)
 
-        x, y = self.model.predict(df)
-        print(x, y)
+        preds_raw, preds_bin, attention_weights = self._predict(df)
+        self._log_predictions(
+            df["observation_id"].to_list(),
+            preds_raw=preds_raw,
+            preds_bin=preds_bin,
+            attention_weights_list=attention_weights,
+        )
+        return preds_raw, preds_bin, attention_weights
 
     def _format_observations_ids(self, urls: list[str]) -> list[int]:
         ids = [int(u.split(sep="/")[-1]) for u in urls]
