@@ -34,6 +34,31 @@ class EndpointConfig:
         return asdict(self)
 
 
+@dataclass
+class PhotoConfig:
+    size: str = "medium"
+    extensions: list[str] = field(default_factory=lambda: [".jpg", ".jpeg", ".png"])
+    base_url: str = "https://inaturalist-open-data.s3.amazonaws.com/photos"
+    item_id_key: str = "photo_id"
+
+    @classmethod
+    def from_params(
+        cls,
+        params,
+        base_url: str = "https://inaturalist-open-data.s3.amazonaws.com/photos",
+    ) -> "PhotoConfig":
+        return cls(
+            size=getattr(params, "size", "medium"),
+            extensions=getattr(params, "extensions", [".jpg", ".jpeg", ".png"]),
+            item_id_key=getattr(params, "item_id", "photo_id"),
+            base_url=base_url,
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize config for logging."""
+        return asdict(self)
+
+
 def _fields_to_string(fields_dict: dict, level=0):
     parts = []
     for key, value in fields_dict.items():

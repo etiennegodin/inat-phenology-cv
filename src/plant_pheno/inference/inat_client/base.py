@@ -9,7 +9,7 @@ import aiohttp
 from tqdm.asyncio import tqdm_asyncio
 
 from .config import EndpointConfig
-from .protocols import Fetcher, Writer
+from .protocols import JsonFetcherProtocol, JsonWriterProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,12 @@ class BaseInatClient(ABC):
     Subclasses only implement _iter_requests() to control how IDs map to HTTP params.
     """
 
-    def __init__(self, config: EndpointConfig, fetcher: Fetcher, writer: Writer):
+    def __init__(
+        self,
+        config: EndpointConfig,
+        fetcher: JsonFetcherProtocol,
+        writer: JsonWriterProtocol,
+    ):
         # Copy config to client
         self.config = config
 

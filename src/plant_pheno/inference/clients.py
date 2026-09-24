@@ -5,9 +5,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
-import aiohttp
 from pandas.core.api import DataFrame as DataFrame
-from tqdm.asyncio import tqdm_asyncio
 
 from ..config import ANCESTOR_ID, OBSERVATIONS_FIELDS, IngestPhotosParams
 from ..data import DuckDBAdapter, DuckDbSQL
@@ -18,6 +16,7 @@ from .inat_client import (
     DuckDbWriter,
     EndpointConfig,
     LocalBinaryWriter,
+    PhotoConfig,
     RateLimiterFetcher,
     make_client,
 )
@@ -29,9 +28,23 @@ logger = logging.getLogger(__name__)
 
 
 class InatInferenceClient(BaseInferenceClient):
+    """
+    Inference client that receives iNaturalist observation URL(s),
+    fetches required observation data and photos (if not already local),
+    runs model inference, and logs predictions.
+    """
+
     def execute(
-        self, urls: list[str], photos_params: IngestPhotosParams, rate: int = 10
+        self,
+        urls: list[str] | str,
+        photos_params: IngestPhotosParams | None = None,
+        rate: int = 10,
     ):
+        if isinstance(urls, str):
+            urls = [urls]
+        if photos_params is None:
+            photos_params = IngestPhotosParams()
+
         # Pull ids from urls
         obs_ids = self._format_observations_ids(urls)
 
@@ -39,18 +52,16 @@ class InatInferenceClient(BaseInferenceClient):
         self.get_observation_data(obs_ids)
         photos_df = self.get_photo_ids(obs_ids)
 
-        # Filter with previously downloaded photos and trac
+        # Filter with previously downloaded photos and track
         filtered_photos_df = self._filter_photo_ids(photos_df)
 
-        # Download missing photos for inference
-        if filtered_photos_df is not None:
-            asyncio.run(
-                self.download_photos_async(
-                    items=filtered_photos_df.to_dict("records"),
-                    target_dir=self.params.photo_target_dir,
-                    rate=rate,
-                    params=photos_params,
-                )
+        # Download missing photos for inference using inat_client PhotoClient
+        if filtered_photos_df is not None and not filtered_photos_df.empty:
+            self.download_photos(
+                photo_ids=filtered_photos_df["photo_id"].tolist(),
+                target_dir=self.params.photo_target_dir,
+                rate=rate,
+                params=photos_params,
             )
 
         # Construct images paths
@@ -85,51 +96,37 @@ class InatInferenceClient(BaseInferenceClient):
     def _init_sql_api(self, con):
         return DuckDbSQL(con, self.params.sql_dir)
 
-    async def _download_photo(
+    def download_photos(
         self,
-        session: aiohttp.ClientSession,
-        fetcher: BinaryFetcher,
-        writer: LocalBinaryWriter,
-        item_id: str,
+        photo_ids: list[int | str],
+        target_dir: str,
+        rate: int,
         params: IngestPhotosParams,
-    ):
-        """Orchestrate the download and write of a single photo."""
-
-        extension = params.extensions[0]
-        size = params.size
-
-        url = f"https://inaturalist-open-data.s3.amazonaws.com/photos/{item_id}/{size}{extension}"
-        filename = f"{item_id}{extension}"
-
-        try:
-            data = await fetcher.fetch(session, url)
-            await writer.write(data, filename)
-        except Exception as e:
-            print("Failed to download photo %s: %s", item_id, e)
-
-    async def download_photos_async(
-        self, items: List[Dict], target_dir: str, rate: int, params: IngestPhotosParams
-    ):
-        """Async execution of the photo download batch."""
+    ) -> None:
+        """Download missing photos via inat_client PhotoClient."""
+        config = PhotoConfig.from_params(params)
         fetcher = BinaryFetcher(
             fallback_extensions=params.extensions, rate=rate, max_retries=0
         )
-        writer = LocalBinaryWriter(target_dir)
+        with LocalBinaryWriter(target_dir) as writer:
+            client = make_client(config, fetcher, writer)
+            asyncio.run(client.execute(photo_ids))
 
-        async with aiohttp.ClientSession() as session:
-            tasks = [
-                self._download_photo(
-                    session=session,
-                    fetcher=fetcher,
-                    writer=writer,
-                    item_id=str(item[params.item_id]),
-                    params=params,
-                )
-                for item in items
-            ]
-            await tqdm_asyncio.gather(*tasks)
-
-        writer.close()
+    async def download_photos_async(
+        self,
+        items: List[Dict] | list[int | str],
+        target_dir: str,
+        rate: int,
+        params: IngestPhotosParams,
+    ):
+        """Async execution of the photo download batch using inat_client PhotoClient."""
+        config = PhotoConfig.from_params(params)
+        fetcher = BinaryFetcher(
+            fallback_extensions=params.extensions, rate=rate, max_retries=0
+        )
+        with LocalBinaryWriter(target_dir) as writer:
+            client = make_client(config, fetcher, writer)
+            await client.execute(items)
 
     def get_observation_data(self, obs_ids: list[int]):
 

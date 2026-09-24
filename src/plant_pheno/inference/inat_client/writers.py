@@ -98,6 +98,12 @@ class LocalBinaryWriter:
         self.target_dir.mkdir(parents=True, exist_ok=True)
         self._executor = ThreadPoolExecutor(max_workers=4)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+
     async def write(self, data: bytes, filename: str):
         """Offload blocking file write to thread pool."""
         loop = asyncio.get_running_loop()
@@ -105,6 +111,7 @@ class LocalBinaryWriter:
 
     def _write_sync(self, data: bytes, filename: str):
         target_path = self.target_dir / filename
+        target_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_path, "wb") as f:
             f.write(data)
 
