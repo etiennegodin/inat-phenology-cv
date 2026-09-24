@@ -222,3 +222,4 @@ mlruns/
 .env
 notes/
 AGENTS.md
+.aider*
