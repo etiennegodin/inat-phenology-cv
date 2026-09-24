@@ -47,14 +47,16 @@ class InatInferenceClient(BaseInferenceClient):
             asyncio.run(
                 self.download_photos_async(
                     items=filtered_photos_df.to_dict("records"),
-                    target_dir=self.paths.photo_target_dir,
+                    target_dir=self.params.photo_target_dir,
                     rate=rate,
                     params=photos_params,
                 )
             )
 
         # Construct images paths
-        df = df_img_to_path(photos_df, self.paths.photo_target_dir, column_name="paths")
+        df = df_img_to_path(
+            photos_df, self.params.photo_target_dir, column_name="paths"
+        )
 
         # Collapse df by observation
         df = (
@@ -64,15 +66,18 @@ class InatInferenceClient(BaseInferenceClient):
             .sort_values(by="observation_id")
             .reset_index(drop=True)
         )
+        logger.debug(df)
 
         x, y = self.model.predict(df)
         print(x, y)
 
     def _format_observations_ids(self, urls: list[str]) -> list[int]:
-        return [int(u.split(sep="/")[-1]) for u in urls]
+        ids = [int(u.split(sep="/")[-1]) for u in urls]
+        logger.debug(ids)
+        return ids
 
     def _init_sql_api(self, con):
-        return DuckDbSQL(con, self.paths.sql_dir)
+        return DuckDbSQL(con, self.params.sql_dir)
 
     async def _download_photo(
         self,
@@ -121,7 +126,8 @@ class InatInferenceClient(BaseInferenceClient):
         writer.close()
 
     def get_observation_data(self, obs_ids: list[int]):
-        with DuckDBAdapter(self.paths.inference_db_path) as con:
+
+        with DuckDBAdapter(self.params.db_path) as con:
             sql_api = self._init_sql_api(con)
             sql_api.execute("init", module="inat")
 
@@ -142,9 +148,8 @@ class InatInferenceClient(BaseInferenceClient):
 
     def get_photo_ids(self, obs_ids: list[int]):
 
-        with DuckDBAdapter(self.paths.inference_db_path) as con:
+        with DuckDBAdapter(self.params.db_path) as con:
             sql_api = self._init_sql_api(con)
-            sql_api.execute("init", module="inat")
 
             # Get observation data
             df = sql_api.fetch_df_query(
@@ -155,15 +160,18 @@ class InatInferenceClient(BaseInferenceClient):
             )
 
             # Keep only flowering plants
+            """
             missing_ids = {ANCESTOR_ID} - set(df["ancestor_ids"])
             if missing_ids:
                 logger.warning(
                     f"Observation ids of non flowering plants: {missing_ids}"
                 )
+            """
             df_filtered = df[df["ancestor_ids"].apply(lambda lst: ANCESTOR_ID in lst)]
 
             # Keep only requested observations
-            df_filtered[df_filtered["observation_id"].isin(obs_ids)]
+            df_filtered = df_filtered[df_filtered["observation_id"].isin(obs_ids)]
+
             # Get photo data
             df_img = sql_api.fetch_df_query(
                 """
@@ -171,13 +179,16 @@ class InatInferenceClient(BaseInferenceClient):
                     FROM staged.img_requests
                 """
             )
-        return df_img.merge(df_filtered, on="observation_id", how="inner")
+
+        df_out = df_img[df_img["observation_id"].isin(df_filtered["observation_id"])]
+        logger.debug(df_out)
+        return df_out
 
     def _filter_photo_ids(self, df: pd.DataFrame) -> pd.DataFrame | None:
         missing = []
         local = []
         for p in df["photo_id"].to_list():
-            matches = list(Path(self.paths.photo_target_dir).glob(f"{p}.*"))
+            matches = list(Path(self.params.photo_target_dir).glob(f"{p}.*"))
             if matches == []:
                 missing.append(p)
             else:
@@ -185,7 +196,7 @@ class InatInferenceClient(BaseInferenceClient):
 
         # Update record table
         logger.info("Updating staged.img_requests with local photo ids")
-        with DuckDBAdapter(self.paths.inference_db_path) as con:
+        with DuckDBAdapter(self.params.db_path) as con:
             if len(local) > 0:
                 placeholders_local = ",".join(["?"] * len(local))
                 con.execute(
@@ -210,7 +221,9 @@ class InatInferenceClient(BaseInferenceClient):
 
         if len(missing) > 0:
             logger.info("Found missing photo ids")
-            return df[df["photo_id"].isin(missing)]
+            df_out = df[df["photo_id"].isin(missing)]
+            logger.debug(df_out)
+            return df_out
 
         logger.info("All requested images are local")
         return None

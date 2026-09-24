@@ -17,6 +17,7 @@ from .config import (
     Config,
     DataLoadersParams,
     DatasetParams,
+    InferenceParams,
     IngestPhotosParams,
     ModelParams,
     OptimizerParams,
@@ -201,9 +202,14 @@ def train_cmd(args, configs: Config):
 def inference_cmd(args, configs: Config):
     photo_params = IngestPhotosParams()
     print(args)
-    client = InatInferenceClient(
-        args.model_name, args.model_version, configs.paths_params
+    inference_params = InferenceParams(
+        args.model_name,
+        args.model_version,
+        db_path=configs.paths_params.inference_db_path,
+        photo_target_dir=configs.paths_params.photo_target_dir,
+        sql_dir=configs.paths_params.sql_dir,
     )
+    client = InatInferenceClient(inference_params)
     print(client)
     client.execute(args.urls, photo_params)
     quit()

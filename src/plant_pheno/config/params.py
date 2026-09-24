@@ -5,6 +5,15 @@ from pathlib import Path
 
 
 @dataclass
+class InferenceParams:
+    model_name: str
+    model_version: int
+    db_path: str
+    photo_target_dir: str
+    sql_dir: str
+
+
+@dataclass
 class IngestPhotosParams:
     extensions: list[str] = field(default_factory=list[str])
     size: str = "medium"

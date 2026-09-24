@@ -5,6 +5,7 @@ from .loader import Config
 from .params import (
     DataLoadersParams,
     DatasetParams,
+    InferenceParams,
     IngestPhotosParams,
     ModelParams,
     OptimizerParams,
@@ -28,6 +29,7 @@ __all__ = [
     "SchedulerParams",
     "TrainingParams",
     "IngestPhotosParams",
+    "InferenceParams",
     "HardwareProfile",
     "resolve_hardware_profile",
 ]
