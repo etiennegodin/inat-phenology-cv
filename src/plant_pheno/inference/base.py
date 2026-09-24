@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -59,11 +58,8 @@ class BaseInferenceClient(ABC):
         attention_rows = []
 
         for i, obs_id in enumerate(observation_ids):
-            prediction_id = str(uuid.uuid4())
-
             prediction_rows.append(
                 (
-                    prediction_id,
                     obs_id,
                     model_id,
                     preds_raw[i].tolist(),
@@ -73,22 +69,29 @@ class BaseInferenceClient(ABC):
             attention_weights = attention_weights_list[i]
             for class_name in CLASS_ORDER:
                 w = attention_weights[class_name]
-                attention_rows.append((prediction_id, class_name, w))
+                attention_rows.append((obs_id, model_id, class_name, w))
 
         with DuckDBAdapter(self.params.db_path) as con:
             con.executemany(
                 """
                 INSERT INTO serving.predictions
-                    (prediction_id, observation_id, model_id, raw_preds, bin_preds)
-                VALUES (?, ?, ?, ?, ?)
+                    (observation_id, model_id, raw_preds, bin_preds)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (observation_id, model_id) DO UPDATE SET
+                    raw_preds = EXCLUDED.raw_preds,
+                    bin_preds = EXCLUDED.bin_preds,
+                    predicted_at = now()
                 """,
                 prediction_rows,
             )
             con.executemany(
                 """
                 INSERT INTO serving.prediction_attention_weights
-                    (prediction_id, class_name, weights)
-                VALUES (?, ?, ?)
+                    (observation_id, model_id, class_name, weights)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (observation_id, model_id, class_name) DO UPDATE SET
+                weights = EXCLUDED.weights,
+                predicted_at = now()
                 """,
                 attention_rows,
             )

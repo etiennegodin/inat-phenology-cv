@@ -20,31 +20,37 @@ scrapper_version VARCHAR,
 
 
 CREATE TABLE IF NOT EXISTS serving.observations (
-    observation_id INT PRIMARY KEY,
+    observation_id BIGINT PRIMARY KEY,
     uuid VARCHAR,
     photos STRUCT(id INT)[],
-    taxon INT,
+    taxon BIGINT,
     ancestor_ids INT[]
     );
 
 CREATE TABLE IF NOT EXISTS serving.photos (
-    photo_id INT PRIMARY KEY,
-    observation_id INT,
+    photo_id BIGINT PRIMARY KEY,
+    observation_id BIGINT,
     downloaded BOOLEAN
     );
 
 CREATE TABLE IF NOT EXISTS serving.predictions (
-    prediction_id VARCHAR PRIMARY KEY,
-    observation_id INT,
-    model_id INT,
+    observation_id BIGINT NOT NULL,
+    model_id INT NOT NULL,
     raw_preds FLOAT[],
-    bin_preds INT[]
+    bin_preds INT[],
+    predicted_at TIMESTAMP DEFAULT now(),
+    PRIMARY KEY (observation_id, model_id)
+
     );
 
 CREATE TABLE IF NOT EXISTS serving.prediction_attention_weights (
-    prediction_id VARCHAR,
-    class_name VARCHAR,
+    observation_id BIGINT NOT NULL,
+    model_id INTEGER NOT NULL,
+    class_name VARCHAR NOT NULL,
     weights FLOAT[],
+    predicted_at TIMESTAMP DEFAULT now(),
+    PRIMARY KEY (observation_id, model_id, class_name)
+
     );
 
 CREATE TABLE IF NOT EXISTS serving.models (
