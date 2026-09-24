@@ -4,8 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from plant_pheno.config import IngestPhotosParams
-from plant_pheno.inference import InatInferenceClient
-from plant_pheno.inference.inat_client import (
+from plant_pheno.inat_client import (
     BatchEndpointClient,
     BinaryFetcher,
     EndpointConfig,
@@ -15,6 +14,7 @@ from plant_pheno.inference.inat_client import (
     PhotoConfig,
     make_client,
 )
+from plant_pheno.inference import InatInferenceClient
 
 
 class DummyBinaryFetcher:
