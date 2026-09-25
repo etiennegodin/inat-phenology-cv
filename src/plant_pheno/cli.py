@@ -29,7 +29,7 @@ from .config import (
 from .core.device import get_device, set_device
 from .core.model import BACKBONE_REGISTRY, build_pipeline_model
 from .data import log_model_evaluation
-from .inference.clients import InatInferenceClient
+from .inference import InatInferencePipeline
 from .infra import init_logger, mlflow_socks_patch, resolve_uri, seed_everything  # noqa
 from .status import status
 from .train import (
@@ -209,10 +209,8 @@ def inference_cmd(args, configs: Config):
         photo_target_dir=configs.paths_params.photo_target_dir,
         sql_dir=configs.paths_params.sql_dir,
     )
-    client = InatInferenceClient(inference_params)
-    print(client)
-    client.execute(args.urls, photo_params)
-    quit()
+    pipeline = InatInferencePipeline.from_params(inference_params)
+    pipeline.execute(args.urls, photo_params)
     pass
 
 

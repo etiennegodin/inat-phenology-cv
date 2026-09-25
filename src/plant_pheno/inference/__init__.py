@@ -1,5 +1,5 @@
-from . import inat_client
-from .clients import InatInferenceClient
-from .model import PhenologyPyfunc
+from .pipeline import InatInferencePipeline
 
-__all__ = ["InatInferenceClient", "PhenologyPyfunc", "inat_client"]
+__all__ = [
+    "InatInferencePipeline",
+]

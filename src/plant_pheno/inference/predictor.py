@@ -1,46 +1,58 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 
 import mlflow
 import numpy as np
+import pandas as pd
 
 from ..config import CLASS_ORDER
 from ..data import DuckDBAdapter
 from ..infra import resolve_uri
 
-if TYPE_CHECKING:
-    from ..config import InferenceParams
-
 logger = logging.getLogger(__name__)
 
 
-class BaseInferenceClient(ABC):
+class PhenologyPredictor:
+    model_name: str
+    model_version: int
+    db_path: str
+
     model: mlflow.pyfunc.PythonModel
     model_uri: str
-    params: InferenceParams
 
-    def __init__(self, params: InferenceParams) -> None:
-        self.params = params
-        self._load_model()
+    def __init__(self, model_name: str, model_version: int, db_path: str) -> None:
+        self.model_name = model_name
+        self.model_version = model_version
+        self.db_path = db_path
 
-    @abstractmethod
-    def execute(self, *args, **kwargs):
-        """Construct and validate model input"""
-
-    def _predict(
-        self, model_input
+    def predict(
+        self, df: pd.DataFrame
     ) -> tuple[np.ndarray, np.ndarray, list[dict[str, list[float]]]]:
-        """Validate"""
-        return self.model.predict(model_input)
+        """Run prediction"""
+        self._load_model()
+        return self.model.predict(df)
 
-    def _load_model(self):
+    def predict_and_log(
+        self, df: pd.DataFrame
+    ) -> tuple[np.ndarray, np.ndarray, list[dict[str, list[float]]]]:
+        """Run prediction and persist to serving.predictions."""
 
+        preds_bin, preds_raw, attention_weights = self.predict(df)
+        self._log_predictions(
+            df["observation_id"].to_list(),
+            preds_raw=preds_raw,
+            preds_bin=preds_bin,
+            attention_weights_list=attention_weights,
+        )
+        return preds_raw, preds_bin, attention_weights
+
+    def _load_model(
+        self,
+    ):
         mlflow.set_tracking_uri(resolve_uri())
         # Construct the model URI
-        self.model_uri = f"models:/{self.params.model_name}/{self.params.model_version}"
+        self.model_uri = f"models:/{self.model_name}/{self.model_version}"
 
         # Load the model
         self.model = mlflow.pyfunc.load_model(self.model_uri)
@@ -71,7 +83,7 @@ class BaseInferenceClient(ABC):
                 w = attention_weights[class_name]
                 attention_rows.append((obs_id, model_id, class_name, w))
 
-        with DuckDBAdapter(self.params.db_path) as con:
+        with DuckDBAdapter(self.db_path) as con:
             con.executemany(
                 """
                 INSERT INTO serving.predictions
@@ -104,7 +116,7 @@ class BaseInferenceClient(ABC):
         if getattr(self, "_model_id", None) is not None:
             return self._model_id
 
-        with DuckDBAdapter(self.params.db_path) as con:
+        with DuckDBAdapter(self.db_path) as con:
             row = con.execute(
                 "SELECT model_id FROM serving.models WHERE model_uri = ?",
                 [self.model_uri],
@@ -122,8 +134,8 @@ class BaseInferenceClient(ABC):
                     """,
                     [
                         new_id,
-                        self.params.model_name,
-                        self.params.model_version,
+                        self.model_name,
+                        self.model_version,
                         self.model_uri,
                         self.model._model_impl.python_model.class_thresholds,
                     ],

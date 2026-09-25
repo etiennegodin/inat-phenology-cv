@@ -23,7 +23,7 @@ from ..utils import df_img_to_path
 logger = logging.getLogger(__name__)
 
 
-class InatObservationSync:
+class InatDataSynchronizer:
     """
     Synchronizes iNaturalist observation metadata and photos with local storage.
     Ensures images for requested observations exist locally on disk.

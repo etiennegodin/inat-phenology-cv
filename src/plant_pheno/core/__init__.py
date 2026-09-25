@@ -9,6 +9,7 @@ from .backbone import (
 # from .checkpoint import Checkpoint
 from .device import get_device, set_device
 from .model import AttentionBranch, PhenologyModel, build_pipeline_model
+from .pyfunc import PhenologyPyfunc
 
 __all__ = [
     "BACKBONE_REGISTRY",
@@ -21,4 +22,5 @@ __all__ = [
     "AttentionBranch",
     "PhenologyModel",
     "build_pipeline_model",
+    "PhenologyPyfunc",
 ]

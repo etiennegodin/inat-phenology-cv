@@ -10,14 +10,14 @@ import torch
 from PIL import Image
 
 from ..config import ModelParams
-from ..core import build_pipeline_model
+from . import build_pipeline_model
 
 if TYPE_CHECKING:
     import pandas as pd
     import torch
     from torchvision.transforms.v2 import Compose
 
-    from ..core.model import PhenologyModel
+    from .model import PhenologyModel
 
 
 class PhenologyPyfunc(mlflow.pyfunc.PythonModel):

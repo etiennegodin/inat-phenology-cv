@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import mlflow
 import torch
 
-from .inference import PhenologyPyfunc
+from .core import PhenologyPyfunc
 from .infra import resolve_uri
 from .train.persistence import Checkpoint
 
