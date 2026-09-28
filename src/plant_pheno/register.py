@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import mlflow
 import torch
+from mlflow.models import ModelSignature
+from mlflow.types.schema import Array, ColSpec, DataType, Schema
 
 from .core import PhenologyPyfunc
 from .infra import resolve_uri
@@ -17,6 +19,16 @@ if TYPE_CHECKING:
 
 # Set mlflow uri
 mlflow.set_tracking_uri(resolve_uri())
+
+# Set model signature
+input_schema = Schema(
+    [
+        ColSpec(DataType.long, "observation_id"),
+        ColSpec(Array(DataType.string), "paths"),
+    ]
+)
+
+signature = ModelSignature(inputs=input_schema)
 
 
 def register_model(
@@ -67,6 +79,7 @@ def register_model(
                         "class_thresholds": str(class_thresholds_path),
                     },
                     registered_model_name=model_name,
+                    signature=signature,
                 )
 
             print(f"Successfully converted .pth and registered it to {run_id}")
