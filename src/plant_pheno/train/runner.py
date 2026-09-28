@@ -49,9 +49,16 @@ def run_training(
 
     if mlflow.active_run():
         mlflow.log_params(model_params.to_dict())
+        mlflow.log_dict(model_params.to_dict(), "model_params.json")
+
         mlflow.log_params(training_params.to_dict())
+        mlflow.log_dict(training_params.to_dict(), "training_params.json")
+
         mlflow.log_params(optim_params.to_dict())
+        mlflow.log_dict(optim_params.to_dict(), "optim_params.json")
+
         mlflow.log_params(scheduler_params.to_dict())
+        mlflow.log_dict(scheduler_params.to_dict(), "scheduler_params.json")
 
         log_experiment_metadata(
             model=model,
