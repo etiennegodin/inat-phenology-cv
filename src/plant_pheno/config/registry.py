@@ -5,5 +5,5 @@ OPTUNA_SAMPLERS = {
 OPTUNA_PRUNERS = {
     "median": ("optuna.pruners", "MedianPruner", {}),
     "hyperband": ("optuna.pruners", "HyperbandPruner", {}),
-    "none": None,
+    "none": ("optuna.pruners", "NopPruner", {}),
 }

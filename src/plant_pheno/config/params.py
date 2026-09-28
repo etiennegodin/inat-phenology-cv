@@ -33,6 +33,7 @@ class FineTuneParams:
     sampler: str
     pruner: str
     study_name: str
+    storage: str
     # cv_folds: int
 
     def to_dict(self):

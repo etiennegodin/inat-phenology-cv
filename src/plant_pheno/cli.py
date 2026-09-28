@@ -190,6 +190,7 @@ def tune_cmd(args, configs: Config):
         sampler=args.sampler,
         pruner=args.pruner,
         study_name=args.study_name,
+        storage=args.storage,
     )
     device = get_device()
     seed_everything(args.seed, set_cuda_deterministic=False)
@@ -213,19 +214,25 @@ def tune_cmd(args, configs: Config):
         mlflow.log_params(configs.dataset_params.to_dict())
         mlflow.log_params(configs.dataloaders_params.to_dict())
 
+        storage = args.storage or "sqlite:///optuna.sqlite3"
+
         study = optuna.create_study(
             study_name=args.study_name,
-            storage="sqlite:///optuna.sqlite3",
+            storage=storage,
+            load_if_exists=True,
             direction="maximize",  # we want the highest ROC-AUC
-            sampler=_instantiate(
-                OPTUNA_SAMPLERS, args.sampler, {"seed": args.random_seed}
+            sampler=_instantiate(OPTUNA_SAMPLERS, args.sampler, {"seed": args.seed}),
+            pruner=_instantiate(
+                OPTUNA_PRUNERS,
+                args.pruner,
+                {"n_startup_trials": 3, "n_warmup_steps": 2},
             ),
-            pruner=_instantiate(OPTUNA_PRUNERS, args.pruner, {"n_warmup_steps": 10}),
         )
+
         objective = make_objective(
             configs=configs,
             data=data,
-            base_args={},
+            base_args=args,
             search_space=SEARCH_SPACES[args.search_space],
         )
 
@@ -237,6 +244,14 @@ def tune_cmd(args, configs: Config):
             show_progress_bar=False,
             callbacks=callbacks,
         )
+
+        mlflow.log_params({f"best_{k}": v for k, v in study.best_params.items()})
+        mlflow.log_metric("best_pr_norm_excess_macro", study.best_value)
+        print(
+            f"\n[Optuna] Best trial: #{study.best_trial.number} "
+            f" with value {study.best_value:.5f}"
+        )
+        print(f"[Optuna] Best params: {study.best_params}")
 
 
 def inference_cmd(args, configs: Config):
@@ -490,11 +505,11 @@ def add_val_args(parser: argparse.ArgumentParser):
 
 
 def add_tune_args(parser: argparse.ArgumentParser):
-    backbone_models = list(SEARCH_SPACES.keys())
+    backbone_models = list(BACKBONE_REGISTRY.keys())
     parser.add_argument(
         "--backbone",
         type=str,
-        choices=list(BACKBONE_REGISTRY.keys()),
+        choices=backbone_models,
         default=backbone_models[0],
     )
     parser.add_argument(
@@ -514,7 +529,13 @@ def add_tune_args(parser: argparse.ArgumentParser):
         "--pruner", choices=list(OPTUNA_PRUNERS.keys()), default="median"
     )
     parser.add_argument("--study-name", type=str, default="my_study")
-    parser.add_argument("--storage", type=str)
+    parser.add_argument("--storage", type=str, default="sqlite:///optuna.sqlite3")
+
+    parser.add_argument("--experiment-name", "-name", type=str, default="cv_inat_tune")
+    parser.add_argument("--epochs", "-n", type=int, default=10)
+    parser.add_argument("--start_unfreezed", type=int, default=1)
+    parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
+    parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
 
 
 def add_train_args(parser: argparse.ArgumentParser):
