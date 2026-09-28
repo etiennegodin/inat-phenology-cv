@@ -415,10 +415,11 @@ def create_parser() -> argparse.ArgumentParser:
     train_parser.set_defaults(func=train_cmd)
 
     # Tune command
-    train_parser = subparsers.add_parser("tune", help="Fine tune model")
-    add_tune_args(train_parser)
-    add_common_args(train_parser)
-    train_parser.set_defaults(func=tune_cmd)
+    tune_parser = subparsers.add_parser("tune", help="Fine tune model")
+    add_tune_args(tune_parser)
+    add_train_args(tune_parser)
+    add_common_args(tune_parser)
+    tune_parser.set_defaults(func=tune_cmd)
 
     # Val command
     val_parser = subparsers.add_parser("val", help="Run inference on val set")
@@ -505,13 +506,6 @@ def add_val_args(parser: argparse.ArgumentParser):
 
 
 def add_tune_args(parser: argparse.ArgumentParser):
-    backbone_models = list(BACKBONE_REGISTRY.keys())
-    parser.add_argument(
-        "--backbone",
-        type=str,
-        choices=backbone_models,
-        default=backbone_models[0],
-    )
     parser.add_argument(
         "--search-space", type=str, choices=list(SEARCH_SPACES.keys()), default="coarse"
     )
@@ -530,12 +524,6 @@ def add_tune_args(parser: argparse.ArgumentParser):
     )
     parser.add_argument("--study-name", type=str, default="my_study")
     parser.add_argument("--storage", type=str, default="sqlite:///optuna.sqlite3")
-
-    parser.add_argument("--experiment-name", "-name", type=str, default="cv_inat_tune")
-    parser.add_argument("--epochs", "-n", type=int, default=10)
-    parser.add_argument("--start_unfreezed", type=int, default=1)
-    parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
-    parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
 
 
 def add_train_args(parser: argparse.ArgumentParser):
