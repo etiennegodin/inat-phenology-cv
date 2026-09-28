@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import mlflow
 import numpy as np
+import optuna
 import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
@@ -300,6 +301,7 @@ def execute(
     criterion: nn.Module,
     checkpoint_path: str,
     training_params: TrainingParams,
+    trial: optuna.trial.Trial | None = None,
 ) -> Checkpoint:
     """Execute training pipeline over requested epochs with full logging."""
     best_eval_metrics = {}
@@ -423,6 +425,11 @@ def execute(
             )
 
         save_log()
+
+        if trial is not None:
+            trial.report(eval_metrics.pr_norm_excess_macro, step=epoch)
+            if trial.should_prune():
+                raise optuna.TrialPruned(f"Trial pruned at epoch {epoch}")
 
     save_log()
     saver.wait()

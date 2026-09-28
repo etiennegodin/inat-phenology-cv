@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import importlib
 import pprint
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
 from torch import Tensor, device, nn
@@ -137,3 +138,35 @@ def clean_data(image_dir: str):
             except Exception:
                 logger.info(f"Deleting corrupted image: {path}")
                 os.remove(path)
+
+
+# ── HELPER: instantiate a class from the registry ──────────────────────────────
+
+
+def _instantiate(registry: dict, key: str, override_params: Optional[dict] = None):
+    """
+    Looks up `key` in `registry`, imports the class, and returns an instance.
+
+    WHY DYNAMIC IMPORT?
+      We don't want to import xgboost, lightgbm, umap, etc. at module load time —
+      users may not have all of them installed. Import only what's actually needed.
+
+    Args:
+        registry:        One of the *_REGISTRY dicts from config.py
+        key:             The string key (e.g. "median", "random_forest")
+        override_params: Extra params that Optuna may inject at trial time
+
+    Returns:
+        An instantiated class.
+        Returns None if the registry entry is None (i.e. step is disabled).
+    """
+    entry = registry.get(key)
+    if entry is None:
+        return None  # step is disabled (e.g. reducer = "none")
+
+    module_path, class_name, default_params = entry
+    params = {**default_params, **(override_params or {})}
+
+    module = importlib.import_module(module_path)
+    cls = getattr(module, class_name)
+    return cls(**params)

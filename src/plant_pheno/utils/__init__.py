@@ -1,4 +1,5 @@
 from .misc import (
+    _instantiate,
     clean_data,
     df_img_to_path,
     format_dict,
@@ -22,4 +23,5 @@ __all__ = [
     "get_current_git_branch",
     "get_git_hash",
     "get_pos_ratios",
+    "_instantiate",
 ]

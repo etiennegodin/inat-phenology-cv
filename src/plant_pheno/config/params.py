@@ -27,6 +27,19 @@ class IngestPhotosParams:
 
 
 @dataclass
+class FineTuneParams:
+    n_trials: int
+    timeout: int
+    sampler: str
+    pruner: str
+    study_name: str
+    # cv_folds: int
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
 class TrainingParams:
     epochs: int
     stopping_patience: int

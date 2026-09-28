@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import mlflow
+import optuna
 import yaml
 from dotenv import load_dotenv
 from mlflow import MlflowException
@@ -14,9 +15,13 @@ from torch import cuda, nn
 
 from . import train
 from .config import (
+    OPTUNA_PRUNERS,
+    OPTUNA_SAMPLERS,
+    SEARCH_SPACES,
     Config,
     DataLoadersParams,
     DatasetParams,
+    FineTuneParams,
     InferenceParams,
     IngestPhotosParams,
     ModelParams,
@@ -37,7 +42,9 @@ from .train import (
     build_datasets,
     build_pipeline_dataloaders,
 )
+from .tune import make_objective
 from .utils import (
+    _instantiate,
     get_current_git_branch,
     get_git_hash,
     get_pos_ratios,
@@ -173,6 +180,63 @@ def train_cmd(args, configs: Config):
         log_path = Path.cwd() / "log.log"
         if log_path.exists():
             mlflow.log_artifact(str(log_path))
+
+
+def tune_cmd(args, configs: Config):
+
+    params = FineTuneParams(
+        n_trials=args.n_trials,
+        timeout=args.timeout,
+        sampler=args.sampler,
+        pruner=args.pruner,
+        study_name=args.study_name,
+    )
+    device = get_device()
+    seed_everything(args.seed, set_cuda_deterministic=False)
+
+    data = build_data_pipeline(
+        configs=configs, backbone_name=args.backbone, device=device, seed=args.seed
+    )
+
+    mlflow.set_experiment(args.experiment_name)
+
+    with mlflow.start_run() as parent_run:
+        parent_run_id = parent_run.info.run_id
+        print(f"\n{'=' * 60}")
+        print(f"MLflow Run ID: {parent_run_id}")
+        print(f"{'=' * 60}\n")
+
+        mlflow.log_dict(params.to_dict(), "tune_params.json")
+        mlflow.log_dict(configs.to_dict(), "configs.json")
+        mlflow.log_params({"git_branch": configs.git_branch})
+        mlflow.log_params({"git_hash": configs.git_hash})
+        mlflow.log_params(configs.dataset_params.to_dict())
+        mlflow.log_params(configs.dataloaders_params.to_dict())
+
+        study = optuna.create_study(
+            study_name=args.study_name,
+            storage="sqlite:///optuna.sqlite3",
+            direction="maximize",  # we want the highest ROC-AUC
+            sampler=_instantiate(
+                OPTUNA_SAMPLERS, args.sampler, {"seed": args.random_seed}
+            ),
+            pruner=_instantiate(OPTUNA_PRUNERS, args.pruner, {"n_warmup_steps": 10}),
+        )
+        objective = make_objective(
+            configs=configs,
+            data=data,
+            base_args={},
+            search_space=SEARCH_SPACES[args.search_space],
+        )
+
+        callbacks = []
+
+        study.optimize(
+            objective,
+            n_trials=args.n_trials,
+            show_progress_bar=False,
+            callbacks=callbacks,
+        )
 
 
 def inference_cmd(args, configs: Config):
@@ -335,6 +399,12 @@ def create_parser() -> argparse.ArgumentParser:
     add_common_args(train_parser)
     train_parser.set_defaults(func=train_cmd)
 
+    # Tune command
+    train_parser = subparsers.add_parser("tune", help="Fine tune model")
+    add_tune_args(train_parser)
+    add_common_args(train_parser)
+    train_parser.set_defaults(func=tune_cmd)
+
     # Val command
     val_parser = subparsers.add_parser("val", help="Run inference on val set")
     add_val_args(val_parser)
@@ -417,6 +487,34 @@ def add_val_args(parser: argparse.ArgumentParser):
         default=False,
         help="Disable committing evaluation results to the DuckDB database",
     )
+
+
+def add_tune_args(parser: argparse.ArgumentParser):
+    backbone_models = list(SEARCH_SPACES.keys())
+    parser.add_argument(
+        "--backbone",
+        type=str,
+        choices=list(BACKBONE_REGISTRY.keys()),
+        default=backbone_models[0],
+    )
+    parser.add_argument(
+        "--search-space", type=str, choices=list(SEARCH_SPACES.keys()), default="coarse"
+    )
+    parser.add_argument("--n-trials", type=int, default=20)
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=1000,
+        help="optional wall-clock cutoff in seconds",
+    )
+    parser.add_argument(
+        "--sampler", choices=list(OPTUNA_SAMPLERS.keys()), default="tpe"
+    )
+    parser.add_argument(
+        "--pruner", choices=list(OPTUNA_PRUNERS.keys()), default="median"
+    )
+    parser.add_argument("--study-name", type=str, default="my_study")
+    parser.add_argument("--storage", type=str)
 
 
 def add_train_args(parser: argparse.ArgumentParser):
