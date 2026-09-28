@@ -72,8 +72,6 @@ def train_cmd(args, configs: Config):
             f"Attempted to load {configs.config_path} on a non-gpu colab session"
         )
 
-    # Set test
-    configs.test = args.test
     device = get_device()
 
     print("Connecting to mlflow")
@@ -171,9 +169,6 @@ def tune_cmd(args, configs: Config):
     mlflow.set_experiment(args.experiment_name)
     seed_everything(args.seed, set_cuda_deterministic=False)
 
-    # Set test
-    configs.test = args.test
-
     data = build_data_pipeline(
         configs=configs, backbone_name=args.backbone, device=device, seed=args.seed
     )
@@ -192,6 +187,7 @@ def tune_cmd(args, configs: Config):
             sampler=args.sampler,
             pruner=args.pruner,
             study_name=study_name,
+            subsample_frac=args.subsample,
         )
 
         mlflow.log_dict(tune_params.to_dict(), "tune_params.json")
@@ -221,6 +217,7 @@ def tune_cmd(args, configs: Config):
             data=data,
             base_args=args,
             search_space=SEARCH_SPACES[args.search_space],
+            subsample_frac=args.subsample,
         )
 
         callbacks = []
@@ -454,12 +451,14 @@ def create_parser() -> argparse.ArgumentParser:
     train_parser = subparsers.add_parser("train", help="Train model")
     add_train_args(train_parser)
     add_common_args(train_parser)
+    add_test_args(train_parser)
     train_parser.set_defaults(func=train_cmd)
 
     # Tune command
     tune_parser = subparsers.add_parser("tune", help="Fine tune model")
     add_tune_args(tune_parser)
     add_train_args(tune_parser)
+    add_test_args(tune_parser)
     add_common_args(tune_parser)
     tune_parser.set_defaults(func=tune_cmd)
 
@@ -467,6 +466,7 @@ def create_parser() -> argparse.ArgumentParser:
     val_parser = subparsers.add_parser("val", help="Run inference on val set")
     add_val_args(val_parser)
     add_common_args(val_parser)
+    add_test_args(val_parser)
     val_parser.set_defaults(func=val_cmd)
 
     # Inference command
@@ -505,15 +505,18 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def add_common_args(parser: argparse.ArgumentParser):
+def add_test_args(parser: argparse.ArgumentParser):
     parser.add_argument("--test", "-t", action="store_true", default=False)
     parser.add_argument(
-        "--test_frac",
+        "--test-frac",
         "-tf",
         help="Fraction of intial dataset to keep for testing",
         type=float,
         default=0.33,
     )
+
+
+def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--seed",
         "-s",
@@ -552,6 +555,15 @@ def add_tune_args(parser: argparse.ArgumentParser):
         "--search-space", type=str, choices=list(SEARCH_SPACES.keys()), default="coarse"
     )
     parser.add_argument("--n-trials", type=int, default=20)
+    parser.add_argument(
+        "--subsample",
+        type=float,
+        default=1.0,
+        help=(
+            "Fraction of the training set used per Optuna trial (0 < subsample ≤ 1.0). "
+            "Val/test splits are unaffected. Speeds up individual trials."
+        ),
+    )
     parser.add_argument(
         "--timeout",
         type=int,
@@ -634,18 +646,27 @@ def main():
     log_path = Path.cwd() / "log.log"
     logger = init_logger(log_path, logging.INFO)
     logger.info("Starting")
-    # Set up paths
 
-    # Set up environment specific configs
+    # Read environment specific configs
     config_path = resolve_env_config_path()
     with open(config_path, "r") as file:
         env_configs = yaml.safe_load(file)
+
+    # Paths
     paths_params = PathsParams(**env_configs["paths"])
-    dataset_params = DatasetParams(
-        **env_configs["dataset_params"], testing_frac=args.test_frac
-    )
+
+    # Dataset
+    dataset_kwargs = dict(env_configs["dataset_params"])
+    test_frac = getattr(args, "test-frac", None)
+    if test_frac is not None:
+        dataset_kwargs["testing_frac"] = test_frac
+    dataset_params = DatasetParams(**dataset_kwargs)
+
+    # Data loader
     dataloader_params = DataLoadersParams(**env_configs["dataloader_params"])
     hardware_profile = resolve_hardware_profile()
+
+    # Assemble configs
     configs = Config(
         config_path,
         paths_params=paths_params,
@@ -655,6 +676,12 @@ def main():
         git_branch=get_current_git_branch(),
         git_hash=get_git_hash(),
     )
+
+    # Set test
+    test = getattr(args, "test", None)
+    if test is not None:
+        configs.test = test
+
     logger.debug("Configs set up")
 
     # Execute command

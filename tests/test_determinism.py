@@ -78,7 +78,7 @@ def test_reduce_dataset_observation_level_sampling():
     df = pd.DataFrame(obs_data)
     params = DatasetParams(testing_frac=0.33)
 
-    reduced_df = reduce_dataset(df, params, seed=42)
+    reduced_df = reduce_dataset(df, fraction=0.33, params=params, seed=42)
     assert len(reduced_df) == 33
     # Check that both single-photo and
     # multi-photo observations are sampled proportionately

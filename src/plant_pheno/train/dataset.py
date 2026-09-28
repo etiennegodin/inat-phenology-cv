@@ -202,12 +202,14 @@ def get_samples(paths, params: DatasetParams) -> pd.DataFrame:
     )
 
 
-def reduce_dataset(df, params: DatasetParams, seed: int = 42) -> pd.DataFrame:
+def reduce_dataset(
+    df: pd.DataFrame, fraction: float, params: DatasetParams, seed: int = 42
+) -> pd.DataFrame:
     # Sample obs id from fraction
-    test_idx = df.sample(frac=params.testing_frac, random_state=seed)
+    test_idx = df.sample(frac=fraction, random_state=seed)
     # Keep sampled observations
     df = df[df[params.idx_col].isin(test_idx[params.idx_col])].reset_index(drop=True)
-    print(f"Test mode - keeping {params.testing_frac * 100}% of dataset")
+    print(f"Test mode - keeping {fraction * 100:.0f}% of dataset")
     print(f"{test_idx.shape[0]} observations kept")
     return df
 
@@ -237,7 +239,12 @@ def build_datasets(
 
     # Reduce dataset size if testing
     if configs.test:
-        df = reduce_dataset(df, configs.dataset_params, seed=seed)
+        df = reduce_dataset(
+            df,
+            fraction=configs.dataset_params.test_frac,
+            params=configs.dataset_params,
+            seed=seed,
+        )
 
     # Create splits
     train_df, val_df, test_df = split_dataset(df, configs.dataset_params, seed=seed)

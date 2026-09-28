@@ -33,6 +33,7 @@ class FineTuneParams:
     sampler: str
     pruner: str
     study_name: str
+    subsample_frac: float
     # cv_folds: int
 
     def to_dict(self):
@@ -146,7 +147,7 @@ class DatasetParams:
     train_frac: float = 0.8
     val_frac: float = 0.1
     test_frac: float = 0.1
-    testing_frac: float = 0.33
+    testing_frac: float = 1.0
 
     def __post_init__(self):
         assert (self.train_frac + self.val_frac + self.test_frac) == 1
