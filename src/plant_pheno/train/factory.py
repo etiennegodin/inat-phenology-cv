@@ -2,17 +2,60 @@ from __future__ import annotations
 
 import itertools
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from torch import optim as optim
+from torch import nn, optim
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
+from torch.utils.data import DataLoader
+
+from ..config import Config
+from ..core.backbone import BACKBONE_REGISTRY
+from ..utils import get_pos_ratios, get_pos_weights
+from .dataloader import build_pipeline_dataloaders
+from .dataset import build_datasets
 
 if TYPE_CHECKING:
-    from torch import nn, optim
-
     from ..config.params import OptimizerParams, SchedulerParams
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DataPipeline:
+    datasets: tuple
+    train_loader: DataLoader
+    val_loader: DataLoader
+    test_loader: DataLoader
+    criterion: nn.Module
+    pos_ratios: list[float]
+
+
+def build_data_pipeline(
+    configs: Config, backbone_name: str, device, seed: int = 42
+) -> DataPipeline:
+    """Builds datasets, dataloaders, criterion, and pos_ratios once."""
+    # Transforms come directly from the backbone
+    # registry without needing the full model
+    transforms = BACKBONE_REGISTRY[backbone_name]().get_transforms()
+    datasets = build_datasets(configs, transforms, seed=seed)
+
+    pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights, reduction="none")
+    pos_ratios = get_pos_ratios(datasets[1])
+
+    train_loader, val_loader, test_loader = build_pipeline_dataloaders(
+        datasets, configs.dataloaders_params, seed=seed
+    )
+
+    return DataPipeline(
+        datasets=datasets,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        test_loader=test_loader,
+        criterion=criterion,
+        pos_ratios=pos_ratios,
+    )
 
 
 def build_scheduler(optimizer: optim.Optimizer, params: SchedulerParams, eta_min=1e-7):

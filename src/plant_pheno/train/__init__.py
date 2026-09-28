@@ -1,10 +1,8 @@
 from .dataloader import build_pipeline_dataloaders
 from .dataset import build_datasets
-from .factory import (
-    build_pipeline_optimizer,
-    build_scheduler,
-)
+from .factory import build_data_pipeline, build_pipeline_optimizer, build_scheduler
 from .metrics import log_experiment_metadata
+from .runner import run_training
 from .workflow import evaluate, execute
 
 __all__ = [
@@ -15,4 +13,6 @@ __all__ = [
     "build_scheduler",
     "evaluate",
     "log_experiment_metadata",
+    "run_training",
+    "build_data_pipeline",
 ]

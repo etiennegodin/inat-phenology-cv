@@ -27,17 +27,15 @@ from .config import (
     resolve_hardware_profile,
 )
 from .core.device import get_device, set_device
-from .core.model import BACKBONE_REGISTRY, build_pipeline_model
+from .core.model import BACKBONE_REGISTRY
 from .data import log_model_evaluation
 from .inference import InatInferencePipeline
 from .infra import init_logger, mlflow_socks_patch, resolve_uri, seed_everything  # noqa
 from .status import status
 from .train import (
+    build_data_pipeline,
     build_datasets,
     build_pipeline_dataloaders,
-    build_pipeline_optimizer,
-    build_scheduler,
-    log_experiment_metadata,
 )
 from .utils import (
     get_current_git_branch,
@@ -68,12 +66,16 @@ def train_cmd(args, configs: Config):
         )
 
     # Set test
+
     configs.test = args.test
+    device = get_device()
 
     print("Connecting to mlflow")
     mlflow.set_tracking_uri(resolve_uri())
 
     print("Initalizing experiment")
+
+    data = build_data_pipeline(configs, args.backbone, device, seed=args.seed)
 
     # // Optimiser params
     optim_params = OptimizerParams(
@@ -100,19 +102,6 @@ def train_cmd(args, configs: Config):
     )
 
     configs.model_params = model_params
-
-    # Initialise train modules
-    device = get_device()
-    model = build_pipeline_model(device, model_params)
-    optimizer = build_pipeline_optimizer(model, optim_params)
-    scheduler = build_scheduler(optimizer, scheduler_params)
-    datasets = build_datasets(configs, model.backbone.get_transforms(), seed=args.seed)
-    train_loader, val_loader, _ = build_pipeline_dataloaders(
-        datasets, configs.dataloaders_params, seed=args.seed
-    )
-
-    pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights, reduction="none")
 
     # Reinstate model and optimizer state if reload
     if args.reload:
@@ -142,7 +131,6 @@ def train_cmd(args, configs: Config):
         best_objective=best_objective,
         seed=args.seed,
         log_step_interval=args.log_step_interval,
-        pos_ratios=get_pos_ratios(datasets[1]),
         backbone_decay=args.backbone_decay,
         accumulation_steps=configs.dataloaders_params.gradient_accumulation_steps,
     )
@@ -161,29 +149,17 @@ def train_cmd(args, configs: Config):
         mlflow.log_dict(configs.to_dict(), "configs.json")
         mlflow.log_params({"git_branch": configs.git_branch})
         mlflow.log_params({"git_hash": configs.git_hash})
-        mlflow.log_params(model_params.to_dict())
-        mlflow.log_params(training_params.to_dict())
         mlflow.log_params(configs.dataset_params.to_dict())
         mlflow.log_params(configs.dataloaders_params.to_dict())
-        mlflow.log_params(optim_params.to_dict())
-        mlflow.log_params(scheduler_params.to_dict())
 
-        log_experiment_metadata(
-            model=model,
-            train_dataset=datasets[0],
-            val_dataset=datasets[1],
-        )
-
-        train.execute(
+        train.run_training(
+            configs=configs,
+            model_params=model_params,
+            optim_params=optim_params,
+            scheduler_params=scheduler_params,
+            training_params=training_params,
+            data=data,
             device=device,
-            model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            criterion=criterion,
-            checkpoint_path=configs.paths_params.checkpoint_path,
-            training_params=configs.training_params,
         )
 
         """
