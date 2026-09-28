@@ -94,10 +94,10 @@ def train_cmd(args, configs: Config):
     # // Model params
     model_params = ModelParams(
         args.backbone,
-        head_neurons=256,
+        head_neurons=args.head_neurons,
         head_outputs=1,
-        head_dropout_prob=0.5,
-        attention_neurons=128,
+        head_dropout_prob=args.head_dropout,
+        attention_neurons=args.attention_neurons,
         attention_dropout_prob=args.attention_dropout,
         start_unfreezed=args.start_unfreezed,
         gated=args.gated,
@@ -594,6 +594,8 @@ def add_tune_args(parser: argparse.ArgumentParser):
 
 def add_hyperparams_args(parser: argparse.ArgumentParser):
     parser.add_argument("--base-lr", "-lr", type=float, default=0.0001)
+    parser.add_argument("--head-neurons", type=int, default=256)
+    parser.add_argument("--attention-neurons", type=int, default=128)
     parser.add_argument("--backbone-decay", type=float, default=0.90)
     parser.add_argument(
         "--gated",
@@ -603,7 +605,13 @@ def add_hyperparams_args(parser: argparse.ArgumentParser):
         Use --no-gated for simple attention.""",
     )
     parser.add_argument(
-        "--attention_dropout",
+        "--head-dropout",
+        type=float,
+        default=0.5,
+        help="Dropout probability for attention weights (default: 0.5)",
+    )
+    parser.add_argument(
+        "--attention-dropout",
         type=float,
         default=0.0,
         help="Dropout probability for attention weights (default: 0.0)",
