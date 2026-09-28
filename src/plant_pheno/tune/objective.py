@@ -12,6 +12,7 @@ from ..config import (
     SchedulerParams,
     TrainingParams,
 )
+from ..infra.seed import seed_everything
 from ..train import run_training
 from ..train.factory import DataPipeline
 
@@ -88,6 +89,15 @@ def make_objective(
     """
 
     def objective(trial: optuna.Trial) -> float:
+        # ── Seed everything for this trial ────────────────────────────────────
+        # Each trial gets a unique but deterministic seed derived from the base
+        # seed so that: (a) model init, dropout masks, and data shuffling are
+        # all varied across trials, and (b) any individual trial is fully
+        # reproducible by re-running with the same base seed and trial number.
+        base_seed = getattr(base_args, "seed", 42)
+        trial_seed = base_seed + trial.number
+        seed_everything(trial_seed, set_cuda_deterministic=False)
+
         # ── Step 1: Ask Optuna for hyperparameter suggestions ─────────────────
         # trial.suggest_* methods implement Bayesian optimization:
         # early trials explore randomly; later trials focus on promising regions.
@@ -141,7 +151,7 @@ def make_objective(
             max_stages=getattr(base_args, "max_stages", 3),
             block_per_stage=getattr(base_args, "block_per_stage", 1),
             best_objective=1e-5,
-            seed=getattr(base_args, "seed", 42),
+            seed=trial_seed,
             log_step_interval=getattr(base_args, "log_step_interval", 10),
             pos_ratios=data.pos_ratios,
             backbone_decay=trial_params.get("backbone_decay", 0.90),
@@ -155,7 +165,7 @@ def make_objective(
             trial_train_loader = _subsample_train_loader(
                 data,
                 subsample_frac,
-                seed=getattr(base_args, "seed", 42) + trial.number,
+                seed=trial_seed,
             )
             trial_data = replace(data, train_loader=trial_train_loader)
         else:
@@ -165,6 +175,7 @@ def make_objective(
 
         with mlflow.start_run(run_name=f"trial_{trial.number}", nested=True):
             mlflow.log_params(trial_params)
+            mlflow.log_param("trial_seed", trial_seed)
             if subsample_frac < 1.0:
                 mlflow.log_param("subsample_frac", subsample_frac)
             try:
