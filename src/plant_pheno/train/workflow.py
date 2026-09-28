@@ -326,13 +326,6 @@ def execute(
     )
 
     for epoch in range(training_params.epochs):
-        if (
-            training_params.start_epoch is not None
-            and epoch <= training_params.start_epoch
-        ):
-            logger.info(f"Skipping epoch {epoch} (resume requested)")
-            continue
-
         epoch_start_time = time.time()
 
         train_loss, train_times = train_one_epoch(

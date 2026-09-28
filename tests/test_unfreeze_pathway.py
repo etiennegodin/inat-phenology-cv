@@ -76,7 +76,6 @@ def test_unfreeze_pathway_multiepoch_simulation():
         starting_block=1,  # block 6 initially unfrozen
         max_stages=2,
         block_per_stage=1,
-        start_epoch=None,
         best_objective=0.0,
         backbone_decay=0.9,
         unfreeze=True,

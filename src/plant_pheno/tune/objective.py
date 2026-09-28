@@ -77,7 +77,6 @@ def make_objective(configs: Config, data: DataPipeline, base_args, search_space:
             starting_block=model_params.start_unfreezed,
             max_stages=getattr(base_args, "max_stages", 3),
             block_per_stage=getattr(base_args, "block_per_stage", 1),
-            start_epoch=None,
             best_objective=1e-5,
             seed=getattr(base_args, "seed", 42),
             log_step_interval=getattr(base_args, "log_step_interval", 10),
@@ -90,17 +89,22 @@ def make_objective(configs: Config, data: DataPipeline, base_args, search_space:
 
         with mlflow.start_run(run_name=f"trial_{trial.number}", nested=True):
             mlflow.log_params(trial_params)
-            checkpoint, _, _ = run_training(
-                configs=configs,
-                model_params=model_params,
-                optim_params=optim_params,
-                scheduler_params=scheduler_params,
-                training_params=training_params,
-                data=data,
-                trial=trial,
-            )
-            metric_val = checkpoint.eval_metrics.pr_norm_excess_macro
-            mlflow.log_metric("final_pr_norm_excess_macro", metric_val)
-            return metric_val
+            try:
+                checkpoint, _, _ = run_training(
+                    configs=configs,
+                    model_params=model_params,
+                    optim_params=optim_params,
+                    scheduler_params=scheduler_params,
+                    training_params=training_params,
+                    data=data,
+                    trial=trial,
+                )
+                metric_val = checkpoint.eval_metrics.pr_norm_excess_macro
+                mlflow.log_metric("final_pr_norm_excess_macro", metric_val)
+                mlflow.set_tag("optuna.state", "COMPLETE")
+                return metric_val
+            except optuna.TrialPruned as e:
+                mlflow.set_tag("optuna.state", "PRUNED")
+                raise e
 
     return objective

@@ -174,14 +174,6 @@ def tune_cmd(args, configs: Config):
     # Set test
     configs.test = args.test
 
-    tune_params = FineTuneParams(
-        n_trials=args.n_trials,
-        timeout=args.timeout,
-        sampler=args.sampler,
-        pruner=args.pruner,
-        study_name=args.study_name,
-    )
-
     data = build_data_pipeline(
         configs=configs, backbone_name=args.backbone, device=device, seed=args.seed
     )
@@ -192,17 +184,28 @@ def tune_cmd(args, configs: Config):
         print(f"MLflow Run ID: {parent_run_id}")
         print(f"{'=' * 60}\n")
 
+        study_name = args.study_name or f"{args.experiment_name}_{parent_run_id[:8]}"
+
+        tune_params = FineTuneParams(
+            n_trials=args.n_trials,
+            timeout=args.timeout,
+            sampler=args.sampler,
+            pruner=args.pruner,
+            study_name=study_name,
+        )
+
         mlflow.log_dict(tune_params.to_dict(), "tune_params.json")
         mlflow.log_params({"git_branch": configs.git_branch})
         mlflow.log_params({"git_hash": configs.git_hash})
         mlflow.log_params(configs.dataset_params.to_dict())
         mlflow.log_params(configs.dataloaders_params.to_dict())
+        mlflow.set_tag("optuna.study_name", study_name)
 
         study = optuna.create_study(
-            study_name=args.study_name,
+            study_name=study_name,
             storage=configs.paths_params.optuna_storage,
-            load_if_exists=True,
-            direction="maximize",  # we want the highest ROC-AUC
+            load_if_exists=args.resume,
+            direction="maximize",  # we want the highest pr_norm_excess_macro
             sampler=_instantiate(OPTUNA_SAMPLERS, args.sampler, {"seed": args.seed}),
             pruner=_instantiate(
                 OPTUNA_PRUNERS,
@@ -210,6 +213,8 @@ def tune_cmd(args, configs: Config):
                 {"n_startup_trials": 3, "n_warmup_steps": 2},
             ),
         )
+        study.set_user_attr("mlflow_run_id", parent_run_id)
+        study.set_user_attr("mlflow_experiment", args.experiment_name)
 
         objective = make_objective(
             configs=configs,
@@ -228,12 +233,67 @@ def tune_cmd(args, configs: Config):
         )
 
         mlflow.log_params({f"best_{k}": v for k, v in study.best_params.items()})
+        mlflow.log_dict(study.best_params, "best_params.json")
         mlflow.log_metric("best_pr_norm_excess_macro", study.best_value)
         print(
             f"\n[Optuna] Best trial: #{study.best_trial.number} "
             f" with value {study.best_value:.5f}"
         )
         print(f"[Optuna] Best params: {study.best_params}")
+        print("Retraining with full model & best params")
+
+        # // Optimiser params
+        optim_params = OptimizerParams(
+            base_lr=study.best_params.get("base_lr"),
+        )
+
+        # // Scheduler params
+        scheduler_params = SchedulerParams(
+            warmup_epochs=args.warmup_epochs, total_epoch=args.epochs
+        )
+
+        # // Model params
+        model_params = ModelParams(
+            args.backbone,
+            head_neurons=256,
+            head_outputs=1,
+            head_dropout_prob=study.best_params.get("head_dropout_prob"),
+            attention_neurons=study.best_params.get("attention_neurons"),
+            attention_dropout_prob=study.best_params.get("attention_dropout_prob"),
+            start_unfreezed=args.start_unfreezed,
+            gated=study.best_params.get("gated"),
+        )
+
+        training_params = TrainingParams(
+            epochs=args.epochs,
+            stopping_patience=args.stopping_patience,
+            unfreeze=args.unfreeze,
+            unfreezing_patience=args.unfreezing_patience,
+            unfreezing_cooldown=args.unfreezing_cooldown,
+            starting_block=args.start_unfreezed,
+            block_per_stage=args.block_per_stage,
+            max_stages=args.max_stages,
+            best_objective=1e-5,
+            seed=args.seed,
+            log_step_interval=args.log_step_interval,
+            backbone_decay=study.best_params.get("backbone_decay"),
+            accumulation_steps=configs.dataloaders_params.gradient_accumulation_steps,
+        )
+
+        train.run_training(
+            configs=configs,
+            model_params=model_params,
+            optim_params=optim_params,
+            scheduler_params=scheduler_params,
+            training_params=training_params,
+            data=data,
+            device=device,
+        )
+
+        # Log accumulated run logs to MLflow
+        log_path = Path.cwd() / "log.log"
+        if log_path.exists():
+            mlflow.log_artifact(str(log_path))
 
 
 def inference_cmd(args, configs: Config):
@@ -372,7 +432,7 @@ def test_cmd(args, configs: Config):
 
     # Tes loaders
     loaders = build_pipeline_dataloaders(configs, model)
-    model, optimizer, start_epoch, eval_metrics, previous_run_id = load_checkpoint(
+    model, optimizer, eval_metrics, previous_run_id = load_checkpoint(
         configs.paths_params.checkpoint_path, model=model, optimizer=optimizer
     )
 
@@ -504,7 +564,19 @@ def add_tune_args(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--pruner", choices=list(OPTUNA_PRUNERS.keys()), default="median"
     )
-    parser.add_argument("--study-name", type=str, default="my_study")
+    parser.add_argument(
+        "--study-name",
+        type=str,
+        default=None,
+        help="""Optuna study name. If omitted,
+        defaults to <experiment_name>_<parent_run_id>""",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        default=False,
+        help="Resume existing study if study-name already exists in storage",
+    )
 
 
 def add_train_args(parser: argparse.ArgumentParser):
