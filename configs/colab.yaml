@@ -8,6 +8,8 @@ paths :
   inference_db_path : "/content/drive/MyDrive/inat-phenology-cv/data/inference.duckdb"
   sql_dir : "/content/drive/MyDrive/inat-phenology-cv/queries"
   photo_target_dir : "/content/data/"
+  optuna_storage : "sqlite:///content/drive/MyDrive/inat-phenology-cv/data/optuna.sqlite3"
+
 
 dataset_params:
   source_table : "cv_photos4"

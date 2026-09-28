@@ -73,7 +73,6 @@ def train_cmd(args, configs: Config):
         )
 
     # Set test
-
     configs.test = args.test
     device = get_device()
 
@@ -88,13 +87,11 @@ def train_cmd(args, configs: Config):
     optim_params = OptimizerParams(
         base_lr=args.base_lr,
     )
-    configs.optim_params = optim_params
 
     # // Scheduler params
     scheduler_params = SchedulerParams(
         warmup_epochs=args.warmup_epochs, total_epoch=args.epochs
     )
-    configs.scheduler_params = scheduler_params
 
     # // Model params
     model_params = ModelParams(
@@ -108,23 +105,6 @@ def train_cmd(args, configs: Config):
         gated=args.gated,
     )
 
-    configs.model_params = model_params
-
-    # Reinstate model and optimizer state if reload
-    if args.reload:
-        raise NotImplementedError("Training reloading not implemented")
-        """
-        model, optimizer, start_epoch, eval_metrics, previous_run_id = load_checkpoint(
-            configs.paths_params.checkpoint_path, model=model, optimizer=optimizer
-        )
-        if eval_metrics is not None:
-            best_objective = eval_metrics.pr_norm_excess_macro
-        """
-
-    else:
-        start_epoch = None
-        previous_run_id = None
-
     training_params = TrainingParams(
         epochs=args.epochs,
         stopping_patience=args.stopping_patience,
@@ -134,7 +114,6 @@ def train_cmd(args, configs: Config):
         starting_block=args.start_unfreezed,
         block_per_stage=args.block_per_stage,
         max_stages=args.max_stages,
-        start_epoch=start_epoch,
         best_objective=best_objective,
         seed=args.seed,
         log_step_interval=args.log_step_interval,
@@ -142,12 +121,9 @@ def train_cmd(args, configs: Config):
         accumulation_steps=configs.dataloaders_params.gradient_accumulation_steps,
     )
 
-    # Set configs params
-    configs.training_params = training_params
-
     mlflow.set_experiment(args.experiment_name)
 
-    with mlflow.start_run(run_id=previous_run_id) as parent_run:
+    with mlflow.start_run() as parent_run:
         parent_run_id = parent_run.info.run_id
         print(f"\n{'=' * 60}")
         print(f"MLflow Run ID: {parent_run_id}")
@@ -184,22 +160,31 @@ def train_cmd(args, configs: Config):
 
 def tune_cmd(args, configs: Config):
 
-    params = FineTuneParams(
+    # Fast fail if in colab without GPU
+    if not cuda.is_available() and configs.config_path == Path("configs/colab.yaml"):
+        raise RuntimeError(
+            f"Attempted to load {configs.config_path} on a non-gpu colab session"
+        )
+
+    device = get_device()
+    mlflow.set_tracking_uri(resolve_uri())
+    mlflow.set_experiment(args.experiment_name)
+    seed_everything(args.seed, set_cuda_deterministic=False)
+
+    # Set test
+    configs.test = args.test
+
+    tune_params = FineTuneParams(
         n_trials=args.n_trials,
         timeout=args.timeout,
         sampler=args.sampler,
         pruner=args.pruner,
         study_name=args.study_name,
-        storage=args.storage,
     )
-    device = get_device()
-    seed_everything(args.seed, set_cuda_deterministic=False)
 
     data = build_data_pipeline(
         configs=configs, backbone_name=args.backbone, device=device, seed=args.seed
     )
-
-    mlflow.set_experiment(args.experiment_name)
 
     with mlflow.start_run() as parent_run:
         parent_run_id = parent_run.info.run_id
@@ -207,18 +192,15 @@ def tune_cmd(args, configs: Config):
         print(f"MLflow Run ID: {parent_run_id}")
         print(f"{'=' * 60}\n")
 
-        mlflow.log_dict(params.to_dict(), "tune_params.json")
-        mlflow.log_dict(configs.to_dict(), "configs.json")
+        mlflow.log_dict(tune_params.to_dict(), "tune_params.json")
         mlflow.log_params({"git_branch": configs.git_branch})
         mlflow.log_params({"git_hash": configs.git_hash})
         mlflow.log_params(configs.dataset_params.to_dict())
         mlflow.log_params(configs.dataloaders_params.to_dict())
 
-        storage = args.storage or "sqlite:///optuna.sqlite3"
-
         study = optuna.create_study(
             study_name=args.study_name,
-            storage=storage,
+            storage=configs.paths_params.optuna_storage,
             load_if_exists=True,
             direction="maximize",  # we want the highest ROC-AUC
             sampler=_instantiate(OPTUNA_SAMPLERS, args.sampler, {"seed": args.seed}),
@@ -523,7 +505,6 @@ def add_tune_args(parser: argparse.ArgumentParser):
         "--pruner", choices=list(OPTUNA_PRUNERS.keys()), default="median"
     )
     parser.add_argument("--study-name", type=str, default="my_study")
-    parser.add_argument("--storage", type=str, default="sqlite:///optuna.sqlite3")
 
 
 def add_train_args(parser: argparse.ArgumentParser):

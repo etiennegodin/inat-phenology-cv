@@ -68,7 +68,7 @@ def run_training(
         scheduler=scheduler,
         criterion=data.criterion,
         checkpoint_path=configs.paths_params.checkpoint_path,
-        training_params=configs.training_params,
+        training_params=training_params,
         trial=trial,
     )
     return checkpoint, model, data

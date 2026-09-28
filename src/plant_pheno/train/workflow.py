@@ -426,6 +426,7 @@ def execute(
 
         save_log()
 
+        # Optuna Trial
         if trial is not None:
             trial.report(eval_metrics.pr_norm_excess_macro, step=epoch)
             if trial.should_prune():

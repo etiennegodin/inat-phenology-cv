@@ -33,7 +33,6 @@ class FineTuneParams:
     sampler: str
     pruner: str
     study_name: str
-    storage: str
     # cv_folds: int
 
     def to_dict(self):
@@ -50,7 +49,6 @@ class TrainingParams:
     starting_block: int
     max_stages: int
     block_per_stage: int
-    start_epoch: int | None
     best_objective: float
     accumulation_steps: int = 1
     backbone_decay: float = 0.9
@@ -130,6 +128,7 @@ class PathsParams:
     inference_db_path: str
     sql_dir: str
     photo_target_dir: str
+    optuna_storage: str
 
     def __post_init__(self):
         Path(self.checkpoint_path).mkdir(parents=True, exist_ok=True)
