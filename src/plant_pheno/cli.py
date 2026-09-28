@@ -450,6 +450,7 @@ def create_parser() -> argparse.ArgumentParser:
     # Train command
     train_parser = subparsers.add_parser("train", help="Train model")
     add_train_args(train_parser)
+    add_hyperparams_args(train_parser)
     add_common_args(train_parser)
     add_test_args(train_parser)
     train_parser.set_defaults(func=train_cmd)
@@ -591,37 +592,9 @@ def add_tune_args(parser: argparse.ArgumentParser):
     )
 
 
-def add_train_args(parser: argparse.ArgumentParser):
-
-    backbone_models = list(BACKBONE_REGISTRY.keys())
-    parser.add_argument(
-        "--backbone", type=str, choices=backbone_models, default=backbone_models[0]
-    )
-    parser.add_argument("--epochs", "-n", type=int, default=10)
-    parser.add_argument("--start_unfreezed", type=int, default=1)
-    parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
-    parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
-    parser.add_argument("--unfreezing-patience", "-up", type=int, default=3)
-    parser.add_argument("--unfreezing-cooldown", type=int, default=3)
-    parser.add_argument("--max-stages", type=int, default=3)
-    parser.add_argument("--block-per-stage", type=int, default=1)
+def add_hyperparams_args(parser: argparse.ArgumentParser):
     parser.add_argument("--base-lr", "-lr", type=float, default=0.0001)
     parser.add_argument("--backbone-decay", type=float, default=0.90)
-    parser.add_argument("--reload", "-r", action="store_true", default=False)
-    parser.add_argument(
-        "--unfreeze",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Enables progressive backbone unfreezing",
-    )
-    parser.add_argument("--experiment-name", "-name", type=str, default="cv_inat_v0.4")
-
-    parser.add_argument(
-        "--log_step_interval",
-        type=int,
-        default=10,
-        help="Interval of steps for logging batch metrics to MLflow",
-    )
     parser.add_argument(
         "--gated",
         action=argparse.BooleanOptionalAction,
@@ -634,6 +607,34 @@ def add_train_args(parser: argparse.ArgumentParser):
         type=float,
         default=0.0,
         help="Dropout probability for attention weights (default: 0.0)",
+    )
+
+
+def add_train_args(parser: argparse.ArgumentParser):
+    backbone_models = list(BACKBONE_REGISTRY.keys())
+    parser.add_argument(
+        "--backbone", type=str, choices=backbone_models, default=backbone_models[0]
+    )
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--start_unfreezed", type=int, default=1)
+    parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
+    parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
+    parser.add_argument("--unfreezing-patience", "-up", type=int, default=3)
+    parser.add_argument("--unfreezing-cooldown", type=int, default=3)
+    parser.add_argument("--max-stages", type=int, default=3)
+    parser.add_argument("--block-per-stage", type=int, default=1)
+    parser.add_argument(
+        "--unfreeze",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enables progressive backbone unfreezing",
+    )
+    parser.add_argument("--experiment-name", type=str, default="cv_inat_v0.4")
+    parser.add_argument(
+        "--log_step_interval",
+        type=int,
+        default=10,
+        help="Interval of steps for logging batch metrics to MLflow",
     )
 
 
