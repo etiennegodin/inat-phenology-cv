@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 from pandas.core.api import DataFrame as DataFrame
 
-from ..config import ANCESTOR_ID, OBSERVATIONS_FIELDS, IngestPhotosParams
+from ..config import OBSERVATIONS_FIELDS, IngestPhotosParams
 from ..data import DuckDBAdapter, DuckDbSQL
 from ..inat_client import (
     BinaryFetcher,
@@ -34,7 +34,7 @@ class InatDataSynchronizer:
         self.photo_target_dir = photo_target_dir
         self.sql_dir = sql_dir
 
-    def prepare_observation_images(
+    def prepare_observation_records(
         self,
         urls: list[str] | str,
         photos_params: IngestPhotosParams | None = None,
@@ -78,11 +78,12 @@ class InatDataSynchronizer:
         # Collapse df by observation
         df = (
             df.groupby("observation_id")
-            .agg({"paths": list})
+            .agg({"uuid": "first", "ancestor_ids": "first", "paths": list})
             .reset_index(drop=False)
             .sort_values(by="observation_id")
             .reset_index(drop=True)
         )
+
         logger.debug(df)
         return df
 
@@ -123,35 +124,29 @@ class InatDataSynchronizer:
             # Get observation data
             df = sql_api.fetch_df_query(
                 """
-                        SELECT *
+                        SELECT observation_id,
+                        uuid,
+                        ancestor_ids
                         FROM serving.observations
                     """
             )
 
-            # Keep only flowering plants
-            """
-                missing_ids = {ANCESTOR_ID} - set(df["ancestor_ids"])
-                if missing_ids:
-                    logger.warning(
-                        f"Observation ids of non flowering plants: {missing_ids}"
-                    )
-                """
-            df_filtered = df[df["ancestor_ids"].apply(lambda lst: ANCESTOR_ID in lst)]
-
             # Keep only requested observations
-            df_filtered = df_filtered[df_filtered["observation_id"].isin(obs_ids)]
+            df_filtered = df[df["observation_id"].isin(obs_ids)]
 
             # Get photo data
             df_img = sql_api.fetch_df_query(
                 """
-                        SELECT *
+                        SELECT photo_id,
+                        observation_id
                         FROM serving.photos
                     """
             )
 
-        df_out = df_img[df_img["observation_id"].isin(df_filtered["observation_id"])]
-        logger.debug(df_out)
-        return df_out
+        # Combine df
+        df_combined = pd.merge(df_filtered, df_img, on="observation_id", how="inner")
+        logger.debug(df_combined)
+        return df_combined
 
     def _filter_local_photos(self, df: pd.DataFrame) -> pd.DataFrame | None:
         missing = []

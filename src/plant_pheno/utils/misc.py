@@ -31,7 +31,9 @@ def df_img_to_path(
 ) -> pd.DataFrame:
     """Formats photo_paths and groups per observation id"""
     df[column_name] = img_dir + "/" + df[photo_id_column].astype(str) + ".jpg"
-    return df.sort_values(by=[id_column, photo_id_column]).reset_index(drop=True)
+    df_out = df.sort_values(by=[id_column, photo_id_column]).reset_index(drop=True)
+    logger.debug(df_out)
+    return df_out
 
 
 def save_log():

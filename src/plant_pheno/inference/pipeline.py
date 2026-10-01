@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from ..config import InferenceParams, IngestPhotosParams
 from .predictor import PhenologyPredictor
 from .sync import InatDataSynchronizer
+from .validator import records_to_dataframe, validate_records
 
 if TYPE_CHECKING:
     import mlflow
@@ -50,11 +51,15 @@ class InatInferencePipeline:
             photos_params = IngestPhotosParams()
 
         # 1. Sync data and photos to local disk
-        df_ready = self.sync.prepare_observation_images(
+        df_records = self.sync.prepare_observation_records(
             urls=urls,
             photos_params=photos_params,
             rate=rate,
         )
 
-        # 2. Run model inference & log to DuckDB
-        return self.predictor.predict_and_log(df_ready)
+        # 2. Validate requested observations
+        validated_records = validate_records(df_records.to_dict(orient="records"))
+        df_validated = records_to_dataframe(validated_records)
+
+        # 3. Run model inference & log to DuckDB
+        return self.predictor.predict_and_log(df_validated)

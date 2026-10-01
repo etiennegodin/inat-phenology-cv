@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .constants import ANCESTOR_ID, CLASS_ORDER, LABEL_MAPPING, OBSERVATIONS_FIELDS
+from .constants import ANGIOSPERMAE_ID, CLASS_ORDER, LABEL_MAPPING, OBSERVATIONS_FIELDS
 from .loader import Config
 from .params import (
     DataLoadersParams,
@@ -20,7 +20,7 @@ from .system import HardwareProfile, resolve_hardware_profile
 
 __all__ = [
     "SEARCH_SPACES",
-    "ANCESTOR_ID",
+    "ANGIOSPERMAE_ID",
     "CLASS_ORDER",
     "LABEL_MAPPING",
     "OBSERVATIONS_FIELDS",
