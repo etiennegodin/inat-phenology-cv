@@ -459,6 +459,18 @@ def status_cmd(args, configs: Config):
     status(configs)
 
 
+def cleanlab_cmd(args, configs: Config):
+    from .cleanlab import run_cleanlab_cv
+
+    config_path = getattr(args, "config_file", None) or Path("configs/cleanlab.yaml")
+    run_cleanlab_cv(
+        config_path=config_path,
+        test_mode=getattr(args, "test", False),
+        test_fraction=getattr(args, "test_frac", 0.05),
+    )
+    return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="torch_pipe")
     subparsers = parser.add_subparsers(
@@ -521,7 +533,24 @@ def create_parser() -> argparse.ArgumentParser:
     # Status command
     status_parser = subparsers.add_parser("status", help="Pipeline status")
     status_parser.set_defaults(func=status_cmd)
+
+    # Cleanlab command
+    cleanlab_parser = subparsers.add_parser(
+        "cleanlab", help="Run K-fold CV and cleanlab error audit"
+    )
+    add_cleanlab_args(cleanlab_parser)
+    add_test_args(cleanlab_parser)
+    cleanlab_parser.set_defaults(func=cleanlab_cmd)
     return parser
+
+
+def add_cleanlab_args(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--config-file",
+        type=Path,
+        default=Path("configs/cleanlab.yaml"),
+        help="Path to cleanlab config YAML (default: configs/cleanlab.yaml)",
+    )
 
 
 def add_test_args(parser: argparse.ArgumentParser):
