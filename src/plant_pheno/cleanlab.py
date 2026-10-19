@@ -16,6 +16,7 @@ from .config import (
     cfg_to_runtime,
     model_params_from_cfg,
     optimizer_params_from_cfg,
+    resolved_container,
     scheduler_params_from_cfg,
     training_params_from_cfg,
 )
@@ -244,69 +245,32 @@ def export_label_issues_csv(
     return csv_path
 
 
-def load_cleanlab_config(config_path: str | Path) -> dict[str, Any]:
-    """Loads a YAML configuration file for the cleanlab CV pipeline."""
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f)
-
-
 def run_cleanlab_cv(
-    config_path: str | Path,
-    test_mode: bool = False,
-    test_fraction: float = 0.05,
+    cfg: DictConfig,
 ) -> dict[str, Any]:
     """Executes the full K-Fold cross-validation loop and
     runs Cleanlab issue detection."""
     import mlflow
 
-    config_path = Path(config_path)
-    cfg_dict = load_cleanlab_config(config_path)
-
-    paths_cfg = cfg_dict.get("paths", {})
-    model_cfg = cfg_dict.get("model_params", {})
-    train_cfg = cfg_dict.get("training_params", {})
-    loader_cfg = cfg_dict.get("dataloader_params", {})
-    dataset_cfg = cfg_dict.get("dataset_params", {})
-    cleanlab_cfg = cfg_dict.get("cleanlab_params", {})
-
-    seed = train_cfg.get("seed", 42)
+    config = cfg_to_runtime(cfg)
+    paths_params = config.paths_params
+    dataset_params = config.dataset_params
+    dataloader_params = config.dataloaders_params
+    cleanlab_cfg = cfg.cleanlab
+    test_mode = bool(cfg.test)
+    test_fraction = float(cfg.test_frac)
+    seed = int(cfg.seed)
     seed_everything(seed, set_cuda_deterministic=False)
-
-    paths_params = PathsParams(**paths_cfg)
-    dataset_params = DatasetParams(**dataset_cfg)
-    dataloader_params = DataLoadersParams(**loader_cfg)
-    hardware_profile = resolve_hardware_profile()
-
-    config = Config(
-        config_path=config_path,
-        paths_params=paths_params,
-        dataset_params=dataset_params,
-        dataloaders_params=dataloader_params,
-        hardware_profile=hardware_profile,
-        git_branch=get_current_git_branch(),
-        git_hash=get_git_hash(),
-    )
-    config.test = test_mode
 
     device = get_device()
     logger.info(f"Using device: {device.type}")
 
-    model_params = ModelParams(
-        backbone=model_cfg.get("backbone", "efficientnet"),
-        architecture=model_cfg.get("architecture", "mil_pooling"),
-        head_neurons=model_cfg.get("head_neurons", 256),
-        head_outputs=model_cfg.get("head_outputs", 1),
-        head_dropout_prob=model_cfg.get("head_dropout_prob", 0.5),
-        attention_neurons=model_cfg.get("attention_neurons", 128),
-        attention_dropout_prob=model_cfg.get("attention_dropout_prob", 0.1),
-        start_unfreezed=model_cfg.get("start_unfreezed", 0),
-        gated=model_cfg.get("gated", True),
-    )
+    model_params = model_params_from_cfg(cfg.model)
 
-    n_folds = cleanlab_cfg.get("n_folds", 5)
-    db_table_name = cleanlab_cfg.get("table_name", "oof_predictions")
-    cleanlab_db_path = paths_cfg.get("cleanlab_db_path", "data/cleanlab.duckdb")
-    corrections_dir = paths_cfg.get("corrections_dir", "data/label_corrections")
+    n_folds = cleanlab_cfg.n_folds
+    db_table_name = cleanlab_cfg.table_name
+    cleanlab_db_path = paths_params.cleanlab_db_path
+    corrections_dir = paths_params.corrections_dir
     checkpoint_dir = Path(paths_params.checkpoint_path)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
@@ -329,7 +293,7 @@ def run_cleanlab_cv(
 
     mean_image_ratio = get_mean_img_ratio(df)
     cache = resolve_cache_decision(
-        hardware_profile, len(df), mean_image_ratio, config.max_img_resolution
+        config.hardware_profile, len(df), mean_image_ratio, config.max_img_resolution
     )
 
     transforms = BACKBONE_REGISTRY[model_params.backbone]().get_transforms()
@@ -350,12 +314,13 @@ def run_cleanlab_cv(
     all_oof_preds: list[np.ndarray] = []
 
     with mlflow.start_run(run_name="cleanlab_cv"):
+        mlflow.log_dict(resolved_container(cfg), "configs.json")
         mlflow.log_params(
             {
                 "n_folds": n_folds,
                 "backbone": model_params.backbone,
                 "architecture": model_params.architecture,
-                "epochs": train_cfg.get("epochs", 5),
+                "epochs": cfg.train.epochs,
                 "seed": seed,
                 "total_observations": len(df),
             }
@@ -379,25 +344,11 @@ def run_cleanlab_cv(
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights, reduction="none")
             pos_ratios = get_pos_ratios(val_set)
 
-            training_params = TrainingParams(
-                epochs=train_cfg.get("epochs", 5),
-                stopping_patience=train_cfg.get("stopping_patience", 3),
-                unfreeze=train_cfg.get("unfreeze", False),
-                unfreezing_patience=train_cfg.get("unfreezing_patience", 2),
-                unfreezing_cooldown=train_cfg.get("unfreezing_cooldown", 1),
-                starting_block=train_cfg.get("starting_block", 0),
-                max_stages=train_cfg.get("max_stages", 1),
-                block_per_stage=train_cfg.get("block_per_stage", 1),
-                best_objective=train_cfg.get("best_objective", 1e-5),
-                seed=seed + fold_idx,
-                pos_ratios=pos_ratios,
+            training_params = training_params_from_cfg(
+                cfg, seed=seed + fold_idx, pos_ratios=pos_ratios
             )
-
-            optim_params = OptimizerParams(base_lr=train_cfg.get("base_lr", 1e-3))
-            scheduler_params = SchedulerParams(
-                warmup_epochs=train_cfg.get("warmup_epochs", 1),
-                total_epoch=training_params.epochs,
-            )
+            optim_params = optimizer_params_from_cfg(cfg)
+            scheduler_params = scheduler_params_from_cfg(cfg)
 
             fold_checkpoint_path = str(checkpoint_dir / f"cleanlab_fold_{fold_idx}.pt")
 
@@ -458,7 +409,7 @@ def run_cleanlab_cv(
         )
 
         exported_csvs = []
-        if cleanlab_cfg.get("export_csv", True):
+        if cleanlab_cfg.export_csv:
             for c_idx, c_name in enumerate(CLASS_ORDER):
                 issues_for_c = cleanlab_results["per_class_issues"].get(c_name, [])
                 csv_p = export_label_issues_csv(

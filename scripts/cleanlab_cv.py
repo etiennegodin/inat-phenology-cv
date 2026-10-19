@@ -3,7 +3,7 @@
 CLI script to run K-Fold cross validation and dataset error auditing with Cleanlab.
 
 Usage:
-    python scripts/cleanlab_cv.py --config configs/cleanlab.yaml
+    python scripts/cleanlab_cv.py --env local
     python scripts/cleanlab_cv.py --test --test-fraction 0.02
 """
 
@@ -13,14 +13,17 @@ import argparse
 import sys
 from pathlib import Path
 
-from plant_pheno.cleanlab import load_cleanlab_config, run_cleanlab_cv
-from plant_pheno.infra import init_logger
-
 # Add project root to sys.path so plant_pheno can be imported
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from hydra import compose, initialize_config_dir  # noqa: E402
+
+from plant_pheno.cleanlab import run_cleanlab_cv  # noqa: E402
+from plant_pheno.config import CONFIG_DIR  # noqa: E402
+from plant_pheno.infra import init_logger  # noqa: E402
 
 
 def parse_args():
@@ -28,10 +31,10 @@ def parse_args():
         description="Run K-Fold cross-validation and clean dataset using Cleanlab."
     )
     parser.add_argument(
-        "--config",
-        type=Path,
-        default=Path("configs/cleanlab.yaml"),
-        help="Path to cleanlab configuration YAML (default: configs/cleanlab.yaml)",
+        "--env",
+        choices=["local", "colab"],
+        default="local",
+        help="Machine config group (default: local)",
     )
     parser.add_argument(
         "--test",
@@ -70,47 +73,25 @@ def main():
     log_path = PROJECT_ROOT / "log.log"
     init_logger(log_path)
 
-    config_path = args.config
-    if not config_path.is_absolute():
-        config_path = PROJECT_ROOT / config_path
-
-    if not config_path.exists():
-        print(f"Error: Configuration file not found at {config_path}", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"Loading configuration from {config_path}...")
-    cfg_dict = load_cleanlab_config(config_path)
-
-    # Apply overrides if provided
+    overrides = [
+        "command=cleanlab",
+        f"env={args.env}",
+        f"test={str(args.test).lower()}",
+        f"test_frac={args.test_fraction}",
+    ]
     if args.backbone:
-        cfg_dict.setdefault("model_params", {})["backbone"] = args.backbone
+        overrides.append(f"model.backbone={args.backbone}")
     if args.epochs is not None:
-        cfg_dict.setdefault("training_params", {})["epochs"] = args.epochs
+        overrides.append(f"train.epochs={args.epochs}")
     if args.n_folds is not None:
-        cfg_dict.setdefault("cleanlab_params", {})["n_folds"] = args.n_folds
+        overrides.append(f"cleanlab.n_folds={args.n_folds}")
 
-    # If any CLI overrides were passed, save temporary config or pass modified
-    temp_cfg_path = config_path
-    if args.backbone or args.epochs is not None or args.n_folds is not None:
-        import tempfile
+    with initialize_config_dir(version_base="1.3", config_dir=str(CONFIG_DIR)):
+        cfg = compose(config_name="config", overrides=overrides)
 
-        import yaml
-
-        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tf:
-            yaml.safe_dump(cfg_dict, tf)
-            temp_cfg_path = Path(tf.name)
-
-    try:
-        results = run_cleanlab_cv(
-            config_path=temp_cfg_path,
-            test_mode=args.test,
-            test_fraction=args.test_fraction,
-        )
-        print("\nCleanlab CV finished successfully!")
-        print(f"Processed {len(results['obs_ids'])} observations.")
-    finally:
-        if temp_cfg_path != config_path and temp_cfg_path.exists():
-            temp_cfg_path.unlink()
+    results = run_cleanlab_cv(cfg)
+    print("\nCleanlab CV finished successfully!")
+    print(f"Processed {len(results['obs_ids'])} observations.")
 
 
 if __name__ == "__main__":
