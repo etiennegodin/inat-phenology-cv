@@ -129,16 +129,18 @@ class CacheDatasetdPhenologyDataset(PhenologyDataset):
 
 def get_mean_img_ratio(df: pd.DataFrame):
     ratios = []
-    for path in df["path"]:
-        try:
-            x, y = Image.open(path).size
-        except UnidentifiedImageError:
-            continue
-        if x <= y:
-            ratio = y / x
-        else:
-            ratio = x / y
-        ratios.append(round(ratio, 3))
+    for paths in df["path"]:
+        image_paths = paths if isinstance(paths, (list, tuple)) else [paths]
+        for path in image_paths:
+            try:
+                x, y = Image.open(path).size
+            except UnidentifiedImageError:
+                continue
+            if x <= y:
+                ratio = y / x
+            else:
+                ratio = x / y
+            ratios.append(round(ratio, 3))
     return np.array(ratios).mean()
 
 

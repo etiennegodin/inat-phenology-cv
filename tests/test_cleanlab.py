@@ -7,6 +7,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 import pytest
+from PIL import Image
 
 from plant_pheno.cleanlab import (
     export_label_issues_csv,
@@ -14,6 +15,7 @@ from plant_pheno.cleanlab import (
     save_oof_predictions_to_duckdb,
     stratified_multilabel_kfold,
 )
+from plant_pheno.train.dataset import get_mean_img_ratio
 
 
 @pytest.fixture
@@ -43,6 +45,17 @@ def mock_multilabel_df() -> pd.DataFrame:
                 }
             )
     return pd.DataFrame(rows)
+
+
+def test_get_mean_img_ratio_with_grouped_paths(tmp_path: Path):
+    portrait_path = tmp_path / "portrait.png"
+    square_path = tmp_path / "square.png"
+    Image.new("RGB", (10, 20)).save(portrait_path)
+    Image.new("RGB", (10, 10)).save(square_path)
+
+    df = pd.DataFrame({"path": [[portrait_path, square_path]]})
+
+    assert get_mean_img_ratio(df) == 1.5
 
 
 def test_stratified_multilabel_kfold(mock_multilabel_df: pd.DataFrame):
