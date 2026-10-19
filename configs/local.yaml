@@ -9,6 +9,8 @@ paths :
   sql_dir : "/home/etienne/projects/inat-phenology-cv/queries"
   photo_target_dir : "/home/etienne/projects/inat-phenology-cv/data/test_images"
   optuna_storage : "sqlite:///data/optuna.sqlite3"
+  cleanlab_db_path: "/home/etienne/projects/inat-phenology-cv/data/cleanlab.duckdb"
+  corrections_dir: "/home/etienne/projects/inat-phenology-cv/data/label_corrections"
 
 dataset_params:
   source_table : "cv_photos4"

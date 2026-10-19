@@ -137,6 +137,7 @@ class PathsParams:
     photo_target_dir: str
     optuna_storage: str
     cleanlab_db_path: str
+    corrections_dir: str
 
     def __post_init__(self):
         Path(self.checkpoint_path).mkdir(parents=True, exist_ok=True)

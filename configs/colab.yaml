@@ -9,6 +9,8 @@ paths :
   sql_dir : "/content/drive/MyDrive/inat-phenology-cv/queries"
   photo_target_dir : "/content/data/"
   optuna_storage : "sqlite:////content/drive/MyDrive/inat-phenology-cv/data/optuna.sqlite3"
+  cleanlab_db_path: "/content/drive/MyDrive/inat-phenology-cv/data/cleanlab.duckdb"
+  corrections_dir: "/content/drive/MyDrive/inat-phenology-cv/data/label_corrections"
 
 
 dataset_params:
