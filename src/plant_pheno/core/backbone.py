@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import open_clip
@@ -22,6 +23,8 @@ logger = logging.getLogger(__name__)
 class Backbone(nn.Module, ABC):
     encoder: nn.Module
     output_dim: int
+    patch_dim: int = 0
+    has_patch_support: bool = False
     trainable_block_count: int
 
     def __init__(self) -> None:
@@ -82,6 +85,12 @@ class Backbone(nn.Module, ABC):
         """returns embeddings ready for attention pooling; normalization,
         if any, is handled per-backbone to match its pretraining regime"""
         pass
+
+    def encode_patches(self, input: Tensor) -> Tensor:
+        """Returns patch embeddings [B, num_patches, patch_dim] if supported"""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support patch encoding."
+        )
 
     @abstractmethod
     def get_transforms(self) -> tuple[v2.Compose, v2.Compose]:
@@ -154,12 +163,31 @@ class BioClipBackbone(Backbone):
         self.encoder = model.visual  # image tower only
         self.freeze()
         self.set_output_dim()
+        self.patch_dim = 768
+        self.has_patch_support = True
         self.set_trainable_block_count()
 
     def encode(self, input: Tensor) -> Tensor:
         # Normalising clip embeddings for scale sensitive attention pooling
         embeddings = self.encoder(input)
         return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+
+    def encode_patches(self, input: Tensor) -> Tensor:
+        x_conv = self.encoder.conv1(input)
+        x_tok = x_conv.reshape(x_conv.shape[0], x_conv.shape[1], -1).permute(0, 2, 1)
+        cls_tok = self.encoder.class_embedding.to(x_tok.dtype) + torch.zeros(
+            x_tok.shape[0], 1, x_tok.shape[-1], dtype=x_tok.dtype, device=x_tok.device
+        )
+        x_tok = torch.cat([cls_tok, x_tok], dim=1)
+        x_tok = x_tok + self.encoder.positional_embedding.to(x_tok.dtype)
+        x_tok = self.encoder.ln_pre(x_tok)
+        x_tok = x_tok.permute(1, 0, 2)
+        x_tok = self.encoder.transformer(x_tok)
+        x_tok = x_tok.permute(1, 0, 2)
+        patches = x_tok[:, 1:, :]
+        if hasattr(self.encoder, "ln_post"):
+            patches = self.encoder.ln_post(patches)
+        return patches
 
     def get_transforms(self, version="v2") -> tuple[v2.Compose, v2.Compose]:
         if version != "v2":
@@ -223,12 +251,31 @@ class BioClip2Backbone(Backbone):
         self.encoder = model.visual  # image tower only
         self.freeze()
         self.set_output_dim()
+        self.patch_dim = 768
+        self.has_patch_support = True
         self.set_trainable_block_count()
 
     def encode(self, input: Tensor) -> Tensor:
         # Normalising clip embeddings for scale sensitive attention pooling
         embeddings = self.encoder(input)
         return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+
+    def encode_patches(self, input: Tensor) -> Tensor:
+        x_conv = self.encoder.conv1(input)
+        x_tok = x_conv.reshape(x_conv.shape[0], x_conv.shape[1], -1).permute(0, 2, 1)
+        cls_tok = self.encoder.class_embedding.to(x_tok.dtype) + torch.zeros(
+            x_tok.shape[0], 1, x_tok.shape[-1], dtype=x_tok.dtype, device=x_tok.device
+        )
+        x_tok = torch.cat([cls_tok, x_tok], dim=1)
+        x_tok = x_tok + self.encoder.positional_embedding.to(x_tok.dtype)
+        x_tok = self.encoder.ln_pre(x_tok)
+        x_tok = x_tok.permute(1, 0, 2)
+        x_tok = self.encoder.transformer(x_tok)
+        x_tok = x_tok.permute(1, 0, 2)
+        patches = x_tok[:, 1:, :]
+        if hasattr(self.encoder, "ln_post"):
+            patches = self.encoder.ln_post(patches)
+        return patches
 
     def get_transforms(self, version="v2") -> tuple[v2.Compose, v2.Compose]:
         if version != "v2":
@@ -281,8 +328,82 @@ class BioClip2Backbone(Backbone):
         return 3, *img_size
 
 
+class DinoV3Backbone(Backbone):
+    DEFAULT_CHECKPOINT_PATH = """/home/etienne/projects/inat-phenology-cv/
+    data/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"""
+
+    def __init__(self, checkpoint_path: str | None = None, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        import sys
+
+        dinov3_dir = Path(__file__).resolve().parents[3] / "external" / "dinov3"
+        if str(dinov3_dir) not in sys.path:
+            sys.path.insert(0, str(dinov3_dir))
+
+        from dinov3.hub.backbones import dinov3_vitb16
+
+        self.encoder = dinov3_vitb16(pretrained=False)
+        ckpt = checkpoint_path or self.DEFAULT_CHECKPOINT_PATH
+        if Path(ckpt).exists():
+            logger.info(f"Loading DINOv3 weights from {ckpt}")
+            state_dict = torch.load(ckpt, map_location="cpu")
+            self.encoder.load_state_dict(state_dict)
+        else:
+            logger.warning(
+                f"DINOv3 checkpoint not found at {ckpt}, initializing random weights."
+            )
+        self.freeze()
+        self.output_dim = 768
+        self.patch_dim = 768
+        self.has_patch_support = True
+        self.set_trainable_block_count()
+
+    def encode(self, input: Tensor) -> Tensor:
+        out = self.encoder.forward_features(input)
+        return F.normalize(out["x_norm_clstoken"], dim=1)
+
+    def encode_patches(self, input: Tensor) -> Tensor:
+        out = self.encoder.forward_features(input)
+        return out["x_norm_patchtokens"]
+
+    def get_transforms(self) -> tuple[v2.Compose, v2.Compose]:
+        base_transforms = [
+            v2.Resize(
+                (224, 224), interpolation=InterpolationMode.BICUBIC, antialias=True
+            ),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+        train_transforms = v2.Compose(
+            [
+                v2.RandomResizedCrop(
+                    size=(224, 224),
+                    scale=(0.9, 1.0),
+                    ratio=(0.75, 1.3333),
+                    interpolation=InterpolationMode.BICUBIC,
+                    antialias=True,
+                ),
+                v2.RandomHorizontalFlip(p=0.5),
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
+        )
+        val_transforms = v2.Compose(base_transforms)
+        return train_transforms, val_transforms
+
+    def get_trainable_blocks(self) -> nn.ModuleList:
+        return self.encoder.blocks
+
+    def get_dummy_input_shape(self) -> tuple[int, int, int]:
+        return (3, 224, 224)
+
+
 BACKBONE_REGISTRY = {
     "efficientnet": EfficientNetBackbone,
     "bioclip": BioClipBackbone,
     "bioclip2": BioClip2Backbone,
+    "dinov3": DinoV3Backbone,
+    "dinov3_vitb16": DinoV3Backbone,
 }

@@ -92,6 +92,7 @@ class OptimizerParams:
 @dataclass
 class ModelParams:
     backbone: str
+    architecture: str = "mil_pooling"
     head_neurons: int = 256
     head_outputs: int = 1
     head_dropout_prob: float = 0.5
@@ -99,6 +100,11 @@ class ModelParams:
     attention_dropout_prob: float = 0.1
     start_unfreezed: int = 1
     gated: bool = True
+    proj_dim: int = 256
+    cross_attn_heads: int = 8
+    cross_attn_dropout: float = 0.1
+    max_images_per_obs: int = 64
+    checkpoint_path: str | None = None
 
     def to_dict(self):
         return asdict(self)

@@ -81,12 +81,19 @@ def build_pipeline_optimizer(
     model: nn.Module, params: OptimizerParams
 ) -> optim.Optimizer:
 
-    attention_params = itertools.chain.from_iterable(
-        branch.attention.parameters() for branch in model.branches
-    )
-    head_params = itertools.chain.from_iterable(
-        branch.head.parameters() for branch in model.branches
-    )
+    if hasattr(model, "get_attention_params"):
+        attention_params = model.get_attention_params()
+    else:
+        attention_params = itertools.chain.from_iterable(
+            branch.attention.parameters() for branch in model.branches
+        )
+
+    if hasattr(model, "get_head_params"):
+        head_params = model.get_head_params()
+    else:
+        head_params = itertools.chain.from_iterable(
+            branch.head.parameters() for branch in model.branches
+        )
 
     # to_do if branches should converge at different rates
     # build 3 separate attention param groups (branch.attention.parameters() per branch

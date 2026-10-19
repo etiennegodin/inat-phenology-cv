@@ -94,6 +94,7 @@ def train_cmd(args, configs: Config):
     # // Model params
     model_params = ModelParams(
         args.backbone,
+        architecture=getattr(args, "architecture", "mil_pooling"),
         head_neurons=args.head_neurons,
         head_outputs=1,
         head_dropout_prob=args.head_dropout,
@@ -101,6 +102,11 @@ def train_cmd(args, configs: Config):
         attention_dropout_prob=args.attention_dropout,
         start_unfreezed=args.start_unfreezed,
         gated=args.gated,
+        proj_dim=getattr(args, "proj_dim", 256),
+        cross_attn_heads=getattr(args, "cross_attn_heads", 8),
+        cross_attn_dropout=getattr(args, "cross_attn_dropout", 0.1),
+        max_images_per_obs=getattr(args, "max_images_per_obs", 64),
+        checkpoint_path=getattr(args, "checkpoint_path", None),
     )
 
     training_params = TrainingParams(
@@ -252,6 +258,7 @@ def tune_cmd(args, configs: Config):
         # // Model params
         model_params = ModelParams(
             args.backbone,
+            architecture=getattr(args, "architecture", "mil_pooling"),
             head_neurons=256,
             head_outputs=1,
             head_dropout_prob=study.best_params.get("head_dropout_prob"),
@@ -259,6 +266,15 @@ def tune_cmd(args, configs: Config):
             attention_dropout_prob=study.best_params.get("attention_dropout_prob"),
             start_unfreezed=args.start_unfreezed,
             gated=study.best_params.get("gated"),
+            proj_dim=study.best_params.get("proj_dim", getattr(args, "proj_dim", 256)),
+            cross_attn_heads=study.best_params.get(
+                "cross_attn_heads", getattr(args, "cross_attn_heads", 8)
+            ),
+            cross_attn_dropout=study.best_params.get(
+                "cross_attn_dropout", getattr(args, "cross_attn_dropout", 0.1)
+            ),
+            max_images_per_obs=getattr(args, "max_images_per_obs", 64),
+            checkpoint_path=getattr(args, "checkpoint_path", None),
         )
 
         training_params = TrainingParams(
@@ -414,11 +430,13 @@ def test_cmd(args, configs: Config):
         )
     configs.dataloaders_params = dataloader_params
     model_params = ModelParams(
+        backbone=getattr(args, "backbone", "efficientnet"),
+        architecture=getattr(args, "architecture", "mil_pooling"),
         head_neurons=256,
         head_outputs=1,
         head_dropout_prob=0.5,
-        attention_dim=0,
         attention_neurons=128,
+        attention_dropout_prob=0.1,
     )
     device = get_device()
     model = build_pipeline_model(device, model_params)
@@ -611,10 +629,47 @@ def add_hyperparams_args(parser: argparse.ArgumentParser):
         help="Dropout probability for attention weights (default: 0.5)",
     )
     parser.add_argument(
-        "--attention-dropout",
+        "--architecture",
+        type=str,
+        choices=["mil_pooling", "cross_attention"],
+        default="mil_pooling",
+        help="""Model aggregation architecture:
+        'mil_pooling' (default) or 'cross_attention'.""",
+    )
+    parser.add_argument(
+        "--proj-dim",
+        dest="proj_dim",
+        type=int,
+        default=256,
+        help="Projection dimension for cross-attention patch neck (default: 256)",
+    )
+    parser.add_argument(
+        "--cross-attn-heads",
+        dest="cross_attn_heads",
+        type=int,
+        default=8,
+        help="Number of attention heads for cross-attention block (default: 8)",
+    )
+    parser.add_argument(
+        "--cross-attn-dropout",
+        dest="cross_attn_dropout",
         type=float,
-        default=0.0,
-        help="Dropout probability for attention weights (default: 0.0)",
+        default=0.1,
+        help="Dropout probability for cross-attention block (default: 0.1)",
+    )
+    parser.add_argument(
+        "--max-images-per-obs",
+        dest="max_images_per_obs",
+        type=int,
+        default=32,
+        help="Maximum images per obs for 1D image index embeddings (default: 64)",
+    )
+    parser.add_argument(
+        "--checkpoint-path",
+        dest="checkpoint_path",
+        type=str,
+        default=None,
+        help="Path to custom pretrained backbone checkpoint (.pth file)",
     )
 
 
