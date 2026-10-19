@@ -1,0 +1,7 @@
+# @package _global_
+model:
+  architecture: cross_attention
+  proj_dim: 256
+  cross_attn_heads: 8
+  cross_attn_dropout: 0.1
+  max_images_per_obs: 64

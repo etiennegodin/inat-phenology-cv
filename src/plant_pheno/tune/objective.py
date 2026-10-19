@@ -7,10 +7,10 @@ from torch.utils.data import DataLoader, SubsetRandomSampler
 
 from ..config import (
     Config,
-    ModelParams,
-    OptimizerParams,
-    SchedulerParams,
-    TrainingParams,
+    model_params_from_cfg,
+    optimizer_params_from_cfg,
+    scheduler_params_from_cfg,
+    training_params_from_cfg,
 )
 from ..infra.seed import seed_everything
 from ..train import run_training
@@ -73,7 +73,7 @@ def _subsample_train_loader(
 def make_objective(
     configs: Config,
     data: DataPipeline,
-    base_args,
+    cfg,
     search_space: dict,
     subsample_frac: float = 1.0,
 ):
@@ -94,7 +94,7 @@ def make_objective(
         # seed so that: (a) model init, dropout masks, and data shuffling are
         # all varied across trials, and (b) any individual trial is fully
         # reproducible by re-running with the same base seed and trial number.
-        base_seed = getattr(base_args, "seed", 42)
+        base_seed = int(cfg.seed)
         trial_seed = base_seed + trial.number
         seed_everything(trial_seed, set_cuda_deterministic=False)
 
@@ -118,44 +118,18 @@ def make_objective(
 
         # ── Step 2: Build pipeline with suggested params ──────────────────────
 
-        # Build trial-specific dataclasses
-
-        model_params = ModelParams(
-            backbone=getattr(base_args, "backbone", "bioclip"),
-            head_neurons=256,
-            head_outputs=1,
-            head_dropout_prob=trial_params.get("head_dropout_prob", 0.5),
-            attention_neurons=trial_params.get("attention_neurons", 128),
-            attention_dropout_prob=trial_params.get("attention_dropout_prob", 0.0),
-            start_unfreezed=getattr(base_args, "start_unfreezed", 1),
-            gated=trial_params.get("gated", True),
+        model_params = model_params_from_cfg(cfg.model, **trial_params)
+        optim_params = optimizer_params_from_cfg(
+            cfg, base_lr=trial_params.get("base_lr", cfg.train.base_lr)
         )
-
-        optim_params = OptimizerParams(
-            base_lr=trial_params.get("base_lr", 1e-4),
-        )
-        epochs = getattr(base_args, "epochs", 10)
-        warmup_epochs = getattr(base_args, "warmup_epochs", 3)
-        scheduler_params = SchedulerParams(
-            warmup_epochs=warmup_epochs,
-            total_epoch=epochs,
-        )
-
-        training_params = TrainingParams(
-            epochs=epochs,
-            stopping_patience=getattr(base_args, "stopping_patience", 3),
-            unfreeze=getattr(base_args, "unfreeze", True),
-            unfreezing_patience=getattr(base_args, "unfreezing_patience", 3),
-            unfreezing_cooldown=getattr(base_args, "unfreezing_cooldown", 3),
-            starting_block=model_params.start_unfreezed,
-            max_stages=getattr(base_args, "max_stages", 3),
-            block_per_stage=getattr(base_args, "block_per_stage", 1),
+        scheduler_params = scheduler_params_from_cfg(cfg)
+        training_params = training_params_from_cfg(
+            cfg,
             best_objective=1e-5,
             seed=trial_seed,
-            log_step_interval=getattr(base_args, "log_step_interval", 10),
+            starting_block=model_params.start_unfreezed,
             pos_ratios=data.pos_ratios,
-            backbone_decay=trial_params.get("backbone_decay", 0.90),
-            accumulation_steps=configs.dataloaders_params.gradient_accumulation_steps,
+            backbone_decay=trial_params.get("backbone_decay"),
         )
 
         # ── Step 3: Optionally subsample the training set for this trial ──────

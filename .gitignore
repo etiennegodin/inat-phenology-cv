@@ -139,6 +139,8 @@ celerybeat.pid
 .envrc
 .venv
 env/
+!configs/env/
+!configs/env/**
 venv/
 ENV/
 env.bak/
@@ -215,6 +217,7 @@ data/
 checkpoints/
 notebooks/temp/*.ipynb
 mlruns/
+outputs/
 
 *.db
 *.sh
