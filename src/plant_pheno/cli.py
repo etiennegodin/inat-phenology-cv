@@ -1,38 +1,35 @@
 from __future__ import annotations
 
-import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import hydra
 import mlflow
 import optuna
-import yaml
 from dotenv import load_dotenv
 from mlflow import MlflowException
+from omegaconf import DictConfig, OmegaConf
 from torch import cuda, nn
 
 from . import train
 from .config import (
+    CONFIG_DIR,
     OPTUNA_PRUNERS,
     OPTUNA_SAMPLERS,
     SEARCH_SPACES,
-    Config,
-    DataLoadersParams,
-    DatasetParams,
-    FineTuneParams,
     InferenceParams,
     IngestPhotosParams,
-    ModelParams,
-    OptimizerParams,
-    PathsParams,
-    SchedulerParams,
-    TrainingParams,
-    resolve_hardware_profile,
+    cfg_to_runtime,
+    model_params_from_cfg,
+    optimizer_params_from_cfg,
+    resolved_container,
+    scheduler_params_from_cfg,
+    training_params_from_cfg,
 )
 from .core.device import get_device, set_device
-from .core.model import BACKBONE_REGISTRY
 from .data import log_model_evaluation
 from .inference import InatInferencePipeline
 from .infra import init_logger, mlflow_socks_patch, resolve_uri, seed_everything  # noqa
@@ -45,87 +42,69 @@ from .train import (
 from .tune import make_objective
 from .utils import (
     _instantiate,
-    get_current_git_branch,
-    get_git_hash,
     get_pos_ratios,
     get_pos_weights,
-    resolve_env_config_path,
 )
 
 if TYPE_CHECKING:
     from .core.model import PhenologyModel
+    from .config import Config
 
 mlflow.enable_system_metrics_logging()
 mlflow.system_metrics.set_system_metrics_sampling_interval(10)
 mlflow.system_metrics.set_system_metrics_samples_before_logging(3)
 
+COMMANDS: dict[str, callable] = {}
 
-def train_cmd(args, configs: Config):
-    # Set RNG seed across Python random, numpy, torch, cuda
-    seed_everything(args.seed, set_cuda_deterministic=False)
 
-    best_objective = 1e-5
+def _command(name: str):
+    def decorator(fn):
+        COMMANDS[name] = fn
+        return fn
 
-    # Fast fail if in colab without GPU
-    if not cuda.is_available() and configs.config_path == Path("configs/colab.yaml"):
+    return decorator
+
+
+def _require_colab_gpu(cfg: DictConfig) -> None:
+    if cfg.env_name == "colab" and not cuda.is_available():
         raise RuntimeError(
-            f"Attempted to load {configs.config_path} on a non-gpu colab session"
+            f"Attempted to load env=colab on a non-gpu session (env_name={cfg.env_name})"
         )
 
-    device = get_device()
 
+def _log_resolved_config(cfg: DictConfig, runtime) -> None:
+    payload = resolved_container(cfg)
+    mlflow.log_dict(payload, "configs.json")
+    mlflow.log_params({"git_branch": runtime.git_branch})
+    mlflow.log_params({"git_hash": runtime.git_hash})
+    mlflow.log_params(runtime.dataset_params.to_dict())
+    mlflow.log_params(runtime.dataloaders_params.to_dict())
+
+
+def _log_run_file() -> None:
+    log_path = Path.cwd() / "log.log"
+    if log_path.exists():
+        mlflow.log_artifact(str(log_path))
+
+
+@_command("train")
+def train_cmd(cfg: DictConfig):
+    runtime = cfg_to_runtime(cfg)
+    seed_everything(cfg.seed, set_cuda_deterministic=False)
+    _require_colab_gpu(cfg)
+
+    device = get_device()
     print("Connecting to mlflow")
     mlflow.set_tracking_uri(resolve_uri())
-
     print("Initalizing experiment")
 
-    data = build_data_pipeline(configs, args.backbone, device, seed=args.seed)
+    data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
+    model_params = model_params_from_cfg(cfg.model)
+    optim_params = optimizer_params_from_cfg(cfg)
+    scheduler_params = scheduler_params_from_cfg(cfg)
+    training_params = training_params_from_cfg(cfg, best_objective=1e-5)
 
-    # // Optimiser params
-    optim_params = OptimizerParams(
-        base_lr=args.base_lr,
-    )
-
-    # // Scheduler params
-    scheduler_params = SchedulerParams(
-        warmup_epochs=args.warmup_epochs, total_epoch=args.epochs
-    )
-
-    # // Model params
-    model_params = ModelParams(
-        args.backbone,
-        architecture=args.architecture,
-        head_neurons=args.head_neurons,
-        head_outputs=1,
-        head_dropout_prob=args.head_dropout,
-        attention_neurons=args.attention_neurons,
-        attention_dropout_prob=args.attention_dropout,
-        start_unfreezed=args.start_unfreezed,
-        gated=args.gated,
-        proj_dim=args.proj_dim,
-        cross_attn_heads=args.cross_attn_heads,
-        cross_attn_dropout=args.cross_attn_dropout,
-        max_images_per_obs=args.max_images_per_obs,
-        checkpoint_path=args.checkpoint_path,
-    )
-
-    training_params = TrainingParams(
-        epochs=args.epochs,
-        stopping_patience=args.stopping_patience,
-        unfreeze=args.unfreeze,
-        unfreezing_patience=args.unfreezing_patience,
-        unfreezing_cooldown=args.unfreezing_cooldown,
-        starting_block=args.start_unfreezed,
-        block_per_stage=args.block_per_stage,
-        max_stages=args.max_stages,
-        best_objective=best_objective,
-        seed=args.seed,
-        log_step_interval=args.log_step_interval,
-        backbone_decay=args.backbone_decay,
-        accumulation_steps=configs.dataloaders_params.gradient_accumulation_steps,
-    )
-
-    mlflow.set_experiment(args.experiment_name)
+    mlflow.set_experiment(cfg.experiment_name)
 
     with mlflow.start_run() as parent_run:
         parent_run_id = parent_run.info.run_id
@@ -133,14 +112,9 @@ def train_cmd(args, configs: Config):
         print(f"MLflow Run ID: {parent_run_id}")
         print(f"{'=' * 60}\n")
 
-        mlflow.log_dict(configs.to_dict(), "configs.json")
-        mlflow.log_params({"git_branch": configs.git_branch})
-        mlflow.log_params({"git_hash": configs.git_hash})
-        mlflow.log_params(configs.dataset_params.to_dict())
-        mlflow.log_params(configs.dataloaders_params.to_dict())
-
+        _log_resolved_config(cfg, runtime)
         train.run_training(
-            configs=configs,
+            configs=runtime,
             model_params=model_params,
             optim_params=optim_params,
             scheduler_params=scheduler_params,
@@ -148,35 +122,23 @@ def train_cmd(args, configs: Config):
             data=data,
             device=device,
         )
-
-        """
-        # Log and register best model
-        pytorch.log_model(best_model, "cv_inat")
-        model_uri = f"runs:/{parent_run_id}/cv_inat"
-        mlflow.register_model(model_uri, "cv_inat")
-        """
-
-        # Log accumulated run logs to MLflow
-        log_path = Path.cwd() / "log.log"
-        if log_path.exists():
-            mlflow.log_artifact(str(log_path))
+        _log_run_file()
 
 
-def tune_cmd(args, configs: Config):
-
-    # Fast fail if in colab without GPU
-    if not cuda.is_available() and configs.config_path == Path("configs/colab.yaml"):
-        raise RuntimeError(
-            f"Attempted to load {configs.config_path} on a non-gpu colab session"
-        )
-
+@_command("tune")
+def tune_cmd(cfg: DictConfig):
+    runtime = cfg_to_runtime(cfg)
+    _require_colab_gpu(cfg)
     device = get_device()
     mlflow.set_tracking_uri(resolve_uri())
-    mlflow.set_experiment(args.experiment_name)
-    seed_everything(args.seed, set_cuda_deterministic=False)
+    mlflow.set_experiment(cfg.experiment_name)
+    seed_everything(cfg.seed, set_cuda_deterministic=False)
 
     data = build_data_pipeline(
-        configs=configs, backbone_name=args.backbone, device=device, seed=args.seed
+        configs=runtime,
+        backbone_name=cfg.model.backbone,
+        device=device,
+        seed=cfg.seed,
     )
 
     with mlflow.start_run() as parent_run:
@@ -185,54 +147,49 @@ def tune_cmd(args, configs: Config):
         print(f"MLflow Run ID: {parent_run_id}")
         print(f"{'=' * 60}\n")
 
-        study_name = args.study_name or f"{args.experiment_name}_{parent_run_id[:8]}"
-
-        tune_params = FineTuneParams(
-            n_trials=args.n_trials,
-            timeout=args.timeout,
-            sampler=args.sampler,
-            pruner=args.pruner,
-            study_name=study_name,
-            subsample_frac=args.subsample,
-        )
-
-        mlflow.log_dict(tune_params.to_dict(), "tune_params.json")
-        mlflow.log_params({"git_branch": configs.git_branch})
-        mlflow.log_params({"git_hash": configs.git_hash})
-        mlflow.log_params(configs.dataset_params.to_dict())
-        mlflow.log_params(configs.dataloaders_params.to_dict())
+        study_name = cfg.tune.study_name or f"{cfg.experiment_name}_{parent_run_id[:8]}"
+        tune_params = {
+            "n_trials": cfg.tune.n_trials,
+            "timeout": cfg.tune.timeout,
+            "sampler": cfg.tune.sampler,
+            "pruner": cfg.tune.pruner,
+            "study_name": study_name,
+            "subsample_frac": cfg.tune.subsample_frac,
+            "search_space": cfg.tune.search_space,
+            "resume": cfg.tune.resume,
+        }
+        mlflow.log_dict(tune_params, "tune_params.json")
+        _log_resolved_config(cfg, runtime)
         mlflow.set_tag("optuna.study_name", study_name)
 
         study = optuna.create_study(
             study_name=study_name,
-            storage=configs.paths_params.optuna_storage,
-            load_if_exists=args.resume,
-            direction="maximize",  # we want the highest pr_norm_excess_macro
-            sampler=_instantiate(OPTUNA_SAMPLERS, args.sampler, {"seed": args.seed}),
+            storage=runtime.paths_params.optuna_storage,
+            load_if_exists=bool(cfg.tune.resume),
+            direction="maximize",
+            sampler=_instantiate(OPTUNA_SAMPLERS, cfg.tune.sampler, {"seed": cfg.seed}),
             pruner=_instantiate(
                 OPTUNA_PRUNERS,
-                args.pruner,
+                cfg.tune.pruner,
                 {"n_startup_trials": 3, "n_warmup_steps": 2},
             ),
         )
         study.set_user_attr("mlflow_run_id", parent_run_id)
-        study.set_user_attr("mlflow_experiment", args.experiment_name)
+        study.set_user_attr("mlflow_experiment", cfg.experiment_name)
 
         objective = make_objective(
-            configs=configs,
+            configs=runtime,
             data=data,
-            base_args=args,
-            search_space=SEARCH_SPACES[args.search_space],
-            subsample_frac=args.subsample,
+            cfg=cfg,
+            search_space=SEARCH_SPACES[cfg.tune.search_space],
+            subsample_frac=cfg.tune.subsample_frac,
         )
-
-        callbacks = []
 
         study.optimize(
             objective,
-            n_trials=args.n_trials,
+            n_trials=cfg.tune.n_trials,
             show_progress_bar=False,
-            callbacks=callbacks,
+            callbacks=[],
         )
 
         mlflow.log_params({f"best_{k}": v for k, v in study.best_params.items()})
@@ -245,99 +202,52 @@ def tune_cmd(args, configs: Config):
         print(f"[Optuna] Best params: {study.best_params}")
         print("Retraining with full model & best params")
 
-        # // Optimiser params
-        optim_params = OptimizerParams(
-            base_lr=study.best_params.get("base_lr"),
-        )
-
-        # // Scheduler params
-        scheduler_params = SchedulerParams(
-            warmup_epochs=args.warmup_epochs, total_epoch=args.epochs
-        )
-
-        # // Model params
-        model_params = ModelParams(
-            args.backbone,
-            architecture=args.architecture,
-            head_neurons=256,
-            head_outputs=1,
-            head_dropout_prob=study.best_params.get("head_dropout_prob"),
-            attention_neurons=study.best_params.get("attention_neurons"),
-            attention_dropout_prob=study.best_params.get("attention_dropout_prob"),
-            start_unfreezed=args.start_unfreezed,
-            gated=study.best_params.get("gated"),
-            proj_dim=study.best_params.get("proj_dim", args.proj_dim),
-            cross_attn_heads=study.best_params.get(
-                "cross_attn_heads", args.cross_attn_heads
-            ),
-            cross_attn_dropout=study.best_params.get(
-                "cross_attn_dropout", args.cross_attn_dropout
-            ),
-            max_images_per_obs=args.max_images_per_obs,
-            checkpoint_path=args.checkpoint_path,
-        )
-
-        training_params = TrainingParams(
-            epochs=args.epochs,
-            stopping_patience=args.stopping_patience,
-            unfreeze=args.unfreeze,
-            unfreezing_patience=args.unfreezing_patience,
-            unfreezing_cooldown=args.unfreezing_cooldown,
-            starting_block=args.start_unfreezed,
-            block_per_stage=args.block_per_stage,
-            max_stages=args.max_stages,
+        best = study.best_params
+        model_params = model_params_from_cfg(cfg.model, **best)
+        training_params = training_params_from_cfg(
+            cfg,
             best_objective=1e-5,
-            seed=args.seed,
-            log_step_interval=args.log_step_interval,
-            backbone_decay=study.best_params.get("backbone_decay"),
-            accumulation_steps=configs.dataloaders_params.gradient_accumulation_steps,
+            backbone_decay=best.get("backbone_decay"),
         )
-
         train.run_training(
-            configs=configs,
+            configs=runtime,
             model_params=model_params,
-            optim_params=optim_params,
-            scheduler_params=scheduler_params,
+            optim_params=optimizer_params_from_cfg(
+                cfg, base_lr=best.get("base_lr", cfg.train.base_lr)
+            ),
+            scheduler_params=scheduler_params_from_cfg(cfg),
             training_params=training_params,
             data=data,
             device=device,
         )
-
-        # Log accumulated run logs to MLflow
-        log_path = Path.cwd() / "log.log"
-        if log_path.exists():
-            mlflow.log_artifact(str(log_path))
+        _log_run_file()
 
 
-def inference_cmd(args, configs: Config):
+@_command("predict")
+def inference_cmd(cfg: DictConfig):
+    runtime = cfg_to_runtime(cfg)
     photo_params = IngestPhotosParams()
-    print(args)
     inference_params = InferenceParams(
-        args.model_name,
-        args.model_version,
-        db_path=configs.paths_params.inference_db_path,
-        photo_target_dir=configs.paths_params.photo_target_dir,
-        sql_dir=configs.paths_params.sql_dir,
+        cfg.predict.model_name,
+        cfg.predict.model_version,
+        db_path=runtime.paths_params.inference_db_path,
+        photo_target_dir=runtime.paths_params.photo_target_dir,
+        sql_dir=runtime.paths_params.sql_dir,
     )
     pipeline = InatInferencePipeline.from_params(inference_params)
-    pipeline.execute(args.urls, photo_params)
-    pass
+    urls = OmegaConf.to_container(cfg.predict.urls) if cfg.predict.urls else None
+    pipeline.execute(urls, photo_params)
 
 
-def val_cmd(args, configs: Config):
-
+@_command("val")
+def val_cmd(cfg: DictConfig):
+    runtime = cfg_to_runtime(cfg)
     print("Connecting to mlflow")
     mlflow.set_tracking_uri(resolve_uri())
-    # Set test
-    configs.test = args.test
-    device = set_device(args.device)
+    device = set_device(cfg.val.device)
+    model_uri = f"models:/{cfg.val.model_name}/{cfg.val.model_version}"
 
-    # Construct the model URI
-    model_uri = f"models:/{args.model_name}/{args.model_version}"
-
-    # Load the model
     try:
-        # Fall back to legacy models
         python_model: PhenologyModel = mlflow.pytorch.load_model(
             model_uri, map_location=device
         )
@@ -347,13 +257,13 @@ def val_cmd(args, configs: Config):
         python_model: PhenologyModel = model._model_impl.python_model.model
 
     datasets = build_datasets(
-        configs, python_model.backbone.get_transforms(), seed=args.seed
+        runtime, python_model.backbone.get_transforms(), seed=cfg.seed
     )
     _, val_loader, _ = build_pipeline_dataloaders(
-        datasets, configs.dataloaders_params, seed=args.seed
+        datasets, runtime.dataloaders_params, seed=cfg.seed
     )
 
-    pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
+    pos_weights = get_pos_weights(datasets[0], runtime.dataset_params, device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights, reduction="none")
 
     eval_metrics, _ = train.evaluate(
@@ -368,21 +278,16 @@ def val_cmd(args, configs: Config):
 
     pprint(eval_metrics)
 
-    if not getattr(args, "no_db", False):
-        eval_db_path = (
-            getattr(args, "eval_db_path", None) or configs.paths_params.eval_db_path
-        )
-        dataset_path = configs.paths_params.db_path
-        dataset_table = configs.dataset_params.source_table
-
+    if not cfg.val.no_db:
+        eval_db_path = cfg.val.eval_db_path or runtime.paths_params.eval_db_path
         eval_id = log_model_evaluation(
             eval_db_path=eval_db_path,
-            model_name=args.model_name,
-            model_version=args.model_version,
-            dataset_path=dataset_path,
-            dataset_table=dataset_table,
-            seed=args.seed,
-            is_test_mode=args.test,
+            model_name=cfg.val.model_name,
+            model_version=cfg.val.model_version,
+            dataset_path=runtime.paths_params.db_path,
+            dataset_table=runtime.dataset_params.source_table,
+            seed=cfg.seed,
+            is_test_mode=cfg.test,
             metrics=eval_metrics,
         )
         print(
@@ -391,424 +296,66 @@ def val_cmd(args, configs: Config):
         )
 
 
-def list_model_cmd(args, configs: Config):
+@_command("list")
+def list_model_cmd(cfg: DictConfig):
     from mlflow import MlflowClient
 
     print("Connecting to mlflow")
-
     mlflow.set_tracking_uri(resolve_uri())
-
-    # Initialize the client
     client = MlflowClient()
-
-    # Search for all registered models
     registered_models = client.search_registered_models()
-    # Fetch all registered models
-
-    # Print out the names of the models
     for rm in registered_models:
         print(f"--- Model: {rm.name} ---")
         print(f"Creation Timestamp: {rm.creation_timestamp}")
         print(f"Last Updated: {rm.last_updated_timestamp}")
-
-        # Iterate through individual versions of the model
         for version in rm.latest_versions:
             print(f"  -> Version: {version.version} | Stage: {version.current_stage}")
 
 
-def test_cmd(args, configs: Config):
-    """
-
-    # Initialise Data loaders params
-    if cuda.is_available():
-        dataloader_params = DataLoadersParams(
-            batch_size=32, num_workers=2, pin_memory=True, persistent_workers=True
-        )
-    else:
-        dataloader_params = DataLoadersParams(
-            batch_size=16, num_workers=0, pin_memory=False, persistent_workers=False
-        )
-    configs.dataloaders_params = dataloader_params
-    model_params = ModelParams(
-        backbone=getattr(args, "backbone", "efficientnet"),
-        architecture=getattr(args, "architecture", "mil_pooling"),
-        head_neurons=256,
-        head_outputs=1,
-        head_dropout_prob=0.5,
-        attention_neurons=128,
-        attention_dropout_prob=0.1,
-    )
-    device = get_device()
-    model = build_pipeline_model(device, model_params)
-    criterion = nn.BCEWithLogitsLoss()
-
-    # Dummy optimiser
-    optimizer = build_pipeline_optimizer(model, OptimizerParams())
-
-    # Tes loaders
-    loaders = build_pipeline_dataloaders(configs, model)
-    model, optimizer, eval_metrics, previous_run_id = load_checkpoint(
-        configs.paths_params.checkpoint_path, model=model, optimizer=optimizer
-    )
-
-    test.execute(device, model, loaders[2], criterion)
-    """
+@_command("test")
+def test_cmd(cfg: DictConfig):
+    print("test command is not implemented")
 
 
-def status_cmd(args, configs: Config):
-    status(configs)
+@_command("status")
+def status_cmd(cfg: DictConfig):
+    status(cfg_to_runtime(cfg))
 
 
-def cleanlab_cmd(args, configs: Config):
+@_command("cleanlab")
+def cleanlab_cmd(cfg: DictConfig):
     from .cleanlab import run_cleanlab_cv
 
-    config_path = getattr(args, "config_file", None) or Path("configs/cleanlab.yaml")
-    run_cleanlab_cv(
-        config_path=config_path,
-        test_mode=getattr(args, "test", False),
-        test_fraction=getattr(args, "test_frac", 0.05),
-    )
-    return 0
+    return run_cleanlab_cv(cfg)
 
 
-def create_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="torch_pipe")
-    subparsers = parser.add_subparsers(
-        title="commands", description="Available commands"
-    )
-
-    # Train command
-    train_parser = subparsers.add_parser("train", help="Train model")
-    add_train_args(train_parser)
-    add_hyperparams_args(train_parser)
-    add_common_args(train_parser)
-    add_test_args(train_parser)
-    train_parser.set_defaults(func=train_cmd)
-
-    # Tune command
-    tune_parser = subparsers.add_parser("tune", help="Fine tune model")
-    add_tune_args(tune_parser)
-    add_train_args(tune_parser)
-    add_hyperparams_args(tune_parser)
-    add_test_args(tune_parser)
-    add_common_args(tune_parser)
-    tune_parser.set_defaults(func=tune_cmd)
-
-    # Val command
-    val_parser = subparsers.add_parser("val", help="Run inference on val set")
-    add_val_args(val_parser)
-    add_common_args(val_parser)
-    add_test_args(val_parser)
-    val_parser.set_defaults(func=val_cmd)
-
-    # Inference command
-    inference_parser = subparsers.add_parser("predict", help="Run inference")
-    add_inference_args(inference_parser)
-    add_common_args(inference_parser)
-
-    inference_parser.set_defaults(func=inference_cmd)
-    inference_subparsers = inference_parser.add_subparsers(
-        title="source", help="Available modules"
-    )
-
-    inference_inat_parser = inference_subparsers.add_parser(
-        "inat", help="run with inat"
-    )
-    inference_inat_parser.add_argument("--urls", type=parse_comma_list)
-    add_inference_args(inference_inat_parser)
-
-    inference_batch_parser = inference_subparsers.add_parser(
-        "batch", help="Batch inference "
-    )
-    inference_batch_parser.add_argument("--ids", type=parse_comma_list)
-
-    # List model command
-    list_parser = subparsers.add_parser("list", help="List registered models")
-    list_parser.set_defaults(func=list_model_cmd)
-
-    # Test command
-    test_parser = subparsers.add_parser("test", help="Test model")
-    # add_train_args(train_parser)
-    test_parser.set_defaults(func=test_cmd)
-
-    # Status command
-    status_parser = subparsers.add_parser("status", help="Pipeline status")
-    status_parser.set_defaults(func=status_cmd)
-
-    # Cleanlab command
-    cleanlab_parser = subparsers.add_parser(
-        "cleanlab", help="Run K-fold CV and cleanlab error audit"
-    )
-    add_cleanlab_args(cleanlab_parser)
-    add_test_args(cleanlab_parser)
-    cleanlab_parser.set_defaults(func=cleanlab_cmd)
-    return parser
+def _inject_colab_env() -> None:
+    if not os.environ.get("COLAB_GPU"):
+        return
+    if any(arg.startswith("env=") for arg in sys.argv[1:]):
+        return
+    sys.argv.append("env=colab")
 
 
-def add_cleanlab_args(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        "--config-file",
-        type=Path,
-        default=Path("configs/cleanlab.yaml"),
-        help="Path to cleanlab config YAML (default: configs/cleanlab.yaml)",
-    )
+@hydra.main(version_base="1.3", config_path=str(CONFIG_DIR), config_name="config")
+def hydra_entry(cfg: DictConfig):
+    log_path = Path.cwd() / "log.log"
+    logger = init_logger(log_path, logging.INFO)
+    logger.info("Starting")
+    logger.debug("Configs set up")
 
-
-def add_test_args(parser: argparse.ArgumentParser):
-    parser.add_argument("--test", "-t", action="store_true", default=False)
-    parser.add_argument(
-        "--test-frac",
-        "-tf",
-        help="Fraction of intial dataset to keep for testing",
-        type=float,
-        default=0.33,
-    )
-
-
-def add_common_args(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        "--seed",
-        "-s",
-        type=int,
-        default=42,
-        help="Random seed for pipeline reproducibility",
-    )
-
-
-def add_inference_args(parser: argparse.ArgumentParser):
-    parser.add_argument("--model-version", "-mv", type=int, default=1)
-    parser.add_argument("--model-name", "-mn", type=str, default="cv_pheno_bioclip")
-    parser.add_argument("--device", "-d", type=str, default="cuda")
-
-
-def add_val_args(parser: argparse.ArgumentParser):
-    parser.add_argument("--model-version", "-mv", type=int, default=1)
-    parser.add_argument("--model-name", "-mn", type=str, default="cv_inat")
-    parser.add_argument("--device", "-d", type=str, default="cuda")
-    parser.add_argument(
-        "--eval_db_path",
-        type=str,
-        default=None,
-        help="Path to DuckDB database for logging model evaluation results",
-    )
-    parser.add_argument(
-        "--no_db",
-        action="store_true",
-        default=False,
-        help="Disable committing evaluation results to the DuckDB database",
-    )
-
-
-def add_tune_args(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        "--search-space", type=str, choices=list(SEARCH_SPACES.keys()), default="coarse"
-    )
-    parser.add_argument("--n-trials", type=int, default=20)
-    parser.add_argument(
-        "--subsample",
-        type=float,
-        default=1.0,
-        help=(
-            "Fraction of the training set used per Optuna trial (0 < subsample ≤ 1.0). "
-            "Val/test splits are unaffected. Speeds up individual trials."
-        ),
-    )
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=1000,
-        help="optional wall-clock cutoff in seconds",
-    )
-    parser.add_argument(
-        "--sampler", choices=list(OPTUNA_SAMPLERS.keys()), default="tpe"
-    )
-    parser.add_argument(
-        "--pruner", choices=list(OPTUNA_PRUNERS.keys()), default="median"
-    )
-    parser.add_argument(
-        "--study-name",
-        type=str,
-        default=None,
-        help="""Optuna study name. If omitted,
-        defaults to <experiment_name>_<parent_run_id>""",
-    )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        default=False,
-        help="Resume existing study if study-name already exists in storage",
-    )
-
-
-def add_hyperparams_args(parser: argparse.ArgumentParser):
-    shared = parser.add_argument_group("shared hyperparameters")
-    shared.add_argument("--base-lr", "-lr", type=float, default=0.0001)
-    shared.add_argument("--backbone-decay", type=float, default=0.90)
-    shared.add_argument(
-        "--architecture",
-        type=str,
-        choices=["mil_pooling", "cross_attention"],
-        default="mil_pooling",
-        help="""Model aggregation architecture:
-        'mil_pooling' (default) or 'cross_attention'.""",
-    )
-    shared.add_argument(
-        "--checkpoint-path",
-        dest="checkpoint_path",
-        type=str,
-        default=None,
-        help="Path to custom pretrained backbone checkpoint (.pth file)",
-    )
-
-    mil = parser.add_argument_group(
-        "MIL pooling hyperparameters (architecture=mil_pooling)"
-    )
-    mil.add_argument("--head-neurons", type=int, default=256)
-    mil.add_argument("--attention-neurons", type=int, default=128)
-    mil.add_argument(
-        "--gated",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="""Use gated attention pooling mechanism (default: True).
-        Use --no-gated for simple attention.""",
-    )
-    mil.add_argument(
-        "--head-dropout",
-        type=float,
-        default=0.5,
-        help="Dropout probability inside the classifier head MLP (default: 0.5)",
-    )
-    mil.add_argument(
-        "--attention-dropout",
-        type=float,
-        default=0.1,
-        help="Dropout applied to softmax attention weights (MIL pooling only).",
-    )
-
-    xattn = parser.add_argument_group(
-        "cross-attention hyperparameters (architecture=cross_attention)"
-    )
-    xattn.add_argument(
-        "--proj-dim",
-        dest="proj_dim",
-        type=int,
-        default=256,
-        help="Projection dimension for cross-attention patch neck (default: 256)",
-    )
-    xattn.add_argument(
-        "--cross-attn-heads",
-        dest="cross_attn_heads",
-        type=int,
-        default=8,
-        help="Number of attention heads for cross-attention block (default: 8)",
-    )
-    xattn.add_argument(
-        "--cross-attn-dropout",
-        dest="cross_attn_dropout",
-        type=float,
-        default=0.1,
-        help="Dropout probability for cross-attention block (default: 0.1)",
-    )
-    xattn.add_argument(
-        "--max-images-per-obs",
-        dest="max_images_per_obs",
-        type=int,
-        default=64,
-        help="Maximum images per obs for 1D image index embeddings (default: 64)",
-    )
-
-
-def add_train_args(parser: argparse.ArgumentParser):
-    backbone_models = list(BACKBONE_REGISTRY.keys())
-    parser.add_argument(
-        "--backbone", type=str, choices=backbone_models, default=backbone_models[0]
-    )
-    parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--start_unfreezed", type=int, default=1)
-    parser.add_argument("--warmup-epochs", "-w", type=int, default=3)
-    parser.add_argument("--stopping-patience", "-sp", type=int, default=3)
-    parser.add_argument("--unfreezing-patience", "-up", type=int, default=3)
-    parser.add_argument("--unfreezing-cooldown", type=int, default=3)
-    parser.add_argument("--max-stages", type=int, default=3)
-    parser.add_argument("--block-per-stage", type=int, default=1)
-    parser.add_argument(
-        "--unfreeze",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enables progressive backbone unfreezing",
-    )
-    parser.add_argument("--experiment-name", type=str, default="cv_inat_v0.4")
-    parser.add_argument(
-        "--log_step_interval",
-        type=int,
-        default=10,
-        help="Interval of steps for logging batch metrics to MLflow",
-    )
+    command = cfg.command
+    if command not in COMMANDS:
+        raise ValueError(
+            f"Unknown command={command!r}. Choose one of: {sorted(COMMANDS)}"
+        )
+    return COMMANDS[command](cfg)
 
 
 def main():
     load_dotenv()
-    parser = create_parser()
-    args = parser.parse_args()
-
-    # Setup logging
-    log_path = Path.cwd() / "log.log"
-    logger = init_logger(log_path, logging.INFO)
-    logger.info("Starting")
-
-    # Read environment specific configs
-    config_path = resolve_env_config_path()
-    with open(config_path, "r") as file:
-        env_configs = yaml.safe_load(file)
-
-    # Paths
-    paths_params = PathsParams(**env_configs["paths"])
-
-    # Dataset
-    dataset_kwargs = dict(env_configs["dataset_params"])
-    test_frac = getattr(args, "test-frac", None)
-    if test_frac is not None:
-        dataset_kwargs["testing_frac"] = test_frac
-    dataset_params = DatasetParams(**dataset_kwargs)
-
-    # Data loader
-    dataloader_params = DataLoadersParams(**env_configs["dataloader_params"])
-    hardware_profile = resolve_hardware_profile()
-
-    # Assemble configs
-    configs = Config(
-        config_path,
-        paths_params=paths_params,
-        dataloaders_params=dataloader_params,
-        dataset_params=dataset_params,
-        hardware_profile=hardware_profile,
-        git_branch=get_current_git_branch(),
-        git_hash=get_git_hash(),
-    )
-
-    # Set test
-    test = getattr(args, "test", None)
-    if test is not None:
-        configs.test = test
-
-    logger.debug("Configs set up")
-
-    # Execute command
-    if hasattr(args, "func"):
-        exit_code = args.func(args, configs)
-        sys.exit(exit_code)
-    """
-    except KeyboardInterrupt:
-        print("\nInterrupted by user")
-        sys.exit(130)
-    except Exception as e:
-        print(f'Unexpected error {e}')
-        logger.error(e)
-    """
-
-
-def parse_comma_list(s):
-    return [x.strip() for x in s.split(",")]
+    _inject_colab_env()
+    hydra_entry()
 
 
 if __name__ == "__main__":

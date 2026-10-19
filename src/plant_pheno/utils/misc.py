@@ -85,15 +85,6 @@ def format_dict(d: dict) -> str:
     return pprint.pformat(d, indent=4)
 
 
-def resolve_env_config_path() -> Path:
-    if os.environ.get("COLAB_GPU"):
-        config_path = Path("configs/colab.yaml")
-    else:
-        config_path = Path("configs/local.yaml")
-    logger.debug(f"Resolved config path '{config_path}'")
-    return config_path
-
-
 def unfreeze(block: nn.Module):
     count = 0
     for p in block.parameters(recurse=True):

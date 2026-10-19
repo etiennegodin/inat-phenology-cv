@@ -28,13 +28,93 @@ class IngestPhotosParams:
 
 @dataclass
 class FineTuneParams:
-    n_trials: int
-    timeout: int
-    sampler: str
-    pruner: str
-    study_name: str
-    subsample_frac: float
-    # cv_folds: int
+    n_trials: int = 20
+    timeout: int = 1000
+    sampler: str = "tpe"
+    pruner: str = "median"
+    study_name: str | None = None
+    subsample_frac: float = 1.0
+    search_space: str = "coarse"
+    resume: bool = False
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class CleanlabParams:
+    n_folds: int = 5
+    table_name: str = "oof_predictions"
+    export_csv: bool = True
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class ValParams:
+    model_name: str = "cv_inat"
+    model_version: int = 1
+    device: str = "cuda"
+    eval_db_path: str | None = None
+    no_db: bool = False
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class PredictParams:
+    model_name: str = "cv_pheno_bioclip"
+    model_version: int = 1
+    device: str = "cuda"
+    urls: list[str] | None = None
+    ids: list[str] | None = None
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class TrainConfig:
+    """Hydra-facing training section (optimizer/scheduler fields included)."""
+
+    epochs: int = 10
+    stopping_patience: int = 3
+    unfreeze: bool = False
+    unfreezing_patience: int = 3
+    unfreezing_cooldown: int = 3
+    starting_block: int = 1
+    max_stages: int = 3
+    block_per_stage: int = 1
+    best_objective: float = 1e-5
+    backbone_decay: float = 0.9
+    log_step_interval: int = 10
+    base_lr: float = 0.0001
+    warmup_epochs: int = 3
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class ModelConfig:
+    """Hydra-facing model section; converted to ModelParams at runtime."""
+
+    backbone: str = "bioclip"
+    architecture: str = "mil_pooling"
+    start_unfreezed: int = 1
+    checkpoint_path: str | None = None
+    head_neurons: int = 256
+    head_outputs: int = 1
+    head_dropout_prob: float = 0.5
+    attention_neurons: int = 128
+    attention_dropout_prob: float = 0.1
+    gated: bool = True
+    proj_dim: int = 256
+    cross_attn_heads: int = 8
+    cross_attn_dropout: float = 0.1
+    max_images_per_obs: int = 64
 
     def to_dict(self):
         return asdict(self)

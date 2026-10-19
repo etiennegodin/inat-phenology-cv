@@ -1,0 +1,25 @@
+# @package _global_
+env_name: colab
+
+paths:
+  root: /content/inat-phenology-cv
+  data_root: ${paths.root}/data
+  image_dir: /content/images
+  db_path: /content/data/cv_photos4.parquet
+  checkpoint_path: /content/drive/MyDrive/inat-phenology-cv/checkpoints
+  eval_db_path: /content/drive/MyDrive/inat-phenology-cv/data/model_evaluations.duckdb
+  inference_db_path: /content/drive/MyDrive/inat-phenology-cv/data/inference.duckdb
+  sql_dir: /content/drive/MyDrive/inat-phenology-cv/queries
+  photo_target_dir: /content/data/
+  optuna_storage: sqlite:////content/drive/MyDrive/inat-phenology-cv/data/optuna.sqlite3
+  cleanlab_db_path: /content/drive/MyDrive/inat-phenology-cv/data/cleanlab.duckdb
+  corrections_dir: /content/drive/MyDrive/inat-phenology-cv/data/label_corrections
+
+dataloaders:
+  batch_size: 256
+  max_images: 1024
+  num_workers: 2
+  pin_memory: true
+  persistent_workers: true
+  use_max_images: true
+  gradient_accumulation_steps: 1

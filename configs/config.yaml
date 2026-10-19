@@ -1,0 +1,48 @@
+# Root config. Hydra composes this with config groups listed under defaults.
+#
+# Groups (pick one YAML from each folder):
+#   env            machine paths + dataloader sizes (local vs colab)
+#   architecture   mil_pooling vs cross_attention heads
+#   command        which CLI entry to run
+#   experiment     optional named recipe (baseline, unfreeze, ...)
+#
+# Later defaults override earlier ones. `_self_` is this file's own keys.
+#
+# Inspect the fully resolved experiment (no training):
+#   torch_pipe --cfg job
+#   torch_pipe command=cleanlab env=colab --cfg job
+defaults:
+  - config_schema
+  - env: local
+  - architecture: mil_pooling
+  - command: train
+  - experiment: null
+  - _self_
+
+# Shared dataset schema (not machine-specific)
+dataset:
+  source_table: cv_photos4
+  idx_col: observation_id
+  photo_idx_col: photo_id
+  label_col: label
+  train_frac: 0.8
+  val_frac: 0.1
+  test_frac: 0.1
+  testing_frac: 1.0
+
+seed: 42
+test: false
+test_frac: 1.0
+experiment_name: cv_inat_v0.4
+
+model:
+  backbone: bioclip
+  start_unfreezed: 1
+  checkpoint_path: null
+
+# Do not chdir into outputs/; data paths are relative to the repo/CWD.
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: outputs/${command}/${now:%Y-%m-%d}/${now:%H-%M-%S}

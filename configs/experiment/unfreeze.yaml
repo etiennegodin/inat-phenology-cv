@@ -1,0 +1,7 @@
+# @package _global_
+train:
+  unfreeze: true
+  unfreezing_patience: 3
+  unfreezing_cooldown: 3
+  max_stages: 3
+  block_per_stage: 1
