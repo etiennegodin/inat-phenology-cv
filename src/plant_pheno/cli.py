@@ -94,7 +94,7 @@ def train_cmd(args, configs: Config):
     # // Model params
     model_params = ModelParams(
         args.backbone,
-        architecture=getattr(args, "architecture", "mil_pooling"),
+        architecture=args.architecture,
         head_neurons=args.head_neurons,
         head_outputs=1,
         head_dropout_prob=args.head_dropout,
@@ -102,11 +102,11 @@ def train_cmd(args, configs: Config):
         attention_dropout_prob=args.attention_dropout,
         start_unfreezed=args.start_unfreezed,
         gated=args.gated,
-        proj_dim=getattr(args, "proj_dim", 256),
-        cross_attn_heads=getattr(args, "cross_attn_heads", 8),
-        cross_attn_dropout=getattr(args, "cross_attn_dropout", 0.1),
-        max_images_per_obs=getattr(args, "max_images_per_obs", 64),
-        checkpoint_path=getattr(args, "checkpoint_path", None),
+        proj_dim=args.proj_dim,
+        cross_attn_heads=args.cross_attn_heads,
+        cross_attn_dropout=args.cross_attn_dropout,
+        max_images_per_obs=args.max_images_per_obs,
+        checkpoint_path=args.checkpoint_path,
     )
 
     training_params = TrainingParams(
@@ -258,7 +258,7 @@ def tune_cmd(args, configs: Config):
         # // Model params
         model_params = ModelParams(
             args.backbone,
-            architecture=getattr(args, "architecture", "mil_pooling"),
+            architecture=args.architecture,
             head_neurons=256,
             head_outputs=1,
             head_dropout_prob=study.best_params.get("head_dropout_prob"),
@@ -266,15 +266,15 @@ def tune_cmd(args, configs: Config):
             attention_dropout_prob=study.best_params.get("attention_dropout_prob"),
             start_unfreezed=args.start_unfreezed,
             gated=study.best_params.get("gated"),
-            proj_dim=study.best_params.get("proj_dim", getattr(args, "proj_dim", 256)),
+            proj_dim=study.best_params.get("proj_dim", args.proj_dim),
             cross_attn_heads=study.best_params.get(
-                "cross_attn_heads", getattr(args, "cross_attn_heads", 8)
+                "cross_attn_heads", args.cross_attn_heads
             ),
             cross_attn_dropout=study.best_params.get(
-                "cross_attn_dropout", getattr(args, "cross_attn_dropout", 0.1)
+                "cross_attn_dropout", args.cross_attn_dropout
             ),
-            max_images_per_obs=getattr(args, "max_images_per_obs", 64),
-            checkpoint_path=getattr(args, "checkpoint_path", None),
+            max_images_per_obs=args.max_images_per_obs,
+            checkpoint_path=args.checkpoint_path,
         )
 
         training_params = TrainingParams(
@@ -489,6 +489,7 @@ def create_parser() -> argparse.ArgumentParser:
     tune_parser = subparsers.add_parser("tune", help="Fine tune model")
     add_tune_args(tune_parser)
     add_train_args(tune_parser)
+    add_hyperparams_args(tune_parser)
     add_test_args(tune_parser)
     add_common_args(tune_parser)
     tune_parser.set_defaults(func=tune_cmd)
@@ -640,24 +641,10 @@ def add_tune_args(parser: argparse.ArgumentParser):
 
 
 def add_hyperparams_args(parser: argparse.ArgumentParser):
-    parser.add_argument("--base-lr", "-lr", type=float, default=0.0001)
-    parser.add_argument("--head-neurons", type=int, default=256)
-    parser.add_argument("--attention-neurons", type=int, default=128)
-    parser.add_argument("--backbone-decay", type=float, default=0.90)
-    parser.add_argument(
-        "--gated",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="""Use gated attention pooling mechanism (default: True).
-        Use --no-gated for simple attention.""",
-    )
-    parser.add_argument(
-        "--head-dropout",
-        type=float,
-        default=0.5,
-        help="Dropout probability for attention weights (default: 0.5)",
-    )
-    parser.add_argument(
+    shared = parser.add_argument_group("shared hyperparameters")
+    shared.add_argument("--base-lr", "-lr", type=float, default=0.0001)
+    shared.add_argument("--backbone-decay", type=float, default=0.90)
+    shared.add_argument(
         "--architecture",
         type=str,
         choices=["mil_pooling", "cross_attention"],
@@ -665,40 +652,69 @@ def add_hyperparams_args(parser: argparse.ArgumentParser):
         help="""Model aggregation architecture:
         'mil_pooling' (default) or 'cross_attention'.""",
     )
-    parser.add_argument(
+    shared.add_argument(
+        "--checkpoint-path",
+        dest="checkpoint_path",
+        type=str,
+        default=None,
+        help="Path to custom pretrained backbone checkpoint (.pth file)",
+    )
+
+    mil = parser.add_argument_group(
+        "MIL pooling hyperparameters (architecture=mil_pooling)"
+    )
+    mil.add_argument("--head-neurons", type=int, default=256)
+    mil.add_argument("--attention-neurons", type=int, default=128)
+    mil.add_argument(
+        "--gated",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="""Use gated attention pooling mechanism (default: True).
+        Use --no-gated for simple attention.""",
+    )
+    mil.add_argument(
+        "--head-dropout",
+        type=float,
+        default=0.5,
+        help="Dropout probability inside the classifier head MLP (default: 0.5)",
+    )
+    mil.add_argument(
+        "--attention-dropout",
+        type=float,
+        default=0.1,
+        help="Dropout applied to softmax attention weights (MIL pooling only).",
+    )
+
+    xattn = parser.add_argument_group(
+        "cross-attention hyperparameters (architecture=cross_attention)"
+    )
+    xattn.add_argument(
         "--proj-dim",
         dest="proj_dim",
         type=int,
         default=256,
         help="Projection dimension for cross-attention patch neck (default: 256)",
     )
-    parser.add_argument(
+    xattn.add_argument(
         "--cross-attn-heads",
         dest="cross_attn_heads",
         type=int,
         default=8,
         help="Number of attention heads for cross-attention block (default: 8)",
     )
-    parser.add_argument(
+    xattn.add_argument(
         "--cross-attn-dropout",
         dest="cross_attn_dropout",
         type=float,
         default=0.1,
         help="Dropout probability for cross-attention block (default: 0.1)",
     )
-    parser.add_argument(
+    xattn.add_argument(
         "--max-images-per-obs",
         dest="max_images_per_obs",
         type=int,
-        default=32,
+        default=64,
         help="Maximum images per obs for 1D image index embeddings (default: 64)",
-    )
-    parser.add_argument(
-        "--checkpoint-path",
-        dest="checkpoint_path",
-        type=str,
-        default=None,
-        help="Path to custom pretrained backbone checkpoint (.pth file)",
     )
 
 
