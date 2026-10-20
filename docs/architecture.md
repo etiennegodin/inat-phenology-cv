@@ -1,75 +1,61 @@
-# Architecture and design
+# Architecture
 
-The system separates model construction, experiment control, and data operations so that architecture choices can change without rewriting the surrounding workflow.
+The system keeps model construction, experiment control and data operations apart, so I can swap a backbone or an attention variant without rewriting the training loop.
 
-## Package structure
+## Package layout
 
-The implementation under `src/plant_pheno` is organized by responsibility:
+Everything lives under `src/plant_pheno/`:
 
-- `config/`: Hydra config, runtime resolution, registry-backed choices, and validation
-- `train/`: training loop, metrics, checkpointing, flow control, and data pipeline construction
-- `inference/`: observation syncing, validation, predictor wiring, and prediction logging
-- `tune/`: Optuna objective generation and tuning configuration
-- `core/`: model-building logic and backbone model integration
-- `data/`: dataset construction, persistence, and model evaluation utilities
-- `infra/`: logging, seeding, MLflow URI resolution, and environment utilities
-- `utils/`: shared helpers and class/object instantiation utilities
+| Module | Responsibility |
+|---|---|
+| `cli.py` | `torch_pipe` entry point |
+| `config/` | Hydra composition, registry-backed choices, search spaces, runtime and system resolution |
+| `core/` | Backbone integration, the MIL model, device handling, and the MLflow pyfunc wrapper |
+| `train/` | Dataset, batch sampler, dataloader, workflow and runner, metrics, flow control (stopping and unfreezing), persistence |
+| `tune/` | Optuna objective |
+| `inference/` | Photo sync, record validation, predictor, scoring pipeline |
+| `inat_client/` | iNaturalist API access, split into clients, fetchers and writers |
+| `data/` | DuckDB access, SQL and adapters |
+| `infra/` | Logging, seeding, MLflow helpers, networking |
+| `cleanlab.py`, `review.py`, `register.py`, `val.py`, `status.py` | Command implementations behind the CLI |
 
-## From configuration to model run
+## From config to a run
 
-Hydra configuration selects the environment, command, architecture, and experiment settings. The training workflow resolves those settings, constructs the data pipeline and model, and manages optimization and evaluation:
+Hydra picks four things: the environment (`env`: local or Colab), the action (`command`), the model variant (`architecture`) and optional presets (`experiment`). A run then goes through these steps:
 
-1. Load Hydra configuration.
-2. Resolve runtime settings and paths.
+1. Compose the config and resolve runtime settings and paths.
+2. Detect hardware and decide on dataset caching.
 3. Build the dataset and dataloaders.
-4. Instantiate the selected backbone and prediction head.
-5. Train with configured optimization, metrics, and checkpoint objectives.
-6. Record run metrics and artifacts in MLflow.
-7. Persist checkpoints and evaluation outputs for later inspection or use.
+4. Build the backbone and the attention head.
+5. Train with the configured optimizer, metrics and stopping rules.
+6. Log metrics and artifacts to MLflow, and save checkpoints.
 
-Centralizing model and runtime choices keeps experiments comparable and reduces the need for one-off training scripts.
+Having one config path for everything is what lets me compare runs fairly. Fewer one-off scripts means fewer hidden differences between experiments.
 
-## Multi-image / MIL thinking
+## The model
 
-An observation may contain multiple photos, so image-level evidence must be combined before producing the observation-level prediction. The model stack supports several aggregation strategies, including attention-based weighting of image instances.
+Each photo goes through a pretrained backbone. The default is BioCLIP ViT-B/16, and the backbone is swappable. The photo embeddings are then pooled into one prediction per class.
 
-The model stack supports:
+- **Multi-branch attention (CLAM-MB style):** every class gets its own attention network and classifier head, so each class can focus on different photos. All branches reuse one backbone forward pass.
+- **Per-class sigmoid outputs** handle the multi-label setup.
+- **Gated attention** and **attention dropout** are configurable.
+- **L2 normalization** of the embeddings happens before attention pooling. CLIP-style pretraining only ever trains on normalized vectors, so the raw output magnitude is unconstrained and unreliable.
+- **Variable-length bags:** the model takes a list of per-observation tensors. Photos are stacked within an observation, never across observations.
+- **Memory:** `max_images`, the total number of photos per forward pass, is what actually drives VRAM, not the observation batch size.
 
-- observation pooling and attention-based instance weighting
-- class-specific metrics and loss aggregation
-- per-class objective and training-state tracking
+I also have a cross-attention architecture config alongside the MIL pooling one, so the aggregation strategy is one of the things I'm comparing.
 
-## Configuration model
+## Hardware and caching
 
-The configuration layer is central to how the project is run:
+A `HardwareProfile` reads the machine's resources. A resolver turns it, together with the dataset's memory footprint, into a cache decision, and the dataset is built to match. That's how the same code runs on a 2 GB local GPU and on a Colab T4 or L4. Mixed precision (bf16 and fp16) is supported, and images stay as uint8 until normalization to keep the cache small.
 
-- `env` controls environment assumptions and runtime setup.
-- `command` selects the action: train, tune, val, cleanlab, status, etc.
-- `architecture` selects model or pipeline variants.
-- `experiment` can enable special training behaviors such as progressive unfreezing.
+## Data layer
 
-This keeps model and workflow choices explicit while allowing focused command-line overrides. See [the configuration guide](../configs/README.md) for composition examples.
+Data lives in DuckDB, with a raw and staged pattern. Training and serving databases are separate, so serving can deploy without the training data. Label corrections are an overlay file keyed by observation ID, not in-place edits, so the original labels stay intact.
 
-## Experimentation and evaluation
+## Separation of concerns
 
-The experiment workflow includes:
-
-- epoch-level metrics and class-specific logs
-- validation runs with thresholded and raw predictions
-- attention metrics summarizing per-observation relevance
-- adaptive stopping and checkpoint objectives
-- dataset and hardware-aware runtime decisions
-
-Together, these controls make it possible to compare experiments and inspect more than a single aggregate validation score.
-
-## Inference pipeline
-
-Inference is a separate layer from training. The system can:
-
-- fetch observation records and photo URLs
-- validate the resulting record schema
-- sync local photo assets
-- run a registered model through the predictor
-- log results to the local DuckDB-backed store
-
-The separate inference layer gives model experiments a path into repeatable batch scoring without coupling data synchronization to the training loop.
+- Architecture lives in the model classes.
+- Training strategy (freezing, optimizer parameter groups) lives in the training workflow.
+- Config knows about environments, and nothing else needs to.
+- Inference is a separate layer, so data sync never gets tangled into the training loop. See [inference and deployment](inference-and-deployment.md).

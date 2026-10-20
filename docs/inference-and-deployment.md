@@ -1,53 +1,51 @@
-# Inference and deployment workflow
+# Inference and deployment
 
-## Overview
+## Scoring pipeline
 
-The inference workflow carries a trained model into batch scoring. Given observation records or URLs, it validates the input, synchronizes the associated photos, runs prediction, and persists structured results for downstream analysis.
+1. Fetch observation metadata and photo URLs from iNaturalist.
+2. Validate the raw response (shape, observation ID, photo URLs).
+3. Sync photos to local storage.
+4. Validate the record against the project's rules.
+5. Load the registered model from MLflow.
+6. Predict on each observation's bag of photos.
+7. Apply per-class thresholds and write predictions to DuckDB.
 
-This keeps data preparation, model execution, and prediction storage in a single traceable path from input records to analysis-ready outputs.
+The code is in `src/plant_pheno/inference/` (`sync.py`, `validator.py`, `predictor.py`, `pipeline.py`) and `src/plant_pheno/inat_client/`.
 
-## Inference pipeline steps
+## Two layers of validation
 
-The scoring path is:
+I split validation on purpose:
 
-1. Fetch observation metadata and photo URLs.
-2. Validate record structure and required fields.
-3. Synchronize local image assets.
-4. Load the selected model from MLflow.
-5. Run model inference on the photo bag.
-6. Convert outputs into structured prediction records.
-7. Persist outputs to DuckDB and the surrounding local data store.
+- **Client-level:** is the API response well-formed, and are the IDs and URLs correct? This happens at acquisition time.
+- **Record-level:** do the business rules hold? Pydantic models check this once the photos are synced.
 
-## Supporting components
+Taxon membership (is this a flowering plant?) is a property on the validated record, not a raising validator. A non-flowering observation isn't corrupt data, it's out of scope, and the pipeline should be able to say so without treating it as an error.
 
-The project includes:
+## The registered model
 
-- `InatDataSynchronizer` for preparing local photo and data state
-- `PhenologyPredictor` for model loading and prediction execution
-- `validate_records` / `records_to_dataframe` for record-level validation
-- persisted model results and diagnostics through the local app data stack
+I log the model as an `mlflow.pyfunc.PythonModel` wrapper (`core/pyfunc.py`). My first attempt, `mlflow.pytorch.log_model`, serialized class references with cloudpickle, which broke after refactors. The pyfunc approach is sturdier.
 
-## Deployment model
+The artifact is:
 
-The current deployment pattern is a model-backed workflow rather than a continuously running web endpoint. It is organized around:
+- a lean checkpoint (model weights plus the parameters needed to rebuild the model),
+- a separate JSON file of per-class thresholds, extracted from the evaluation metrics at registration time.
 
-- reproducible training runs
-- MLflow model registration and retrieval
-- data sync and validation before scoring
-- local ingestion of prediction artifacts
+Preprocessing lives inside the artifact, so a caller only provides image paths. The wrapper takes a list of per-observation inputs, which matches how the model handles variable-length bags.
 
-This pattern suits repeated research and batch-scoring workflows where source observations are photo-heavy and local data synchronization is part of the job.
+## Prediction store
 
-## Operational considerations
+Predictions go into DuckDB, following the same raw and staged pattern as the rest of the data layer. The serving schema is separate from the training one on purpose, so serving can be deployed without any training data.
 
-The project is designed with practical concerns in mind:
+Draft tables: observations, photos, models (name, version, thresholds), predictions, and attention weights.
 
-- environment-aware configuration
-- photo synchronization and local cache usage
-- model retrieval from tracked experiment artifacts
-- logging of both predictions and metadata
-- compatibility with Colab and local machine environments
+Predictions and attention weights use composite primary keys, `(observation_id, model_id)` and `(observation_id, model_id, class_name)`, instead of a surrogate ID. Re-running a model on an observation overwrites in place via `ON CONFLICT ... DO UPDATE`, so reruns don't pile up duplicates.
 
-## Current status
+## Operational notes
 
-The inference layer is an active part of the project alongside training and tuning. The workflow is designed for local and Colab-based execution; it should not be mistaken for a hosted prediction API.
+- Config knows about the environment (`local` or `colab`).
+- Photo sync uses a local cache.
+- The model is pulled from tracked MLflow artifacts, so a prediction can be traced back to a run.
+
+## Status
+
+The registered model has run inference end to end on a hand-built set of observations. The sync, validation and database pieces are the part I'm still shaping.
