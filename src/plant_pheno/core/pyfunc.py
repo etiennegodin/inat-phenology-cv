@@ -66,7 +66,7 @@ class PhenologyPyfunc(mlflow.pyfunc.PythonModel):
             observations_ids.append(row["observation_id"])
             image_paths = row["paths"]
             images = [self._load_image(p) for p in image_paths]
-            image_bags.append(torch.stack(images))
+            image_bags.append(torch.stack(images).to(self.device))
 
         # Inference
         with torch.inference_mode():
