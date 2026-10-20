@@ -329,9 +329,6 @@ class BioClip2Backbone(Backbone):
 
 
 class DinoV3Backbone(Backbone):
-    DEFAULT_CHECKPOINT_PATH = """/home/etienne/projects/inat-phenology-cv/
-    data/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"""
-
     def __init__(self, checkpoint_path: str | None = None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         import sys
@@ -343,15 +340,17 @@ class DinoV3Backbone(Backbone):
         from dinov3.hub.backbones import dinov3_vitb16
 
         self.encoder = dinov3_vitb16(pretrained=False)
-        ckpt = checkpoint_path or self.DEFAULT_CHECKPOINT_PATH
-        if Path(ckpt).exists():
-            logger.info(f"Loading DINOv3 weights from {ckpt}")
-            state_dict = torch.load(ckpt, map_location="cpu")
+        if checkpoint_path is not None and Path(checkpoint_path).is_file():
+            logger.info(f"Loading DINOv3 weights from {checkpoint_path}")
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
             self.encoder.load_state_dict(state_dict)
-        else:
+        elif checkpoint_path is not None:
             logger.warning(
-                f"DINOv3 checkpoint not found at {ckpt}, initializing random weights."
+                f"DINOv3 checkpoint not found at {checkpoint_path}, "
+                "initializing random weights."
             )
+        else:
+            logger.info("No DINOv3 checkpoint configured; initializing random weights.")
         self.freeze()
         self.output_dim = 768
         self.patch_dim = 768
