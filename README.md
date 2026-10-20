@@ -1,79 +1,86 @@
-# inat_phenology_cv
-Phenology vision model enrichment for [inat-obs-scorer](https://github.com/etiennegodin/inat-obs-scorer)
+# Plant Phenology CV
 
-## Roadmap
+This project builds a computer-vision pipeline for phenology classification from iNaturalist-style observation data. The system trains multi-image, multi-label models for plant phenology events and exposes a reusable inference pipeline that syncs photos, validates observations, runs model inference, and writes results back to the local data store.
 
-### ✅ v0.1 — Baseline
-- Transfer learning from ResNet-50 frozen backbone
-- Custom head: Linear(2048→256) → ReLU → Dropout(0.5) → Linear(256→1)
-- Single photo per observations
-- BCEWithLogitsLoss, Adam
-- 736 images, 60/20/20 stratified split, early stopping (patience=3), best checkpoint saving
-- evaluate() returns loss, accuracy, confusion matrix, ROC-AUC
-- ~80% val accuracy, ~0.90 roc_auc
+The repository is no longer a single-model prototype. It is a feature-complete training and inference stack built around Hydra configuration, MLflow tracking, dynamic backbones, Optuna tuning, attention-based multiple-instance learning, and progressive backbone unfreezing.
 
-### ✅ v0.2 — Multi-image classification
+## Current project scope
 
-- Backbone swap
-- Data expansion, multiple photos per observations
-- Level 1 multi-image: weak supervision baseline
-- Level 2 multi-image: observation-level mean pooling
-- MlFlow tracking setup
+The code currently supports:
 
-### ✅  v0.3 — Multiple Instance Learning
+- Multi-label phenology prediction for observation-level labels
+- Multiple photos per observation using bag-based training patterns
+- Attention-based MIL and pooled observation-level inference
+- Multiple backbone options and architecture variants
+- Hydra-driven configuration and validation
+- MLflow experiment tracking and artifact logging
+- Optuna search-space tuning for training and model parameters
+- Progressive unfreezing of backbone blocks
+- CleanLab-based label-quality checks for training/validation refinement
+- DuckDB-backed persistence and local data synchronization for inference
+- CLI-driven workflows for train, tune, validate, and status checks
 
-- Attention-based MIL
+## High-level architecture
 
-### ✅ v0.4 — Multi-label classification
+The project is organized as a modular ML pipeline:
 
-- Model improvements
-    - Multi-label classification expanding to full Flowers+Fruits phenology
-    - Learning rate scheduling
-- Pipeline features
-    - Multiple backbone compatibility
-        - EfficientNetB0
-        - BioCLIP
+- Data ingestion and validation from iNaturalist records and photo URLs
+- Dataset construction and batching for multi-image observations
+- Model construction from Hydra configuration, including backbone selection and training heads
+- Training workflow with metrics, early stopping, checkpointing, and unfreezing logic
+- Model evaluation and artifact logging via MLflow
+- Inference pipeline that fetches the required images, validates records, and logs predictions
 
-### ✅ v0.5 — Pipeline and persistence upgrades
+## Core commands
 
-- Better step and metrics logging
-- Colab compatibility reworked
-- Pushing pipeline logging to centralised mlflow server instead of local instances
+The primary CLI entry point is `torch_pipe`.
 
-### ✅ v0.6 — CLAM-MB Setup
+Examples:
 
-- Implementation of CLAM-MB
-- Reworked attention metrics
-- Per-class loss logging
+```bash
+torch_pipe command=train
+torch_pipe command=tune tune.search_space=coarse
+torch_pipe command=val val.model_name=cv_inat val.model_version=1
+torch_pipe command=status
+```
 
-### ✅ v0.7 — Hardware and caching
+The configuration system is Hydra-based and supports composition via `env`, `command`, and `architecture` groups. See the configuration docs for the current command and experiment patterns.
 
-- New HardwareProfile dataclass reading the system's configuration
-- Dataset caching implementation
-    - resolve_cache_decision() outputs a cache decision from HardwareProfile, and derived dataset memory size.
-    - PhenologyDataset.from_profile() constructor
-- Support for bf16 and fp16 datatypes
-- Backbone transforms moved to v2 to accept cached tensors.
-    - Uint8 until normalisation
+## Repository structure
 
-### ✅ v0.8 — Checkpoint objective, metrics, gated attention, seeding
+- `src/plant_pheno/` — main package code
+- `src/plant_pheno/train/` — training workflow, metrics, checkpointing, and flow control
+- `src/plant_pheno/inference/` — sync + validation + prediction pipeline
+- `src/plant_pheno/tune/` — Optuna objective and search-space wiring
+- `src/plant_pheno/config/` — Hydra config, validation, and runtime resolution
+- `tests/` — regression tests covering backbone behavior, metrics, determinism, cleanlab, and unfreezing flow
+- `configs/` — config defaults, Hydra examples, and command patterns
+- `notes/` — design and refactor notes capturing the evolution of the pipeline
 
-- Reworked objective for checkpointing and patience
-    - Continue as long as worst performing is still improving
-    - Patience counter per-class
-- Metrics overhaul
-    - EpochMetrics class with methods
-    - Computing, logging and plotting separation of concerns
-- Attention can now be gated and supports a dropout value
-- Seedind for determinism
-- v2 transforms support
+## What changed from the older README
 
-### 🔲 v0.9 — Backbone unfreezing
+The original roadmap described a simple baseline and a few later milestones. The current codebase has moved well beyond that:
 
-- Backbone progressive unfreezing
-- Cleanlab label correction on val set top-n errors
+- The project is now configured as a real package named `plant_pheno`
+- Training is Hydra-driven, not ad hoc notebook code
+- Multi-label training and attention-based observation pooling are part of the core workflow
+- MLflow is integrated as the experiment and registry layer
+- Optuna is a first-class tune command, not a future idea
+- Progressive unfreezing and per-class patience logic are implemented and tested
+- CleanLab, validation, and inference pipelines are active pieces of the system
+- DuckDB-backed data operations and model inference are part of the production workflow
 
+## Documentation map
 
-### 🔲 v1.0 — Optuna set up
+This README is intentionally a landing page. The detailed project context is split into focused docs:
 
-- Optuna tuning set up
+- [docs/overview.md](docs/overview.md) — project mission, scope, and current status
+- [docs/architecture.md](docs/architecture.md) — model architecture and pipeline components
+- [docs/training-and-tuning.md](docs/training-and-tuning.md) — training workflow, CLI commands, and experimentation
+- [docs/inference-and-deployment.md](docs/inference-and-deployment.md) — sync, validation, model serving, and result logging
+
+## Current development status
+
+This repo is in active research-and-operations development. The codebase is structured for iterative experimentation, model comparison, and regular retraining, rather than a static demo implementation.
+
+If you are onboarding to the project, start with the docs listed above before diving into the training and inference modules.
