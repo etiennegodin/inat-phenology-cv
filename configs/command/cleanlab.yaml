@@ -13,5 +13,6 @@ model:
 
 cleanlab:
   n_folds: 5
+  start_fold: 1
   table_name: oof_predictions
   export_csv: true

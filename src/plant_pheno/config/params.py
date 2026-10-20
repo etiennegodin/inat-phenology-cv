@@ -44,6 +44,7 @@ class FineTuneParams:
 @dataclass
 class CleanlabParams:
     n_folds: int = 5
+    start_fold: int = 1
     table_name: str = "oof_predictions"
     export_csv: bool = True
 

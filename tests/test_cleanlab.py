@@ -11,7 +11,10 @@ from PIL import Image
 
 from plant_pheno.cleanlab import (
     export_label_issues_csv,
+    load_oof_fold_predictions_from_duckdb,
+    prepare_oof_fold_table,
     run_cleanlab_analysis,
+    save_oof_fold_predictions_to_duckdb,
     save_oof_predictions_to_duckdb,
     stratified_multilabel_kfold,
 )
@@ -115,6 +118,58 @@ def test_save_oof_predictions_to_duckdb():
             # Check view
             res_view = con.execute("SELECT COUNT(*) FROM test_set").fetchone()
             assert res_view[0] == 3
+
+
+def test_oof_fold_table_preserves_prior_folds_on_resume(tmp_path: Path):
+    db_path = tmp_path / "folds.duckdb"
+    first_fold_table = prepare_oof_fold_table(db_path, "oof_predictions", 1, 3)
+    save_oof_fold_predictions_to_duckdb(
+        db_path,
+        first_fold_table,
+        1,
+        [101],
+        np.array([[1.0, 0.0]]),
+        np.array([[0.9, 0.1]]),
+    )
+    save_oof_fold_predictions_to_duckdb(
+        db_path,
+        first_fold_table,
+        2,
+        [102],
+        np.array([[0.0, 1.0]]),
+        np.array([[0.2, 0.8]]),
+    )
+
+    resumed_table = prepare_oof_fold_table(db_path, "oof_predictions", 2, 3)
+    assert resumed_table == first_fold_table
+    with duckdb.connect(str(db_path)) as con:
+        rows = con.execute(
+            f"SELECT fold_idx, obs_id FROM {resumed_table} ORDER BY fold_idx"
+        ).fetchall()
+    assert rows == [(1, 101)]
+
+    save_oof_fold_predictions_to_duckdb(
+        db_path,
+        resumed_table,
+        2,
+        [102],
+        np.array([[0.0, 1.0]]),
+        np.array([[0.2, 0.8]]),
+    )
+    saved_ids, saved_labels, saved_preds = load_oof_fold_predictions_from_duckdb(
+        db_path, resumed_table, 2
+    )
+
+    assert saved_ids == [101, 102]
+    assert np.allclose(saved_labels, [[1.0, 0.0], [0.0, 1.0]])
+    assert np.allclose(saved_preds, [[0.9, 0.1], [0.2, 0.8]])
+
+
+def test_oof_fold_table_requires_prior_folds(tmp_path: Path):
+    db_path = tmp_path / "missing-folds.duckdb"
+
+    with pytest.raises(ValueError, match="missing saved OOF data"):
+        prepare_oof_fold_table(db_path, "oof_predictions", 2, 3)
 
 
 def test_run_cleanlab_analysis():

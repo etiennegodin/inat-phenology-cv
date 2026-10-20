@@ -154,6 +154,118 @@ def save_oof_predictions_to_duckdb(
     )
 
 
+def prepare_oof_fold_table(
+    db_path: str | Path,
+    table_name: str,
+    start_fold: int,
+    n_folds: int,
+) -> str:
+    """Prepares the durable per-fold table, retaining folds before start_fold."""
+    if not 1 <= start_fold <= n_folds:
+        raise ValueError(
+            f"start_fold must be between 1 and {n_folds}, got {start_fold}"
+        )
+
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    fold_table = f"{table_name}_folds"
+
+    with duckdb.connect(str(db_path)) as con:
+        con.execute(f"""
+            CREATE TABLE IF NOT EXISTS {fold_table} (
+                fold_idx INTEGER,
+                obs_id BIGINT,
+                labels DOUBLE[],
+                preds DOUBLE[],
+                PRIMARY KEY (fold_idx, obs_id)
+            )
+        """)
+
+        if start_fold > 1:
+            existing_folds = {
+                row[0]
+                for row in con.execute(
+                    f"SELECT DISTINCT fold_idx FROM {fold_table}"
+                ).fetchall()
+            }
+            missing_folds = set(range(1, start_fold)) - existing_folds
+            if missing_folds:
+                missing = ", ".join(str(fold) for fold in sorted(missing_folds))
+                raise ValueError(
+                    f"Cannot start at fold {start_fold}; missing saved OOF data "
+                    f"for fold(s): {missing}"
+                )
+
+        if start_fold == 1:
+            con.execute(f"DELETE FROM {fold_table}")
+        else:
+            con.execute(f"DELETE FROM {fold_table} WHERE fold_idx >= ?", [start_fold])
+
+    return fold_table
+
+
+def save_oof_fold_predictions_to_duckdb(
+    db_path: str | Path,
+    fold_table: str,
+    fold_idx: int,
+    obs_ids: list[int],
+    labels: np.ndarray,
+    preds: np.ndarray,
+) -> None:
+    """Atomically replaces one fold's OOF rows in the durable fold table."""
+    rows = [
+        (fold_idx, int(obs_id), label.tolist(), pred.tolist())
+        for obs_id, label, pred in zip(obs_ids, labels, preds)
+    ]
+
+    with duckdb.connect(str(db_path)) as con:
+        con.execute("BEGIN TRANSACTION")
+        try:
+            con.execute(f"DELETE FROM {fold_table} WHERE fold_idx = ?", [fold_idx])
+            con.executemany(
+                f"""
+                INSERT INTO {fold_table} (fold_idx, obs_id, labels, preds)
+                VALUES (?, ?, ?, ?)
+                """,
+                rows,
+            )
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+
+    logger.info(
+        "Saved %s OOF observations for fold %s to %s (%s)",
+        len(obs_ids),
+        fold_idx,
+        db_path,
+        fold_table,
+    )
+
+
+def load_oof_fold_predictions_from_duckdb(
+    db_path: str | Path,
+    fold_table: str,
+    n_folds: int,
+) -> tuple[list[int], np.ndarray, np.ndarray]:
+    """Loads all saved folds in observation order, requiring a complete set."""
+    with duckdb.connect(str(db_path), read_only=True) as con:
+        rows = con.execute(
+            f"SELECT fold_idx, obs_id, labels, preds FROM {fold_table} ORDER BY obs_id"
+        ).fetchall()
+
+    existing_folds = {row[0] for row in rows}
+    missing_folds = set(range(1, n_folds + 1)) - existing_folds
+    if missing_folds:
+        missing = ", ".join(str(fold) for fold in sorted(missing_folds))
+        raise ValueError(f"Missing saved OOF data for fold(s): {missing}")
+
+    obs_ids = [row[1] for row in rows]
+    labels = np.asarray([row[2] for row in rows], dtype=float)
+    preds = np.asarray([row[3] for row in rows], dtype=float)
+    return obs_ids, labels, preds
+
+
 def run_cleanlab_analysis(
     obs_ids: list[int],
     labels: np.ndarray,
@@ -268,6 +380,7 @@ def run_cleanlab_cv(
     model_params = model_params_from_cfg(cfg.model)
 
     n_folds = cleanlab_cfg.n_folds
+    start_fold = int(cleanlab_cfg.start_fold)
     db_table_name = cleanlab_cfg.table_name
     cleanlab_db_path = paths_params.cleanlab_db_path
     corrections_dir = paths_params.corrections_dir
@@ -306,18 +419,21 @@ def run_cleanlab_cv(
         n_splits=n_folds,
         seed=seed,
     )
+    fold_table = prepare_oof_fold_table(
+        db_path=cleanlab_db_path,
+        table_name=db_table_name,
+        start_fold=start_fold,
+        n_folds=n_folds,
+    )
 
     mlflow.set_tracking_uri(resolve_uri())
-
-    all_oof_obs_ids: list[int] = []
-    all_oof_labels: list[np.ndarray] = []
-    all_oof_preds: list[np.ndarray] = []
 
     with mlflow.start_run(run_name="cleanlab_cv"):
         mlflow.log_dict(resolved_container(cfg), "configs.json")
         mlflow.log_params(
             {
                 "n_folds": n_folds,
+                "start_fold": start_fold,
                 "backbone": model_params.backbone,
                 "architecture": model_params.architecture,
                 "epochs": cfg.train.epochs,
@@ -327,7 +443,12 @@ def run_cleanlab_cv(
         )
 
         for fold_idx, (train_df, val_df) in enumerate(folds):
-            logger.info(f"\n{'=' * 25} FOLD {fold_idx + 1}/{n_folds} {'=' * 25}")
+            fold_number = fold_idx + 1
+            if fold_number < start_fold:
+                logger.info("Skipping fold %s; reusing saved OOF data", fold_number)
+                continue
+
+            logger.info(f"\n{'=' * 25} FOLD {fold_number}/{n_folds} {'=' * 25}")
 
             train_set = PhenologyDataset.from_profile(
                 cache, train_df, train_transform, dataset_params
@@ -376,19 +497,25 @@ def run_cleanlab_cv(
                     device=device,
                     as_numpy=True,
                 )
+                save_oof_fold_predictions_to_duckdb(
+                    db_path=cleanlab_db_path,
+                    fold_table=fold_table,
+                    fold_idx=fold_number,
+                    obs_ids=fold_obs_ids,
+                    labels=np.asarray(fold_labels),
+                    preds=np.asarray(fold_preds),
+                )
+                mlflow.log_metric(
+                    "oof_observations", len(fold_obs_ids), step=fold_number
+                )
 
-                all_oof_obs_ids.extend(fold_obs_ids)
-                all_oof_labels.append(fold_labels)
-                all_oof_preds.append(fold_preds)
-
-        oof_labels_arr = np.concatenate(all_oof_labels, axis=0)
-        oof_preds_arr = np.concatenate(all_oof_preds, axis=0)
-
-        # Sort aggregated results deterministically by observation_id
-        sort_idx = np.argsort(all_oof_obs_ids)
-        sorted_obs_ids = [all_oof_obs_ids[i] for i in sort_idx]
-        sorted_labels = oof_labels_arr[sort_idx]
-        sorted_preds = oof_preds_arr[sort_idx]
+        sorted_obs_ids, sorted_labels, sorted_preds = (
+            load_oof_fold_predictions_from_duckdb(
+                db_path=cleanlab_db_path,
+                fold_table=fold_table,
+                n_folds=n_folds,
+            )
+        )
 
         logger.info(
             "\nRunning Cleanlab issue detection across all out-of-fold predictions..."
