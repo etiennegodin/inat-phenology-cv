@@ -12,6 +12,7 @@ torch_pipe command=status
 torch_pipe command=options
 torch_pipe -m command=train architecture=mil_pooling,cross_attention
 torch_pipe experiment=unfreeze
+torch_pipe train.progressive_unfreezing.enabled=true train.progressive_unfreezing.patience=5
 ```
 
 `command=options` lists Hydra groups and registry-backed choices, including
@@ -19,6 +20,12 @@ backbones, architectures, Optuna search spaces, samplers, and pruners. Registry
 choices are validated before command dispatch, so unsupported values fail early.
 Hydra group choices such as `env`, `command`, and `experiment` are also validated
 by Hydra during composition.
+
+Progressive-only training controls are grouped under
+`train.progressive_unfreezing`. They default to disabled; select
+`experiment=unfreeze` or set `train.progressive_unfreezing.enabled=true` to turn
+them on. `model.start_unfreezed` separately controls how many backbone blocks
+start trainable.
 
 On Colab, `COLAB_GPU` selects `env=colab` unless you pass `env=` yourself.
 

@@ -1,6 +1,17 @@
 from __future__ import annotations
 
 from .constants import ANGIOSPERMAE_ID, CLASS_ORDER, LABEL_MAPPING, OBSERVATIONS_FIELDS
+from .hydra_conf import (
+    CONFIG_DIR,
+    AppConfig,
+    cfg_to_runtime,
+    model_params_from_cfg,
+    optimizer_params_from_cfg,
+    register_config_store,
+    resolved_container,
+    scheduler_params_from_cfg,
+    training_params_from_cfg,
+)
 from .loader import Config
 from .params import (
     CleanlabParams,
@@ -14,21 +25,11 @@ from .params import (
     OptimizerParams,
     PathsParams,
     PredictParams,
+    ProgressiveUnfreezingConfig,
     SchedulerParams,
     TrainConfig,
     TrainingParams,
     ValParams,
-)
-from .hydra_conf import (
-    CONFIG_DIR,
-    AppConfig,
-    cfg_to_runtime,
-    model_params_from_cfg,
-    optimizer_params_from_cfg,
-    register_config_store,
-    resolved_container,
-    scheduler_params_from_cfg,
-    training_params_from_cfg,
 )
 from .registry import OPTUNA_PRUNERS, OPTUNA_SAMPLERS
 from .search_spaces import SEARCH_SPACES
@@ -59,6 +60,7 @@ __all__ = [
     "CleanlabParams",
     "ValParams",
     "PredictParams",
+    "ProgressiveUnfreezingConfig",
     "cfg_to_runtime",
     "model_params_from_cfg",
     "optimizer_params_from_cfg",

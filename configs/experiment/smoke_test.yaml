@@ -5,5 +5,4 @@ test_frac: 0.05
 model:
   backbone: bioclip
 train:
-  unfreeze: false
   epochs: 1

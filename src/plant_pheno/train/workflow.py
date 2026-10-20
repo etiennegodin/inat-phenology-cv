@@ -312,11 +312,12 @@ def execute(
         training_params=training_params,
     )
 
-    training_state.stages_states = create_stage_states(
-        training_params=training_params,
-        trainable_block_count=len(model.backbone.get_trainable_blocks())
-        - training_params.starting_block,
-    )
+    if training_params.unfreeze:
+        training_state.stages_states = create_stage_states(
+            training_params=training_params,
+            trainable_block_count=len(model.backbone.get_trainable_blocks())
+            - training_params.starting_block,
+        )
 
     log_step_interval = getattr(training_params, "log_step_interval", 10)
 

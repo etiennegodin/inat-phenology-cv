@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from hydra import compose, initialize_config_dir
 
-from plant_pheno.config import CONFIG_DIR
+from plant_pheno.config import CONFIG_DIR, training_params_from_cfg
 from plant_pheno.config.choices import (
     available_choices,
     format_available_choices,
@@ -58,6 +58,31 @@ def test_experiment_recipe_overrides_root_settings() -> None:
     assert cfg.test is True
     assert cfg.test_frac == 0.05
     assert cfg.train.epochs == 1
+
+
+def test_progressive_unfreezing_is_disabled_by_default() -> None:
+    cfg = compose_config()
+    params = training_params_from_cfg(cfg)
+
+    assert cfg.train.progressive_unfreezing.enabled is False
+    assert params.unfreeze is False
+    assert params.unfreezing_patience == 3
+    assert params.unfreezing_cooldown == 3
+    assert params.max_stages == 3
+    assert params.block_per_stage == 1
+    assert params.backbone_decay == 0.9
+
+
+def test_unfreeze_experiment_enables_progressive_settings() -> None:
+    cfg = compose_config("experiment=unfreeze")
+    params = training_params_from_cfg(cfg)
+
+    assert cfg.train.progressive_unfreezing.enabled is True
+    assert params.unfreeze is True
+    assert params.unfreezing_patience == 3
+    assert params.unfreezing_cooldown == 3
+    assert params.max_stages == 3
+    assert params.block_per_stage == 1
 
 
 def test_train_epoch_override_and_hydra_does_not_change_directory() -> None:

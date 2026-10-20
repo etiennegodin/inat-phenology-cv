@@ -1,7 +1,9 @@
 # @package _global_
 train:
-  unfreeze: true
-  unfreezing_patience: 3
-  unfreezing_cooldown: 3
-  max_stages: 3
-  block_per_stage: 1
+  progressive_unfreezing:
+    enabled: true
+    patience: 3
+    cooldown: 3
+    max_stages: 3
+    blocks_per_stage: 1
+    backbone_decay: 0.9

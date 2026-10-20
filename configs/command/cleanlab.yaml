@@ -5,8 +5,6 @@ command: cleanlab
 train:
   epochs: 25
   warmup_epochs: 1
-  unfreeze: false
-  starting_block: 0
   best_objective: 0.00001
   base_lr: 0.0001
 

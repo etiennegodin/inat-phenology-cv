@@ -110,8 +110,15 @@ def training_params_from_cfg(
     data = resolved_container(cfg)
     train = dict(data["train"])
     model = data["model"]
+    progressive = train["progressive_unfreezing"]
     allowed = _init_fields(TrainingParams)
     kwargs: dict[str, Any] = {k: train[k] for k in allowed if k in train}
+    kwargs["unfreeze"] = progressive["enabled"]
+    kwargs["unfreezing_patience"] = progressive["patience"]
+    kwargs["unfreezing_cooldown"] = progressive["cooldown"]
+    kwargs["max_stages"] = progressive["max_stages"]
+    kwargs["block_per_stage"] = progressive["blocks_per_stage"]
+    kwargs["backbone_decay"] = progressive["backbone_decay"]
     kwargs.setdefault("seed", data["seed"])
     kwargs.setdefault(
         "starting_block", model.get("start_unfreezed", train.get("starting_block", 1))

@@ -76,22 +76,28 @@ class PredictParams:
 
 
 @dataclass
+class ProgressiveUnfreezingConfig:
+    enabled: bool = False
+    patience: int = 3
+    cooldown: int = 3
+    max_stages: int = 3
+    blocks_per_stage: int = 1
+    backbone_decay: float = 0.9
+
+
+@dataclass
 class TrainConfig:
-    """Hydra-facing training section (optimizer/scheduler fields included)."""
+    """Hydra-facing general training settings."""
 
     epochs: int = 10
     stopping_patience: int = 3
-    unfreeze: bool = False
-    unfreezing_patience: int = 3
-    unfreezing_cooldown: int = 3
-    starting_block: int = 1
-    max_stages: int = 3
-    block_per_stage: int = 1
     best_objective: float = 1e-5
-    backbone_decay: float = 0.9
     log_step_interval: int = 10
     base_lr: float = 0.0001
     warmup_epochs: int = 3
+    progressive_unfreezing: ProgressiveUnfreezingConfig = field(
+        default_factory=ProgressiveUnfreezingConfig
+    )
 
     def to_dict(self):
         return asdict(self)
@@ -180,7 +186,8 @@ class ModelParams:
 
     Shared fields
     -------------
-    backbone            : Backbone registry key (e.g. ``"bioclip"``, ``"dinov3_vits14"``).
+    backbone            : Backbone registry key (e.g. ``"bioclip"``,
+                          ``"dinov3_vits14"``).
     architecture        : Aggregation head: ``"mil_pooling"`` (default) or
                           ``"cross_attention"``.
     start_unfreezed     : Number of backbone blocks unfrozen at initialisation.
@@ -257,7 +264,8 @@ class ModelParams:
                 if getattr(self, field_name) != default:
                     _log.warning(
                         "ModelParams: field '%s' is cross_attention-specific but was "
-                        "set to a non-default value (%r) while architecture='mil_pooling'. "
+                        "set to a non-default value (%r) while "
+                        "architecture='mil_pooling'. "
                         "It will be ignored by MilAttentionModel.",
                         field_name,
                         getattr(self, field_name),
