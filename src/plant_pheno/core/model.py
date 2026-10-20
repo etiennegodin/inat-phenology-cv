@@ -10,7 +10,7 @@ from torch import nn
 
 from ..config import CLASS_ORDER
 from ..utils.misc import unfreeze
-from .backbone import BACKBONE_REGISTRY, Backbone
+from .backbone import build_backbone
 
 if TYPE_CHECKING:
     from torch import nn
@@ -177,13 +177,7 @@ class MilAttentionModel(nn.Module):
     def __init__(self, params: ModelParams, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.params = params
-        backbone_cls = BACKBONE_REGISTRY[params.backbone]
-        if params.checkpoint_path is not None:
-            self.backbone: Backbone = backbone_cls(
-                checkpoint_path=params.checkpoint_path
-            )
-        else:
-            self.backbone: Backbone = backbone_cls()
+        self.backbone = build_backbone(params.backbone, params.checkpoint_path)
         self.branches = nn.ModuleList(
             [AttentionBranch(self.backbone.output_dim, params, c) for c in CLASS_ORDER]
         )
@@ -244,13 +238,7 @@ class CrossAttentionModel(nn.Module):
     def __init__(self, params: ModelParams, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.params = params
-        backbone_cls = BACKBONE_REGISTRY[params.backbone]
-        if params.checkpoint_path is not None:
-            self.backbone: Backbone = backbone_cls(
-                checkpoint_path=params.checkpoint_path
-            )
-        else:
-            self.backbone: Backbone = backbone_cls()
+        self.backbone = build_backbone(params.backbone, params.checkpoint_path)
 
         if not self.backbone.has_patch_support:
             raise ValueError(

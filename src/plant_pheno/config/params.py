@@ -192,7 +192,9 @@ class ModelParams:
     architecture        : Aggregation head: ``"mil_pooling"`` (default) or
                           ``"cross_attention"``.
     start_unfreezed     : Number of backbone blocks unfrozen at initialisation.
-    checkpoint_path     : Optional path to a pretrained backbone checkpoint.
+    checkpoint_path     : Optional local DINOv3 backbone checkpoint path. Other
+                          backbones use their configured pretrained weights and
+                          reject this option.
 
     mil_pooling fields (MilAttentionModel)
     --------------------------------------

@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from plant_pheno.config import CLASS_ORDER, ModelParams, OptimizerParams
@@ -8,7 +9,32 @@ from plant_pheno.core import (
     MilAttentionModel,
     build_pipeline_model,
 )
+from plant_pheno.core.backbone import build_backbone
 from plant_pheno.train.factory import build_pipeline_optimizer
+
+
+def test_build_backbone_passes_checkpoint_to_dinov3(monkeypatch):
+    received = {}
+
+    class RecordingBackbone:
+        def __init__(self, checkpoint_path=None):
+            received["checkpoint_path"] = checkpoint_path
+
+    monkeypatch.setitem(BACKBONE_REGISTRY, "dinov3", RecordingBackbone)
+
+    backbone = build_backbone("dinov3", "weights.pth")
+
+    assert isinstance(backbone, RecordingBackbone)
+    assert received["checkpoint_path"] == "weights.pth"
+
+
+@pytest.mark.parametrize("model_class", [MilAttentionModel, CrossAttentionModel])
+@pytest.mark.parametrize("backbone_name", ["efficientnet", "bioclip", "bioclip2"])
+def test_models_reject_checkpoint_for_unsupported_backbone(model_class, backbone_name):
+    params = ModelParams(backbone=backbone_name, checkpoint_path="weights.pth")
+
+    with pytest.raises(ValueError, match="does not support a local checkpoint_path"):
+        model_class(params)
 
 
 def test_dinov3_backbone_shapes():
