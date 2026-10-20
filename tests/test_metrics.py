@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
+import torch.nn as nn
 
+from plant_pheno.train import metrics
 from plant_pheno.train.metrics import (
     compute_attention_values,
     compute_metrics,
@@ -72,3 +74,52 @@ def test_generate_metric_plots():
     assert "pr_curves" in figures
     assert "threshold_f1" in figures
     assert "confusion_matrices" in figures
+
+
+def test_log_experiment_metadata_supports_branchless_model(monkeypatch):
+    class BranchlessModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = nn.Linear(2, 2, bias=False)
+            self.attention = nn.Linear(2, 1, bias=False)
+            self.classifier = nn.Linear(1, 1, bias=True)
+            self.backbone.weight.requires_grad_(False)
+
+        def get_attention_params(self):
+            return self.attention.parameters()
+
+        def get_head_params(self):
+            return self.classifier.parameters()
+
+    logged_params = []
+    logged_dicts = []
+    monkeypatch.setattr(metrics.mlflow, "active_run", lambda: object())
+    monkeypatch.setattr(metrics.mlflow, "log_params", logged_params.append)
+    monkeypatch.setattr(
+        metrics.mlflow, "log_dict", lambda data, name: logged_dicts.append((data, name))
+    )
+
+    metrics.log_experiment_metadata(BranchlessModel(), object(), object())
+
+    model_summary = logged_params[0]
+    assert model_summary["total"] == {
+        "total_params": 8,
+        "trainable_params": 4,
+        "frozen_params": 4,
+        "trainable_percent": 50.0,
+    }
+    assert model_summary["attention_architecture"] == {
+        "params": 2,
+        "trainable_params": 2,
+        "frozen_params": 0,
+        "trainable_percent": 100.0,
+    }
+    assert model_summary["classifier_architecture"] == {
+        "params": 2,
+        "trainable_params": 2,
+        "frozen_params": 0,
+        "trainable_percent": 100.0,
+    }
+    assert len(logged_dicts) == 2
+    assert logged_dicts[0] == (model_summary, "model_summary.json")
+    assert logged_dicts[1] == ({"train": {}, "val": {}}, "dataset_summary.json")

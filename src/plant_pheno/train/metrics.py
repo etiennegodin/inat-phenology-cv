@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import matplotlib.pyplot as plt
 import mlflow
@@ -26,9 +26,20 @@ from ..config import CLASS_ORDER, LABEL_MAPPING
 from ..utils import format_dict
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
+    from torch.nn import Module, Parameter
     from torch.utils.data import Dataset
 
-    from ..core.model import PhenologyModel
+    class MetadataModel(Protocol):
+        backbone: Module
+
+        def parameters(self) -> Iterator[Parameter]: ...
+
+        def get_attention_params(self) -> Iterable[Parameter]: ...
+
+        def get_head_params(self) -> Iterable[Parameter]: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -619,7 +630,7 @@ def compute_attention_values(
 
 
 def log_experiment_metadata(
-    model: "PhenologyModel",
+    model: "MetadataModel",
     train_dataset: "Dataset",
     val_dataset: "Dataset",
 ) -> None:
@@ -639,16 +650,18 @@ def log_experiment_metadata(
     backbone_frozen_params = backbone_params - backbone_trainable_params
 
     # Attention params
-    attention_params = sum(p.numel() for p in model.branches[0].attention.parameters())
+    attention_parameters = list(model.get_attention_params())
+    attention_params = sum(p.numel() for p in attention_parameters)
     attention_trainable_params = sum(
-        p.numel() for p in model.branches[0].attention.parameters() if p.requires_grad
+        p.numel() for p in attention_parameters if p.requires_grad
     )
     attention_frozen_params = attention_params - attention_trainable_params
 
     # Classifier params
-    classifier_params = sum(p.numel() for p in model.branches[0].head.parameters())
+    classifier_parameters = list(model.get_head_params())
+    classifier_params = sum(p.numel() for p in classifier_parameters)
     classifier_trainable_params = sum(
-        p.numel() for p in model.branches[0].head.parameters() if p.requires_grad
+        p.numel() for p in classifier_parameters if p.requires_grad
     )
     classifier_frozen_params = classifier_params - classifier_trainable_params
 
