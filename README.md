@@ -80,6 +80,12 @@ The package installs a `torch_pipe` command, composed with [Hydra](https://hydra
 
 ```bash
 torch_pipe command=predict
+
+#Example
+torch_pipe command=predict \
+  predict.model_name=cv_pheno_bioclip \
+  predict.model_version=7 \
+  predict.urls=["https://www.inaturalist.ca/observations/409673980"]
 ```
 
 <!-- TODO: replace with the exact predict example, including the URL argument. -->
