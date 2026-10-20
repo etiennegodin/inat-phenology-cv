@@ -14,6 +14,7 @@ Raw PR-AUC isn't comparable across classes with different positive rates. A clas
 
 My first unfreezing experiment changed the cosine schedule length and `max_images` at the same time, starting from epoch 0. When the result looked different from baseline, I couldn't say why. Experiments now change one thing at a time, and I run three seeds before believing a difference.
 
+
 ## Cleanlab needs out-of-sample predictions
 
 Predictions on training data are useless for finding label errors, because the model has already memorized the mistakes. Validation-set predictions from a saved checkpoint are genuinely out-of-sample, so that's the free first audit. Training-set audits need k-fold.

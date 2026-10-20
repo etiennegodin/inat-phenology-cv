@@ -26,9 +26,9 @@ This is a portfolio and learning project, so the goals are about both the model 
 
 ## Scope
 
-- **Data:** about 44k observations from Northeastern US and Canada, around 3 photos each. Current splits are 14,228 training and 1,779 validation observations (about 2.5 images per observation).
-- **Classes:** Flowering (about 45% positive), Fruiting (18–20%) and Flower Budding (19–20%), with near-identical ratios across the splits.
-- **Out of scope:** hosted serving, non-flowering plants, and regions outside the dataset.
+- **Data:** about 15k observations from Québec, Canada. Current splits are 12,608 training and 1,576 validation observations.
+- **Classes:** Flowering, Fruiting and Flower Budding. Their positive rates differ, which is why I normalize metrics per class (see [training and tuning](training-and-tuning.md)).
+- **Out of scope for now:** a hosted prediction service, non-flowering plants, and regions outside the dataset.
 
 ## Core terms
 
@@ -40,4 +40,4 @@ This is a portfolio and learning project, so the goals are about both the model 
 
 ## Where things stand
 
-The project is active. Model quality is judged through tracked experiments, not assumed from the design. A controlled backbone × attention-architecture comparison is in progress, and the results section of the [README](../README.md) will be filled in once it's done.
+The project is active. Training, a registered model and command-line inference all work today. Model quality is judged through tracked experiments, not assumed from the design, so a controlled backbone × aggregation comparison is in progress, and the results section of the [README](../README.md) will be filled in once it's done. Before the next round of tuning and unfreezing, I'm auditing the training labels with Cleanlab.

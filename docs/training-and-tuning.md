@@ -40,7 +40,7 @@ Now:
 
 Instead of keeping the backbone frozen or fully trainable from the start, I unlock backbone blocks stage by stage when the head's training stalls. Warmup learning rates apply to newly unlocked stages, and unfreezing state is saved in checkpoints. There is regression test coverage for the pathway (`tests/test_unfreeze_pathway.py`).
 
-**Status:** the mechanism is built, and I'm still validating it.
+**Status:** the mechanism is built. Validating it is on hold until the training-label audit (below) is done, since noisy labels would muddy the comparison.
 
 - The unfreeze trigger rule is an open question. "All three classes stale" is risky because Flower Budding's label noise may stall it forever. A majority rule could fire early because of a saturated class. I plan to settle this with a controlled experiment.
 - The stop condition and the unfreeze condition currently share one staleness array. They need independent counters.
@@ -48,7 +48,7 @@ Instead of keeping the backbone frozen or fully trainable from the start, I unlo
 
 ## Hyperparameter search
 
-Trials take about an hour on full data, so the budget shapes the design. I'm using a two-stage Optuna search:
+Trials take about an hour on full data, so the budget shapes the design. The next round waits for the label audit, and the plan is a two-stage Optuna search:
 
 1. **Coarse screening** on a ~20% subsample to rule out clearly bad regions.
 2. **Refinement** on the full dataset for the survivors.
@@ -65,7 +65,7 @@ Cleanlab's confident-learning approach flags labels that look wrong, and it need
 
 - Out-of-fold predictions only. In-sample predictions are invalid because the model memorizes wrong labels.
 - Audit the validation set first. My checkpoint predictions on it are already out-of-sample, so it costs nothing.
-- For the training set, I plan a cheaper k-fold proxy: frozen embeddings plus a lightweight classifier per fold.
+- For the training set, I'm running a k-fold audit right now, ahead of more tuning and unfreezing, so those experiments start from cleaner labels. It uses a cheaper proxy than the full model: frozen embeddings plus a lightweight classifier per fold.
 - Flower Budding deserves caution, since some of the "errors" are real ambiguity. Cleanlab suggests candidates, and I decide.
 
 Corrections are stored as an overlay keyed by observation ID.

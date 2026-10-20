@@ -12,15 +12,18 @@ The project began as an enrichment step for a companion project, [inat-obs-score
 | **v0.6** CLAM-MB | Multi-branch attention, reworked attention metrics, per-class loss logging. | One attention head for all classes was a bottleneck. |
 | **v0.7** Hardware | `HardwareProfile`, dataset caching decisions, bf16/fp16 support, v2 transforms that accept cached tensors. | Training had to work on both a tiny local GPU and Colab. |
 | **v0.8** Objectives | Per-class patience counters, a metrics overhaul (compute, log and plot separated), gated attention with dropout, seeding for determinism. | Early stopping and metrics were misleading me. |
-| **v0.9** Unfreezing *(in progress)* | Progressive backbone unfreezing, Cleanlab audits of validation errors. | Test whether fine-tuning deeper blocks helps. |
-| **v1.0** Tuning *(in progress)* | Optuna search, two-stage design. | Stop hand-tuning. |
+| **v0.9** Inference | MLflow pyfunc registered model, and a command that turns an iNaturalist URL into a prediction. | A model that can only be evaluated inside the training code isn't much use. |
+| **v0.10** Backbones and aggregation | DINOv3 backbone and a cross-attention aggregation build, alongside CLAM-MB. | Compare backbones and aggregation strategies under one config. |
+| **v0.11** Label audit *(in progress)* | Cleanlab k-fold audit of the training labels. | Tune and unfreeze on cleaner labels. |
+| **v0.12** Unfreezing *(planned, mechanism built)* | Progressive backbone unfreezing, validated with a controlled experiment. | Test whether fine-tuning deeper blocks helps. |
+| **v1.0** Tuning *(planned)* | Optuna search, two-stage design. | Stop hand-tuning. |
 
-<!-- TODO: confirm v0.9/v1.0 status, and decide whether to add rows for the backbone × attention comparison and the serving layer (pyfunc registration, DuckDB prediction store). -->
+<!-- TODO: version numbers from v0.9 on are my guess. Adjust them to match your own roadmap. -->
 
 ## Where it's going
 
-- A controlled comparison of backbones and attention architectures
-- A settled rule for when unfreezing fires
-- A Cleanlab audit of the training set using a k-fold proxy
-- A finished serving path: registered model, validated scoring, prediction store
+- A controlled comparison of backbones and aggregation strategies
+- Finish the Cleanlab audit and act on what it finds
+- A settled rule for when unfreezing fires, then the tuning rounds
+- Hosting inference, possibly behind a small API
 - Possibly publishing model weights on Hugging Face

@@ -19,6 +19,10 @@ Everything lives under `src/plant_pheno/`:
 | `infra/` | Logging, seeding, MLflow helpers, networking |
 | `cleanlab.py`, `review.py`, `register.py`, `val.py`, `status.py` | Command implementations behind the CLI |
 
+## Two install profiles
+
+This codebase holds both the training pipeline and the inference pipeline, but they don't need the same dependencies. A plain `pip install` gives the inference side: load a registered model and score observations. The full training stack (training, tuning, label audits) needs the `[train]` extra. Keeping them apart means someone who only wants predictions doesn't have to install the training dependencies.
+
 ## From config to a run
 
 Hydra picks four things: the environment (`env`: local or Colab), the action (`command`), the model variant (`architecture`) and optional presets (`experiment`). A run then goes through these steps:
@@ -34,7 +38,12 @@ Having one config path for everything is what lets me compare runs fairly. Fewer
 
 ## The model
 
-Each photo goes through a pretrained backbone. The default is BioCLIP ViT-B/16, and the backbone is swappable. The photo embeddings are then pooled into one prediction per class.
+Each photo goes through a pretrained backbone. I've used BioCLIP ViT-B/16, BioCLIP 2 and DINOv3, and the backbone is swappable through config. The photo embeddings are then combined into one prediction per class by one of two aggregation strategies:
+
+- **MIL (CLAM-MB):** the `mil_pooling` architecture. It started as plain attention-based MIL and grew into the multi-branch design below.
+- **Cross-attention:** the `cross_attention` architecture, a newer alternative added alongside the DINOv3 backbone.
+
+The details below describe the MIL (CLAM-MB) model.
 
 - **Multi-branch attention (CLAM-MB style):** every class gets its own attention network and classifier head, so each class can focus on different photos. All branches reuse one backbone forward pass.
 - **Per-class sigmoid outputs** handle the multi-label setup.
@@ -43,7 +52,7 @@ Each photo goes through a pretrained backbone. The default is BioCLIP ViT-B/16, 
 - **Variable-length bags:** the model takes a list of per-observation tensors. Photos are stacked within an observation, never across observations.
 - **Memory:** `max_images`, the total number of photos per forward pass, is what actually drives VRAM, not the observation batch size.
 
-I also have a cross-attention architecture config alongside the MIL pooling one, so the aggregation strategy is one of the things I'm comparing.
+Because both aggregation strategies and several backbones sit behind config, the backbone × aggregation grid is something I can run as a controlled comparison instead of a pile of one-off scripts.
 
 ## Hardware and caching
 

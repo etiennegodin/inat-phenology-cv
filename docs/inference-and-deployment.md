@@ -1,5 +1,9 @@
 # Inference and deployment
 
+Inference takes a registered model and turns iNaturalist observations into validated predictions. Today a command takes an observation URL and returns a prediction, and it can run as a batch job locally or on Colab. It isn't a hosted service yet.
+
+The inference code lives in the same package as training but installs separately. A plain `pip install` is enough to run it, and training needs the `[train]` extra.
+
 ## Scoring pipeline
 
 1. Fetch observation metadata and photo URLs from iNaturalist.
@@ -48,4 +52,6 @@ Predictions and attention weights use composite primary keys, `(observation_id, 
 
 ## Status
 
-The registered model has run inference end to end on a hand-built set of observations. The sync, validation and database pieces are the part I'm still shaping.
+Inference was finished before the tuning and unfreezing work: the registered model takes an iNaturalist URL through a command and returns a prediction. The database side is still being shaped.
+
+**Next:** hosting it. Wrapping the pipeline in a small API server is the likely route, but I haven't decided yet. I'm also open to keeping it as a command-line tool if a hosted service doesn't earn its complexity.
