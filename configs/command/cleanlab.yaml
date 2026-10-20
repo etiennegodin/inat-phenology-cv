@@ -3,7 +3,7 @@ command: cleanlab
 
 # K-fold audit uses a longer frozen-backbone schedule; paths still come from env=.
 train:
-  epochs: 20
+  epochs: 30
   warmup_epochs: 3
   best_objective: 0.00001
   base_lr: 0.0001
