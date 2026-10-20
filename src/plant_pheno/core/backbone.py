@@ -410,14 +410,10 @@ BACKBONE_REGISTRY = {
 LOCAL_CHECKPOINT_BACKBONES = frozenset({"dinov3", "dinov3_vitb16"})
 
 
-def build_backbone(backbone_name: str, checkpoint_path: str | None = None) -> Backbone:
-    if checkpoint_path is not None and backbone_name not in LOCAL_CHECKPOINT_BACKBONES:
-        raise ValueError(
-            f"Backbone '{backbone_name}' does not support a local checkpoint_path. "
-            "Local backbone checkpoints are currently supported only for DINOv3."
-        )
-
+def build_backbone(
+    backbone_name: str, dinov3_checkpoint_path: str | None = None
+) -> Backbone:
     backbone_cls = BACKBONE_REGISTRY[backbone_name]
     if backbone_name in LOCAL_CHECKPOINT_BACKBONES:
-        return backbone_cls(checkpoint_path=checkpoint_path)
+        return backbone_cls(checkpoint_path=dinov3_checkpoint_path)
     return backbone_cls()

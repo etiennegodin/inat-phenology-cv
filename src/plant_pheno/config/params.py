@@ -105,13 +105,18 @@ class TrainConfig:
 
 
 @dataclass
+class DinoV3Params:
+    checkpoint_path: str | None = None
+
+
+@dataclass
 class ModelConfig:
     """Hydra-facing model section; converted to ModelParams at runtime."""
 
     backbone: str = "bioclip"
     architecture: str = "mil_pooling"
     start_unfreezed: int = 1
-    checkpoint_path: str | None = None
+    dinov3: DinoV3Params = field(default_factory=DinoV3Params)
     head_neurons: int = 256
     head_outputs: int = 1
     head_dropout_prob: float = 0.5
@@ -192,9 +197,8 @@ class ModelParams:
     architecture        : Aggregation head: ``"mil_pooling"`` (default) or
                           ``"cross_attention"``.
     start_unfreezed     : Number of backbone blocks unfrozen at initialisation.
-    checkpoint_path     : Optional local DINOv3 backbone checkpoint path. Other
-                          backbones use their configured pretrained weights and
-                          reject this option.
+    dinov3               : DINOv3-specific settings, including its optional local
+                          pretrained checkpoint path.
 
     mil_pooling fields (MilAttentionModel)
     --------------------------------------
@@ -217,7 +221,7 @@ class ModelParams:
     backbone: str
     architecture: str = "mil_pooling"
     start_unfreezed: int = 1
-    checkpoint_path: str | None = None
+    dinov3: DinoV3Params = field(default_factory=DinoV3Params)
 
     # -- mil_pooling (MilAttentionModel) ---------------------------------------
     head_neurons: int = 256

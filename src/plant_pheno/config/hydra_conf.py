@@ -12,6 +12,7 @@ from .params import (
     CleanlabParams,
     DataLoadersParams,
     DatasetParams,
+    DinoV3Params,
     FineTuneParams,
     ModelConfig,
     ModelParams,
@@ -97,6 +98,9 @@ def model_params_from_cfg(
     if not isinstance(data, dict):
         raise TypeError("model config must resolve to a mapping")
     data.update({k: v for k, v in overrides.items() if v is not None})
+    dinov3_data = data.get("dinov3")
+    if isinstance(dinov3_data, dict):
+        data["dinov3"] = DinoV3Params(**dinov3_data)
     allowed = _init_fields(ModelParams)
     return ModelParams(**{k: data[k] for k in allowed if k in data})
 

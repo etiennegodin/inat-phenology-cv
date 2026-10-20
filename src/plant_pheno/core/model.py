@@ -177,7 +177,7 @@ class MilAttentionModel(nn.Module):
     def __init__(self, params: ModelParams, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.params = params
-        self.backbone = build_backbone(params.backbone, params.checkpoint_path)
+        self.backbone = build_backbone(params.backbone, params.dinov3.checkpoint_path)
         self.branches = nn.ModuleList(
             [AttentionBranch(self.backbone.output_dim, params, c) for c in CLASS_ORDER]
         )
@@ -238,7 +238,7 @@ class CrossAttentionModel(nn.Module):
     def __init__(self, params: ModelParams, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.params = params
-        self.backbone = build_backbone(params.backbone, params.checkpoint_path)
+        self.backbone = build_backbone(params.backbone, params.dinov3.checkpoint_path)
 
         if not self.backbone.has_patch_support:
             raise ValueError(

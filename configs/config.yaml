@@ -38,7 +38,8 @@ experiment_name: cv_inat_v0.4
 model:
   backbone: bioclip
   start_unfreezed: 1
-  checkpoint_path: null
+  dinov3:
+    checkpoint_path: null
 
 # Do not chdir into outputs/; data paths are relative to the repo/CWD.
 hydra:

@@ -2,7 +2,8 @@
 env_name: colab
 
 model:
-  checkpoint_path: /content/drive/MyDrive/inat-phenology-cv/data/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
+  dinov3:
+    checkpoint_path: /content/drive/MyDrive/inat-phenology-cv/data/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
 
 paths:
   root: /content/inat-phenology-cv

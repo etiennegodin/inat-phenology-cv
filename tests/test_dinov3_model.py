@@ -28,13 +28,22 @@ def test_build_backbone_passes_checkpoint_to_dinov3(monkeypatch):
     assert received["checkpoint_path"] == "weights.pth"
 
 
-@pytest.mark.parametrize("model_class", [MilAttentionModel, CrossAttentionModel])
 @pytest.mark.parametrize("backbone_name", ["efficientnet", "bioclip", "bioclip2"])
-def test_models_reject_checkpoint_for_unsupported_backbone(model_class, backbone_name):
-    params = ModelParams(backbone=backbone_name, checkpoint_path="weights.pth")
+def test_build_backbone_ignores_dinov3_checkpoint_for_other_backbones(
+    monkeypatch, backbone_name
+):
+    received = []
 
-    with pytest.raises(ValueError, match="does not support a local checkpoint_path"):
-        model_class(params)
+    class RecordingBackbone:
+        def __init__(self):
+            received.append(True)
+
+    monkeypatch.setitem(BACKBONE_REGISTRY, backbone_name, RecordingBackbone)
+
+    backbone = build_backbone(backbone_name, "weights.pth")
+
+    assert isinstance(backbone, RecordingBackbone)
+    assert received == [True]
 
 
 def test_dinov3_backbone_shapes():

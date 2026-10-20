@@ -2,7 +2,8 @@
 env_name: local
 
 model:
-  checkpoint_path: ${paths.data_root}/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
+  dinov3:
+    checkpoint_path: ${paths.data_root}/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
 
 paths:
   root: /home/etienne/projects/inat-phenology-cv

@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 from hydra import compose, initialize_config_dir
 
-from plant_pheno.config import CONFIG_DIR, training_params_from_cfg
+from plant_pheno.config import (
+    CONFIG_DIR,
+    model_params_from_cfg,
+    training_params_from_cfg,
+)
 from plant_pheno.config.choices import (
     available_choices,
     format_available_choices,
@@ -31,6 +35,20 @@ def test_colab_environment_overrides_machine_settings() -> None:
     assert cfg.env_name == "colab"
     assert cfg.paths.root == "/content/inat-phenology-cv"
     assert cfg.dataloaders.batch_size == 256
+    assert cfg.model.backbone == "bioclip"
+    assert cfg.model.dinov3.checkpoint_path.endswith(
+        "dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
+    )
+
+
+def test_dinov3_checkpoint_setting_is_optional_and_explicit() -> None:
+    cfg = compose_config(
+        "model.backbone=dinov3",
+        "model.dinov3.checkpoint_path=/content/weights.pth",
+    )
+    params = model_params_from_cfg(cfg.model)
+
+    assert params.dinov3.checkpoint_path == "/content/weights.pth"
 
 
 def test_cross_attention_group_sets_architecture_parameters() -> None:
