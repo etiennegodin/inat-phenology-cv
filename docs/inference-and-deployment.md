@@ -2,21 +2,21 @@
 
 ## Overview
 
-The inference path is designed for operational scoring: given a set of observation URLs or records, the system fetches the required photos, validates the data, runs a model, and logs the predictions in a local data store.
+The inference workflow carries a trained model into batch scoring. Given observation records or URLs, it validates the input, synchronizes the associated photos, runs prediction, and persists structured results for downstream analysis.
 
-This is a real workflow layer rather than a toy demo notebook. It is built to connect the training pipeline to downstream ecological analysis.
+This keeps data preparation, model execution, and prediction storage in a single traceable path from input records to analysis-ready outputs.
 
 ## Inference pipeline steps
 
-The core inference flow is:
+The scoring path is:
 
 1. Fetch observation metadata and photo URLs.
 2. Validate record structure and required fields.
 3. Synchronize local image assets.
-4. Load the registered model from MLflow.
+4. Load the selected model from MLflow.
 5. Run model inference on the photo bag.
 6. Convert outputs into structured prediction records.
-7. Log outputs to DuckDB and related storage.
+7. Persist outputs to DuckDB and the surrounding local data store.
 
 ## Supporting components
 
@@ -29,14 +29,14 @@ The project includes:
 
 ## Deployment model
 
-The overall deployment pattern is best described as a model-backed workflow pipeline rather than a single web service endpoint. The project is structured around:
+The current deployment pattern is a model-backed workflow rather than a continuously running web endpoint. It is organized around:
 
 - reproducible training runs
 - MLflow model registration and retrieval
 - data sync and validation before scoring
 - local ingestion of prediction artifacts
 
-This makes the project convenient for repeated batch scoring or research workflows, especially when the source data is observational and photo-heavy.
+This pattern suits repeated research and batch-scoring workflows where source observations are photo-heavy and local data synchronization is part of the job.
 
 ## Operational considerations
 
@@ -50,4 +50,4 @@ The project is designed with practical concerns in mind:
 
 ## Current status
 
-The repository should be understood as an active ML operating pipeline, not just a model training script. The inference layer is one of the major pieces that has grown beyond the original baseline roadmap and should be treated as part of the active system design.
+The inference layer is an active part of the project alongside training and tuning. The workflow is designed for local and Colab-based execution; it should not be mistaken for a hosted prediction API.

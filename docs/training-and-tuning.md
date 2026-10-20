@@ -1,8 +1,10 @@
 # Training and tuning
 
+Training is designed as a repeatable experiment loop: compose a run from configuration, train and evaluate the selected model, then compare its tracked outputs with other runs.
+
 ## Command entry points
 
-The main CLI is `torch_pipe` and is defined in the package entry points.
+The `torch_pipe` CLI exposes the main training and experiment workflows:
 
 Common commands:
 
@@ -13,16 +15,16 @@ torch_pipe command=val val.model_name=cv_inat val.model_version=1
 torch_pipe command=status
 ```
 
-The config layer also supports composition such as:
+Hydra supports multi-run architecture comparisons and named experiment presets:
 
 ```bash
 torch_pipe -m command=train architecture=mil_pooling,cross_attention
 torch_pipe experiment=unfreeze
 ```
 
-## Training features
+## Training workflow
 
-The current training stack includes:
+The workflow supports:
 
 - multi-label objective logic
 - multi-image batched observations
@@ -35,7 +37,7 @@ The current training stack includes:
 
 ## Progressive unfreezing
 
-One of the major recent additions is a progressive unfreeze pathway for the backbone. This is implemented as a staged training mechanism that unlocks deeper blocks over time instead of training the entire backbone at once.
+Progressive unfreezing offers a staged alternative to either freezing the backbone throughout training or making it fully trainable from the start. As training progresses, selected backbone blocks can be unlocked based on class-level staleness, with cooldown and warmup controls for each stage.
 
 Key ideas in the codebase:
 
@@ -45,13 +47,13 @@ Key ideas in the codebase:
 - reset and staleness tracking across classes
 - checkpoint-aware resume logic
 
-This logic is covered by tests and is a significant change from the earlier baseline roadmap.
+The pathway is integrated with optimizer parameter groups and checkpoint-aware state, and has dedicated regression coverage.
 
 ## Hyperparameter tuning
 
-The project includes Optuna-based tuning through a dedicated command path. This allows search-space-based tuning over model and optimizer settings using experiment tracking and a reproducible objective.
+Optuna provides a dedicated tuning path for exploring configured model and optimizer search spaces. The objective and run tracking make trial results available for review before selecting a configuration for a follow-up training run.
 
-Typical tuning flows include:
+Typical iteration:
 
 - search-space selection
 - sampler and pruner configuration
@@ -60,10 +62,8 @@ Typical tuning flows include:
 
 ## Evaluation and quality controls
 
-The training workflow includes richer monitoring than a simple validation loss. It tracks metrics, observes class-level behavior, and logs attention statistics where relevant. It also supports more advanced quality workflows, including label review and correction steps.
+Evaluation tracks class-level behavior alongside aggregate metrics, and logs attention statistics where applicable. CleanLab-based review tools support inspection of potentially problematic labels as a complement to model evaluation.
 
 ## CleanLab and data quality
 
-The project has moved beyond training-only evaluation and includes label-quality refinement paths. The cleanlab-related logic is not simply a side experiment; it is part of the workflow and is reflected in tests and documentation.
-
-This support is important because ecological labels can be noisy, and observation-level multi-image datasets often benefit from quality-aware review.
+Ecological labels can be noisy, so quality review is a useful part of the experiment loop. CleanLab support helps surface examples for review; it complements domain judgment rather than replacing it.

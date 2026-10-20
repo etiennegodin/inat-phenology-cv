@@ -1,8 +1,10 @@
 # Architecture and design
 
+The system separates model construction, experiment control, and data operations so that architecture choices can change without rewriting the surrounding workflow.
+
 ## Package structure
 
-The main implementation sits under `src/plant_pheno` and is structured around functional layers:
+The implementation under `src/plant_pheno` is organized by responsibility:
 
 - `config/`: Hydra config, runtime resolution, registry-backed choices, and validation
 - `train/`: training loop, metrics, checkpointing, flow control, and data pipeline construction
@@ -13,30 +15,29 @@ The main implementation sits under `src/plant_pheno` and is structured around fu
 - `infra/`: logging, seeding, MLflow URI resolution, and environment utilities
 - `utils/`: shared helpers and class/object instantiation utilities
 
-## Training pipeline
+## From configuration to model run
 
-At a high level, the pipeline is:
+Hydra configuration selects the environment, command, architecture, and experiment settings. The training workflow resolves those settings, constructs the data pipeline and model, and manages optimization and evaluation:
 
 1. Load Hydra configuration.
 2. Resolve runtime settings and paths.
 3. Build the dataset and dataloaders.
 4. Instantiate the selected backbone and prediction head.
-5. Run training with metrics, checkpointing, and optimization.
-6. Log the run to MLflow with metrics and artifacts.
-7. Save checkpoints and evaluation outputs.
+5. Train with configured optimization, metrics, and checkpoint objectives.
+6. Record run metrics and artifacts in MLflow.
+7. Persist checkpoints and evaluation outputs for later inspection or use.
 
-The training stack supports multiple backbone families and architecture variants, while keeping model configuration centralized in the config system.
+Centralizing model and runtime choices keeps experiments comparable and reduces the need for one-off training scripts.
 
 ## Multi-image / MIL thinking
 
-The project does not treat each photo as a standalone sample. Instead, a single observation can carry multiple photos, and the model aggregates the image-level evidence into an observation-level prediction.
+An observation may contain multiple photos, so image-level evidence must be combined before producing the observation-level prediction. The model stack supports several aggregation strategies, including attention-based weighting of image instances.
 
 The model stack supports:
 
-- aggregated observation pooling
-- attention-based weighting over image instances
-- class-specific logging and metrics
-- per-class loss and objective tracking
+- observation pooling and attention-based instance weighting
+- class-specific metrics and loss aggregation
+- per-class objective and training-state tracking
 
 ## Configuration model
 
@@ -47,11 +48,11 @@ The configuration layer is central to how the project is run:
 - `architecture` selects model or pipeline variants.
 - `experiment` can enable special training behaviors such as progressive unfreezing.
 
-This ensures that feature selection and runtime behavior are not scattered through ad hoc scripts. The project prefers structured composition over flag-heavy manual branching.
+This keeps model and workflow choices explicit while allowing focused command-line overrides. See [the configuration guide](../configs/README.md) for composition examples.
 
 ## Experimentation and evaluation
 
-The project includes:
+The experiment workflow includes:
 
 - epoch-level metrics and class-specific logs
 - validation runs with thresholded and raw predictions
@@ -59,7 +60,7 @@ The project includes:
 - adaptive stopping and checkpoint objectives
 - dataset and hardware-aware runtime decisions
 
-This is designed for fast iteration on model quality, not just one-off training scripts.
+Together, these controls make it possible to compare experiments and inspect more than a single aggregate validation score.
 
 ## Inference pipeline
 
@@ -71,4 +72,4 @@ Inference is a separate layer from training. The system can:
 - run a registered model through the predictor
 - log results to the local DuckDB-backed store
 
-This makes the project useful for both experimental training and operational scoring workflows.
+The separate inference layer gives model experiments a path into repeatable batch scoring without coupling data synchronization to the training loop.

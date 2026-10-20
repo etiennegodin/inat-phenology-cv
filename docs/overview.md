@@ -1,43 +1,38 @@
 # Project overview
 
-## Mission
+## The problem
 
-This project creates a vision pipeline for plant phenology classification using observation-level imagery and metadata from iNaturalist-style datasets. The goal is to estimate phenology states from photo sets, not just single images, and to support this as a repeatable ML workflow with experiment tracking, evaluation, and model deployment.
+Plant phenology describes recurring life-cycle events such as flowering and fruiting. These events are useful signals for ecological analysis, but observations are visually uneven: one record may include several photos, while the most informative evidence may appear in only one of them. This project explores how to turn those observation-level photo sets into multi-label phenology predictions.
 
-## Current state
+## The approach
 
-The codebase has evolved from a baseline transfer-learning prototype into a structured ML project with:
+Rather than treating every photo as an independent example, the pipeline groups images by observation and predicts at the observation level. It combines configurable vision backbones with pooled or attention-based multiple-instance learning, then supports the full experiment loop around model development:
 
-- multi-label phenology classification
-- multi-image observation bags
-- attention-based multiple-instance learning
-- configurable backbone stacks
-- Hydra-driven runtime configuration
-- MLflow tracking and artifact logging
-- Optuna-based hyperparameter tuning
-- progressive unfreezing for backbone training
-- CleanLab-driven label review support
-- inference and validation pipelines tied to local data stores
+- structured configuration and runtime validation with Hydra
+- training, evaluation, checkpointing, and experiment tracking with MLflow
+- parameter search with Optuna and staged backbone unfreezing
+- label review support with CleanLab
+- validated batch inference with photo synchronization and DuckDB persistence
 
-## Why this exists
+## Why it matters
 
-The project sits between data collection and operational ecological scoring. It turns raw observation metadata and images into model predictions that can later be used in broader phenology and biodiversity workflows. This is not only a model benchmark; it is an end-to-end system for experimentation and pipeline execution.
+The work connects image modeling with the practical data workflow needed to use predictions downstream. Its focus is both methodological, exploring how multiple images contribute to an observation-level prediction, and engineering-oriented, making experiments configurable, traceable, and repeatable.
 
 ## Project goals
 
-1. Train robust phenology models from noisy, multi-image ecological observations.
-2. Support multiple backbone architectures and model families.
-3. Keep the training stack reproducible and trackable via MLflow and structured config.
-4. Provide an inference pipeline that can ingest observation URLs and synchronize needed photos.
-5. Support iterative improvement through tuning, validation, and label-quality workflows.
+1. Build and compare multi-label models for multi-image ecological observations.
+2. Make backbone and aggregation choices configurable for controlled experiments.
+3. Track training runs, metrics, and artifacts so results can be inspected and compared.
+4. Carry trained models into a validated batch-scoring workflow.
+5. Support iteration through tuning, evaluation, and label-quality review.
 
 ## Core terms
 
-- Observation: a single ecological sample with one or more photos and phenology metadata.
-- Bag-of-images: the set of images attached to an observation used in a multi-instance prediction pipeline.
-- Multi-label classification: each observation can have multiple active phenology classes, such as flowering and fruiting states.
-- Progressive unfreezing: a staged backbone training approach that gradually makes deeper layers trainable.
+- Observation: an ecological record with one or more photos and associated phenology metadata.
+- Image bag: the photos attached to one observation and processed together for an observation-level prediction.
+- Multi-label classification: one observation may have several active classes, such as flowering and fruiting.
+- Progressive unfreezing: a staged fine-tuning strategy that gradually makes backbone blocks trainable.
 
-## Repository direction
+## Project status
 
-The repository is organized for active experimentation and repeatable training jobs rather than a single static demo. The current emphasis is on research-grade ML workflow structure: strong config management, reproducible experiment tracking, robust validation, and inference pipelines that can be rerun reliably.
+The repository is an active research and engineering project. Its current emphasis is a modular experiment and inference workflow; model quality should be evaluated through the tracked experiments rather than assumed from the system design alone.
