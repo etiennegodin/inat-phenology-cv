@@ -1,6 +1,6 @@
 import torch
 
-from plant_pheno.config import ModelParams, OptimizerParams
+from plant_pheno.config import DinoV3Params, ModelParams, OptimizerParams
 from plant_pheno.core import build_pipeline_model
 from plant_pheno.train.factory import (
     build_pipeline_optimizer,
@@ -13,6 +13,7 @@ def create_dummy_model():
     device = torch.device("cpu")
     model_params = ModelParams(
         backbone="efficientnet",
+        dinov3=DinoV3Params(),
         head_neurons=32,
         head_outputs=3,
         head_dropout_prob=0.1,
@@ -147,6 +148,7 @@ def test_checkpoint_from_file_instantiates_model(tmp_path):
 
     assert reloaded_ckpt.model is not None
     assert hasattr(reloaded_ckpt.model, "backbone")
+    assert isinstance(reloaded_ckpt.model.params.dinov3, DinoV3Params)
 
 
 def test_checkpoint_to_dict(tmp_path):

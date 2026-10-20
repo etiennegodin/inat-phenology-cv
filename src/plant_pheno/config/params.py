@@ -108,6 +108,9 @@ class TrainConfig:
 class DinoV3Params:
     checkpoint_path: str | None = None
 
+    def to_dict(self):
+        return asdict(self)
+
 
 @dataclass
 class ModelConfig:
@@ -265,6 +268,9 @@ class ModelParams:
         import logging as _logging
 
         _log = _logging.getLogger(__name__)
+
+        if isinstance(self.dinov3, dict):
+            self.dinov3 = DinoV3Params(**self.dinov3)
 
         if self.architecture == "mil_pooling":
             for field_name, default in self._CROSS_DEFAULTS.items():

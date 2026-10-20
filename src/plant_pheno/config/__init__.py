@@ -17,6 +17,7 @@ from .params import (
     CleanlabParams,
     DataLoadersParams,
     DatasetParams,
+    DinoV3Params,
     FineTuneParams,
     InferenceParams,
     IngestPhotosParams,
@@ -71,4 +72,5 @@ __all__ = [
     "resolve_hardware_profile",
     "OPTUNA_PRUNERS",
     "OPTUNA_SAMPLERS",
+    "DinoV3Params",
 ]

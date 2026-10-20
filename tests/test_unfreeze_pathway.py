@@ -182,7 +182,9 @@ def test_unfreeze_pathway_multiepoch_simulation():
             block5 = model.backbone.get_trainable_blocks()[5]
             assert all(p.requires_grad for p in block5.parameters())
             # Warmup LR at epoch 2 is 10% of target_lr
-            target_lr_0 = scheduler.get_last_lr()[0] * (0.9**0)
+            target_lr_0 = scheduler.get_last_lr()[0] * training_params.get_depth_ratio(
+                0
+            )
             stage0_group = next(
                 g
                 for g in optimizer.param_groups
@@ -199,7 +201,9 @@ def test_unfreeze_pathway_multiepoch_simulation():
                 for g in optimizer.param_groups
                 if g.get("name") == "unfreezed_stage_0"
             )
-            target_lr_0 = scheduler.get_last_lr()[0] * (0.9**0)
+            target_lr_0 = scheduler.get_last_lr()[0] * training_params.get_depth_ratio(
+                0
+            )
             assert pytest.approx(stage0_group["lr"], rel=1e-3) == 0.55 * target_lr_0
 
         elif epoch == 4:
@@ -210,7 +214,9 @@ def test_unfreeze_pathway_multiepoch_simulation():
                 for g in optimizer.param_groups
                 if g.get("name") == "unfreezed_stage_0"
             )
-            target_lr_0 = scheduler.get_last_lr()[0] * (0.9**0)
+            target_lr_0 = scheduler.get_last_lr()[0] * training_params.get_depth_ratio(
+                0
+            )
             assert pytest.approx(stage0_group["lr"], rel=1e-3) == 1.0 * target_lr_0
 
         elif epoch == 5:
@@ -224,7 +230,9 @@ def test_unfreeze_pathway_multiepoch_simulation():
             block4 = model.backbone.get_trainable_blocks()[4]
             assert all(p.requires_grad for p in block4.parameters())
             # Stage 1 warmup at start factor (10% of depth-scaled target_lr)
-            target_lr_1 = scheduler.get_last_lr()[0] * (0.9**1)
+            target_lr_1 = scheduler.get_last_lr()[0] * training_params.get_depth_ratio(
+                1
+            )
             stage1_group = next(
                 g
                 for g in optimizer.param_groups
