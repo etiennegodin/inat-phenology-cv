@@ -286,14 +286,18 @@ def review_misclassifications(
         lbl = label_dropdown.value
         err = error_dropdown.value
         items = report_dict.get(lbl, {}).get(err, [])
-        if items:
-            obs_slider.max = len(items) - 1
-            obs_slider.value = 0
-            obs_slider.disabled = False
-        else:
-            obs_slider.max = 0
-            obs_slider.value = 0
-            obs_slider.disabled = True
+        obs_slider.unobserve(render_figure, names="value")
+        try:
+            if items:
+                obs_slider.max = len(items) - 1
+                obs_slider.value = 0
+                obs_slider.disabled = False
+            else:
+                obs_slider.max = 0
+                obs_slider.value = 0
+                obs_slider.disabled = True
+        finally:
+            obs_slider.observe(render_figure, names="value")
         render_figure()
 
     def render_figure(*args):
