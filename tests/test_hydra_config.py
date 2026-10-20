@@ -45,6 +45,15 @@ def test_cleanlab_command_keeps_selected_environment_paths() -> None:
     )
 
 
+def test_experiment_recipe_overrides_root_settings() -> None:
+    cfg = compose_config("experiment=smoke_test")
+
+    assert cfg.experiment_name == "test"
+    assert cfg.test is True
+    assert cfg.test_frac == 0.05
+    assert cfg.train.epochs == 1
+
+
 def test_train_epoch_override_and_hydra_does_not_change_directory() -> None:
     with initialize_config_dir(version_base="1.3", config_dir=str(CONFIG_DIR)):
         cfg = compose(

@@ -13,11 +13,11 @@
 #   torch_pipe command=cleanlab env=colab --cfg job
 defaults:
   - config_schema
+  - _self_
   - env: local
   - architecture: mil_pooling
   - command: train
   - experiment: null
-  - _self_
 
 # Shared dataset schema (not machine-specific)
 dataset:

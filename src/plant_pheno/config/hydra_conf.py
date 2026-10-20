@@ -63,6 +63,8 @@ def resolved_container(cfg: DictConfig | AppConfig) -> dict[str, Any]:
 
 
 def cfg_to_runtime(cfg: DictConfig | AppConfig) -> Config:
+    """Creates the project Config with paths, dataloaders,
+    dataset settings, hardware profile, and git metadata"""
     from ..utils.misc import get_current_git_branch, get_git_hash
 
     data = resolved_container(cfg)
@@ -90,6 +92,7 @@ def model_params_from_cfg(
     model_cfg: DictConfig | ModelConfig | dict[str, Any],
     **overrides: Any,
 ) -> ModelParams:
+    """Creates ModelParams from DictConfig"""
     data = OmegaConf.to_container(model_cfg, resolve=True)  # type: ignore[arg-type]
     if not isinstance(data, dict):
         raise TypeError("model config must resolve to a mapping")
@@ -102,13 +105,17 @@ def training_params_from_cfg(
     cfg: DictConfig | AppConfig,
     **overrides: Any,
 ) -> TrainingParams:
+    """Creates TrainingParams, adding shared values such as
+    the seed and dataloader accumulation setting."""
     data = resolved_container(cfg)
     train = dict(data["train"])
     model = data["model"]
     allowed = _init_fields(TrainingParams)
     kwargs: dict[str, Any] = {k: train[k] for k in allowed if k in train}
     kwargs.setdefault("seed", data["seed"])
-    kwargs.setdefault("starting_block", model.get("start_unfreezed", train.get("starting_block", 1)))
+    kwargs.setdefault(
+        "starting_block", model.get("start_unfreezed", train.get("starting_block", 1))
+    )
     kwargs.setdefault(
         "accumulation_steps",
         data["dataloaders"].get("gradient_accumulation_steps", 1),
