@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import pytest
 from hydra import compose, initialize_config_dir
 
 from plant_pheno.config import CONFIG_DIR
+from plant_pheno.config.choices import (
+    available_choices,
+    format_available_choices,
+    validate_config_choices,
+)
 
 
 def compose_config(*overrides: str):
@@ -64,3 +70,30 @@ def test_train_epoch_override_and_hydra_does_not_change_directory() -> None:
 
     assert cfg.train.epochs == 3
     assert cfg.hydra.job.chdir is False
+
+
+def test_available_choices_include_backbones_and_hydra_groups() -> None:
+    choices = available_choices()
+
+    assert "bioclip" in choices["model.backbone"]
+    assert "mil_pooling" in choices["architecture"]
+    assert "cross_attention" in choices["architecture"]
+    assert "local" in choices["env"]
+    assert "options" in choices["command"]
+    assert "model.backbone:" in format_available_choices()
+
+
+def test_invalid_backbone_reports_available_values() -> None:
+    cfg = compose_config()
+    cfg.model.backbone = "not-a-backbone"
+
+    with pytest.raises(ValueError, match="model.backbone='not-a-backbone'"):
+        validate_config_choices(cfg)
+
+
+def test_invalid_tuning_choice_reports_available_values() -> None:
+    cfg = compose_config("command=tune")
+    cfg.tune.sampler = "not-a-sampler"
+
+    with pytest.raises(ValueError, match="tune.sampler='not-a-sampler'"):
+        validate_config_choices(cfg)

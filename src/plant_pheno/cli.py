@@ -29,6 +29,7 @@ from .config import (
     scheduler_params_from_cfg,
     training_params_from_cfg,
 )
+from .config.choices import format_available_choices, validate_config_choices
 from .core.device import get_device, set_device
 from .data import log_model_evaluation
 from .inference import InatInferencePipeline
@@ -48,7 +49,6 @@ from .utils import (
 
 if TYPE_CHECKING:
     from .core.model import PhenologyModel
-    from .config import Config
 
 mlflow.enable_system_metrics_logging()
 mlflow.system_metrics.set_system_metrics_sampling_interval(10)
@@ -68,7 +68,8 @@ def _command(name: str):
 def _require_colab_gpu(cfg: DictConfig) -> None:
     if cfg.env_name == "colab" and not cuda.is_available():
         raise RuntimeError(
-            f"Attempted to load env=colab on a non-gpu session (env_name={cfg.env_name})"
+            "Attempted to load env=colab on a non-gpu session "
+            f"(env_name={cfg.env_name})"
         )
 
 
@@ -312,6 +313,11 @@ def list_model_cmd(cfg: DictConfig):
             print(f"  -> Version: {version.version} | Stage: {version.current_stage}")
 
 
+@_command("options")
+def options_cmd(cfg: DictConfig):
+    print(format_available_choices())
+
+
 @_command("test")
 def test_cmd(cfg: DictConfig):
     print("test command is not implemented")
@@ -344,6 +350,7 @@ def hydra_entry(cfg: DictConfig):
     logger.info("Starting")
     logger.debug("Configs set up")
 
+    validate_config_choices(cfg)
     command = cfg.command
     if command not in COMMANDS:
         raise ValueError(
