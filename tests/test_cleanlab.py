@@ -18,7 +18,11 @@ from plant_pheno.cleanlab import (
     save_oof_predictions_to_duckdb,
     stratified_multilabel_kfold,
 )
-from plant_pheno.train.dataset import get_mean_img_ratio
+from plant_pheno.train.dataset import (
+    CacheDatasetdPhenologyDataset,
+    PhenologyDataset,
+    get_mean_img_ratio,
+)
 
 
 @pytest.fixture
@@ -59,6 +63,45 @@ def test_get_mean_img_ratio_with_grouped_paths(tmp_path: Path):
     df = pd.DataFrame({"path": [[portrait_path, square_path]]})
 
     assert get_mean_img_ratio(df) == 1.5
+
+
+def test_cached_dataset_views_reuse_preloaded_images(tmp_path: Path, monkeypatch):
+    from types import SimpleNamespace
+
+    image_paths = []
+    for image_id in range(2):
+        image_path = tmp_path / f"{image_id}.png"
+        Image.new("RGB", (4, 4), color=(image_id, 0, 0)).save(image_path)
+        image_paths.append(image_path)
+
+    dataset_params = SimpleNamespace(idx_col="observation_id", label_col="label")
+    full_df = pd.DataFrame(
+        {
+            "observation_id": [10, 20],
+            "path": [[image_paths[0]], [image_paths[1]]],
+            "label": [[1.0], [0.0]],
+        }
+    )
+    full_dataset = PhenologyDataset.from_profile(True, full_df, None, dataset_params)
+    cached_images = full_dataset.images
+
+    def fail_preload(*args, **kwargs):
+        raise AssertionError("fold datasets should reuse the full image cache")
+
+    monkeypatch.setattr(
+        CacheDatasetdPhenologyDataset, "preload_images_to_ram", fail_preload
+    )
+    fold_df = full_df.iloc[[1]].reset_index(drop=True)
+    fold_dataset = PhenologyDataset.from_profile(
+        True,
+        fold_df,
+        None,
+        dataset_params,
+        shared_cache=full_dataset,
+    )
+
+    assert fold_dataset.images[0] is cached_images[1]
+    assert fold_dataset[0][2] == 20
 
 
 def test_stratified_multilabel_kfold(mock_multilabel_df: pd.DataFrame):

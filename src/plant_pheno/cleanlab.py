@@ -411,6 +411,11 @@ def run_cleanlab_cv(
 
     transforms = BACKBONE_REGISTRY[model_params.backbone]().get_transforms()
     train_transform, val_transform = transforms
+    shared_cache = (
+        PhenologyDataset.from_profile(cache, df, None, dataset_params)
+        if cache
+        else None
+    )
 
     folds = stratified_multilabel_kfold(
         df=df,
@@ -451,10 +456,18 @@ def run_cleanlab_cv(
             logger.info(f"\n{'=' * 25} FOLD {fold_number}/{n_folds} {'=' * 25}")
 
             train_set = PhenologyDataset.from_profile(
-                cache, train_df, train_transform, dataset_params
+                cache,
+                train_df,
+                train_transform,
+                dataset_params,
+                shared_cache=shared_cache,
             )
             val_set = PhenologyDataset.from_profile(
-                cache, val_df, val_transform, dataset_params
+                cache,
+                val_df,
+                val_transform,
+                dataset_params,
+                shared_cache=shared_cache,
             )
 
             train_loader, val_loader, _ = build_pipeline_dataloaders(

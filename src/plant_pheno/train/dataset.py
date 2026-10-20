@@ -47,9 +47,12 @@ class PhenologyDataset(Dataset, ABC):
         df: pd.DataFrame,
         transform,
         dataset_params: DatasetParams,
+        shared_cache: CacheDatasetdPhenologyDataset | None = None,
     ):
         if cache:
-            return CacheDatasetdPhenologyDataset(df, transform, dataset_params)
+            return CacheDatasetdPhenologyDataset(
+                df, transform, dataset_params, shared_cache=shared_cache
+            )
         return UncachedPhenologyDataset(df, transform, dataset_params)
 
     @abstractmethod
@@ -88,10 +91,29 @@ class UncachedPhenologyDataset(PhenologyDataset):
 
 class CacheDatasetdPhenologyDataset(PhenologyDataset):
     def __init__(
-        self, df: pd.DataFrame, transform, dataset_params: DatasetParams
+        self,
+        df: pd.DataFrame,
+        transform,
+        dataset_params: DatasetParams,
+        shared_cache: CacheDatasetdPhenologyDataset | None = None,
     ) -> None:
         super().__init__(df, transform, dataset_params)
-        self.images, self.targets = self.preload_images_to_ram(df, dataset_params)
+        if shared_cache is None:
+            self.images, self.targets = self.preload_images_to_ram(df, dataset_params)
+        else:
+            self._reuse_shared_cache(shared_cache)
+
+    def _reuse_shared_cache(self, shared_cache: CacheDatasetdPhenologyDataset) -> None:
+        cache_indices = {
+            int(obs_id): index
+            for index, obs_id in enumerate(shared_cache.df[self.dataset_params.idx_col])
+        }
+        selected_indices = [
+            cache_indices[int(obs_id)]
+            for obs_id in self.df[self.dataset_params.idx_col]
+        ]
+        self.images = [shared_cache.images[index] for index in selected_indices]
+        self.targets = [shared_cache.targets[index] for index in selected_indices]
 
     def __getitem__(self, index: int):
         obs_id = int(self.df.iat[index, 0])
