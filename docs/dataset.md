@@ -1,24 +1,7 @@
 
 ## Training
 
-$n = 14186$
-
-| Class | Positive count | Pos. Ratio |
-|---|---|---|
-| Flowering | 6504 | 0.458 |
-| Fruiting | 2612 | 0.184 |
-| Flower Budding  | 2775 | 0.196 |
-
-
 ## Validation
-
-$n = 1774$
-
-| Class | Positive count | Pos. Ratio |
-|---|---|---|
-| Flowering | 824 | 0.464 |
-| Fruiting | 336 | 0.189 |
-| Flower Budding  | 352 | 0.198 |
 
 ## Photo per observation distribution
 
