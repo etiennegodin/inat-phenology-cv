@@ -17,3 +17,12 @@ SELECT
 FROM staged.label t1
 JOIN staged.label_corrected t2 ON t1.observation_id = t2.observation_id
 WHERE t1.label IS DISTINCT FROM t2.label;
+
+-- Removals
+CREATE OR REPLACE TABLE eda.uncertain_observations AS
+SELECT
+    t1.observation_id,
+    t2.label
+FROM staged.label_corrected t1
+JOIN staged.label_corrected t2 ON t1.observation_id = t2.observation_id
+WHERE list_contains(t1.label, -1)
