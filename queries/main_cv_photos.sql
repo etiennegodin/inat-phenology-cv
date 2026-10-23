@@ -1,5 +1,5 @@
 -- Create the table for training
-CREATE OR REPLACE TABLE main.cv_photos4 AS
+CREATE OR REPLACE TABLE main.train_set AS
 
 WITH base AS(
 SELECT p.observation_id,

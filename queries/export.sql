@@ -1,1 +1,1 @@
-COPY main.cv_photos4 TO 'cv_photos4.parquet' (FORMAT PARQUET);
+COPY main.train_set TO 'train_set.parquet' (FORMAT PARQUET);

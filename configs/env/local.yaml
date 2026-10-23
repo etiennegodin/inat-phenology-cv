@@ -9,7 +9,7 @@ paths:
   root: /home/etienne/projects/inat-phenology-cv
   data_root: ${paths.root}/data
   image_dir: ${paths.data_root}/images
-  db_path: ${paths.data_root}/cv_photos4.parquet
+  db_path: ${paths.data_root}/train_set.parquet
   checkpoint_path: ${paths.data_root}/checkpoints
   eval_db_path: ${paths.data_root}/model_evaluations.duckdb
   inference_db_path: ${paths.data_root}/inference.duckdb

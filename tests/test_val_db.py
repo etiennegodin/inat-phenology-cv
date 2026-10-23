@@ -41,14 +41,14 @@ def sample_epoch_metrics():
 def test_log_model_evaluation_with_epoch_metrics(sample_epoch_metrics):
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_evals.duckdb"
-        dataset_path = "/path/to/data/cv_photos4.parquet"
+        dataset_path = "/path/to/data/train_set.parquet"
 
         eval_id = log_model_evaluation(
             eval_db_path=db_path,
             model_name="cv_inat_test",
             model_version=2,
             dataset_path=dataset_path,
-            dataset_table="cv_photos4",
+            dataset_table="train_set",
             seed=42,
             is_test_mode=True,
             metrics=sample_epoch_metrics,
@@ -65,9 +65,9 @@ def test_log_model_evaluation_with_epoch_metrics(sample_epoch_metrics):
         assert row["eval_id"] == eval_id
         assert row["model_name"] == "cv_inat_test"
         assert str(row["model_version"]) == "2"
-        assert row["dataset_file"] == "cv_photos4.parquet"
+        assert row["dataset_file"] == "train_set.parquet"
         assert row["dataset_path"] == dataset_path
-        assert row["dataset_table"] == "cv_photos4"
+        assert row["dataset_table"] == "train_set"
         assert row["seed"] == 42
         assert bool(row["is_test_mode"]) is True
 
