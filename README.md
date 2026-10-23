@@ -40,11 +40,11 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 
 | Backbone | Aggregation | Macro PR-AUC | Flowering | Fruiting | Flower Budding |
 |---|---|---|---|---|---|
-| BioCLIP | MIL (CLAM-MB) | – | – | – | – |
+| BioCLIP | MIL (CLAM-MB) | 0.832 | 0.986 | 0.872 | 0.637 |
 | BioCLIP | Cross-attention | – | – | – | – |
 | BioCLIP 2 | MIL (CLAM-MB) | – | – | – | – |
 | BioCLIP 2 | Cross-attention | – | – | – | – |
-| DINOv3 | MIL (CLAM-MB) | – | – | – | – |
+| DINOv3 | MIL (CLAM-MB) | 0.771 | 0.974 | 0.799 | 0.540 |
 | DINOv3 | Cross-attention | – | – | – | – |
 
 <!-- TODO: trim or reorder the grid to the combinations you actually run, and fill in numbers when the runs are final. -->
@@ -54,6 +54,7 @@ What I can say with some confidence so far:
 - Metric choice matters a lot. Early stopping on a calibration-sensitive metric (BCE loss) gave misleading signals, and I now stop on discrimination metrics (PR-AUC variants).
 - Early comparisons suggest BioCLIP 2 improves on BioCLIP 1 for fruiting and flower budding and makes flower budding much more stable across seeds. The flowering difference isn't distinguishable from noise. I'll treat this as a lead until the controlled grid confirms it.
 - Flower Budding is the hardest class and the noisiest. Some of its ambiguity is human-level, so I treat its metrics with caution.
+
 
 ## Installation
 
@@ -130,6 +131,7 @@ docs/                 # design notes (see below)
 ## Documentation
 
 - [Overview](docs/overview.md): problem framing, goals, scope
+- [Dataset](docs/dataset.md): dataset description
 - [Architecture](docs/architecture.md): model design and how the system is organized
 - [Training and tuning](docs/training-and-tuning.md): metrics, stopping, unfreezing, hyperparameter search, label audits
 - [Inference and deployment](docs/inference-and-deployment.md): scoring, validation, persistence
