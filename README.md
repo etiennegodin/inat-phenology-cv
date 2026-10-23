@@ -40,11 +40,11 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 
 | Backbone | Aggregation | Macro PR-AUC | Flowering | Fruiting | Flower Budding |
 |---|---|---|---|---|---|
-| BioCLIP | MIL (CLAM-MB) | 0.832 | 0.986 | 0.872 | 0.637 |
+| BioCLIP | MIL (CLAM-MB) | – | – | – | – |
 | BioCLIP | Cross-attention | – | – | – | – |
 | BioCLIP 2 | MIL (CLAM-MB) | – | – | – | – |
 | BioCLIP 2 | Cross-attention | – | – | – | – |
-| DINOv3 | MIL (CLAM-MB) | 0.771 | 0.974 | 0.799 | 0.540 |
+| DINOv3 | MIL (CLAM-MB) | – | – | – | – |
 | DINOv3 | Cross-attention | – | – | – | – |
 
 <!-- TODO: trim or reorder the grid to the combinations you actually run, and fill in numbers when the runs are final. -->

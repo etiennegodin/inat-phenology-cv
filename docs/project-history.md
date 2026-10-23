@@ -16,7 +16,12 @@ The project began as an enrichment step for a companion project, [inat-obs-score
 | **v0.10** Backbones and aggregation | DINOv3 backbone and a cross-attention aggregation build, alongside CLAM-MB. | Compare backbones and aggregation strategies under one config. |
 | **v0.11** Label audit *(in progress)* | Cleanlab k-fold audit of the training labels. | Tune and unfreeze on cleaner labels. |
 | **v0.12** Unfreezing *(planned, mechanism built)* | Progressive backbone unfreezing, validated with a controlled experiment. | Test whether fine-tuning deeper blocks helps. |
-| **v1.0** Tuning *(planned)* | Optuna search, two-stage design. | Stop hand-tuning. |
+| **v0.13** Embeddings caching  *(planned)* | Cache the backbone cls embeddings on frozen or partially tuned backbone | Enables fast iteration and tuning on head. MIL only.  |
+| **v0.14** Tuning *(planned)* | Optuna search, two-stage design. | Stop hand-tuning. |
+| **v0.15** Final tuning *(planned)* | Putting back winning heads on top of backbone and fine tuning last layers  | Final knowledge extraction |
+| **v0.16** Evaluation *(planned)* | Evaluation on held out test set, reports | Final results and reports. |
+| **v0.17** API design *(planned)* | API entrypoint design, POST annotation results on iNaturalist from evaluated observations  | Product deployment |
+| **v1.0** Release *(planned)* |  |  |
 
 <!-- TODO: version numbers from v0.9 on are my guess. Adjust them to match your own roadmap. -->
 
