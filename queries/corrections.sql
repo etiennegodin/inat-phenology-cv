@@ -1,7 +1,7 @@
 -- Import csvs
-CREATE OR REPLACE TABLE corrections.flowering AS SELECT * FROM "/home/etienne/projects/inat-phenology-cv/data/label_corrections/val_label_correction - flowering.csv";
-CREATE OR REPLACE TABLE corrections.fruiting AS SELECT * FROM "/home/etienne/projects/inat-phenology-cv/data/label_corrections/val_label_correction - fruiting.csv";
-CREATE OR REPLACE TABLE corrections.flower_budding AS SELECT * FROM "/home/etienne/projects/inat-phenology-cv/data/label_corrections/val_label_correction - budding.csv";
+CREATE OR REPLACE TABLE corrections.flowering AS SELECT * FROM "/home/etienne/projects/inat-phenology-cv/data/label_corrections/cleanlab_issues_Flowering.csv";
+CREATE OR REPLACE TABLE corrections.fruiting AS SELECT * FROM "/home/etienne/projects/inat-phenology-cv/data/label_corrections/cleanlab_issues_Fruiting.csv";
+CREATE OR REPLACE TABLE corrections.flower_budding AS SELECT * FROM "/home/etienne/projects/inat-phenology-cv/data/label_corrections/cleanlab_issues_Flower_Budding.csv";
 
 -- Stage in one table
 CREATE OR REPLACE TABLE staged.corrections AS
