@@ -5,6 +5,7 @@ import logging
 import mlflow
 import numpy as np
 import pandas as pd
+from mlflow import MlflowClient, MlflowException
 
 from ..config import CLASS_ORDER
 from ..data import DuckDBAdapter
@@ -15,13 +16,15 @@ logger = logging.getLogger(__name__)
 
 class PhenologyPredictor:
     model_name: str
-    model_version: int
+    model_version: int | None
     db_path: str
 
     model: mlflow.pyfunc.PythonModel
     model_uri: str
 
-    def __init__(self, model_name: str, model_version: int, db_path: str) -> None:
+    def __init__(
+        self, model_name: str, model_version: int | None, db_path: str
+    ) -> None:
         self.model_name = model_name
         self.model_version = model_version
         self.db_path = db_path
@@ -51,6 +54,18 @@ class PhenologyPredictor:
         self,
     ):
         mlflow.set_tracking_uri(resolve_uri())
+        if self.model_version is None:
+            versions = MlflowClient().search_model_versions(
+                f"name='{self.model_name}'",
+                max_results=1,
+                order_by=["version_number DESC"],
+            )
+            if not versions:
+                raise MlflowException(
+                    f"No registered versions found for model '{self.model_name}'"
+                )
+            self.model_version = int(versions[0].version)
+
         # Construct the model URI
         self.model_uri = f"models:/{self.model_name}/{self.model_version}"
 

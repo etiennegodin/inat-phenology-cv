@@ -85,9 +85,12 @@ torch_pipe command=predict
 #Example
 torch_pipe command=predict \
   predict.model_name=cv_pheno_bioclip \
-  predict.model_version=7 \
   predict.urls=["https://www.inaturalist.ca/observations/409673980"]
 ```
+
+By default, `predict` uses the latest registered version for the specified
+`predict.model_name`. Set `predict.model_version=<number>` to pin a specific
+version.
 
 <!-- TODO: replace with the exact predict example, including the URL argument. -->
 

@@ -7,7 +7,7 @@ from pathlib import Path
 @dataclass
 class InferenceParams:
     model_name: str
-    model_version: int
+    model_version: int | None
     db_path: str
     photo_target_dir: str
     sql_dir: str
@@ -67,7 +67,7 @@ class ValParams:
 @dataclass
 class PredictParams:
     model_name: str = "cv_pheno_bioclip"
-    model_version: int = 1
+    model_version: int | None = None
     device: str = "cuda"
     urls: list[str] | None = None
     ids: list[str] | None = None
