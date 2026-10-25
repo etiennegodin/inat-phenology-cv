@@ -32,6 +32,7 @@ Dataset comparison using baseline model parameters
 |---|---|---|---|---|---|---|
 |2|09/17/2026|0.776|0.973|0.811|0.545|f87f9c85a35042b1bfaa197ba74cdf8d |
 |3|10/23/2026|0.788|0.974|0.843|0.547|d389acfc58b44182a70c72903c3b0e6b |
+|4|10/24/2026|0.794 |0.970 |0.830 |0.582|d389acfc58b44182a70c72903c3b0e6b |
 
 
 ## Dataset version
@@ -94,6 +95,35 @@ Visual inspection of cross validated dataset.
     "Flower_Budding_pos_count": 352,
     "Flower_Budding_pos_ratio": 0.1984,
     "avg_images_per_obs": 2.53
+  }
+}
+```
+
+### 4. 5-fold cross validation
+
+Visual inspection of cross validated dataset.
+100 reviews for Flower Budding
+```json
+{
+  "train": {
+    "total_observations": 14176,
+    "Flowering_pos_count": 6434,
+    "Flowering_pos_ratio": 0.4539,
+    "Fruiting_pos_count": 2610,
+    "Fruiting_pos_ratio": 0.1841,
+    "Flower_Budding_pos_count": 2758,
+    "Flower_Budding_pos_ratio": 0.1946,
+    "avg_images_per_obs": 2.5
+  },
+  "val": {
+    "total_observations": 1772,
+    "Flowering_pos_count": 811,
+    "Flowering_pos_ratio": 0.4577,
+    "Fruiting_pos_count": 317,
+    "Fruiting_pos_ratio": 0.1789,
+    "Flower_Budding_pos_count": 355,
+    "Flower_Budding_pos_ratio": 0.2003,
+    "avg_images_per_obs": 2.56
   }
 }
 ```
