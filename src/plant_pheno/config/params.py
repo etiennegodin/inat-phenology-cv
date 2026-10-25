@@ -5,6 +5,23 @@ from pathlib import Path
 
 
 @dataclass
+class CachingParams:
+    to_layer: int
+    views: int
+
+
+@dataclass
+class CachingConfig:
+    """Hydra-facing cache section; converted to CacheParams at runtime."""
+
+    to_layer: int = 1
+    views: int = 1
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
 class InferenceParams:
     model_name: str
     model_version: int | None

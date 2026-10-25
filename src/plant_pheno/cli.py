@@ -14,7 +14,7 @@ from mlflow import MlflowException
 from omegaconf import DictConfig, OmegaConf
 from torch import cuda, nn
 
-from . import train
+from . import cache, train
 from .config import (
     CONFIG_DIR,
     OPTUNA_PRUNERS,
@@ -22,6 +22,7 @@ from .config import (
     SEARCH_SPACES,
     InferenceParams,
     IngestPhotosParams,
+    cache_params_from_cfg,
     cfg_to_runtime,
     model_params_from_cfg,
     optimizer_params_from_cfg,
@@ -86,6 +87,23 @@ def _log_run_file() -> None:
     log_path = Path.cwd() / "log.log"
     if log_path.exists():
         mlflow.log_artifact(str(log_path))
+
+
+@_command("cache")
+def cache_cmd(cfg: DictConfig):
+    runtime = cfg_to_runtime(cfg)
+    seed_everything(cfg.seed, set_cuda_deterministic=False)
+    _require_colab_gpu(cfg)
+
+    model_params = model_params_from_cfg(cfg.model)
+    caching_params = cache_params_from_cfg(cfg.cache)
+
+    cache.execute(
+        configs=runtime,
+        caching_params=caching_params,
+        model_params=model_params,
+        seed=cfg.seed,
+    )
 
 
 @_command("train")

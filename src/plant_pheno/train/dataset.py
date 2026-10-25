@@ -149,6 +149,43 @@ class CacheDatasetdPhenologyDataset(PhenologyDataset):
         return preloaded_images, targets
 
 
+def _prepare_build_dataset(
+    configs: Config, seed: int = 42
+) -> tuple[pd.DataFrame, CacheDataset]:
+    """Reusable function to prepare dataframe and cache dataset
+    for further datasets creation"""
+
+    df = get_samples(configs.paths_params, configs.dataset_params)
+
+    # Get mean image ratio on raw df
+    mean_image_ratio = get_mean_img_ratio(df)
+
+    # Decide if caching is possible with dataset size and current hardware
+    cache = resolve_cache_decision(
+        configs.hardware_profile, len(df), mean_image_ratio, configs.max_img_resolution
+    )
+
+    # Collapse df by observation
+    df = (
+        df.groupby(configs.dataset_params.idx_col)
+        .agg({"path": list, configs.dataset_params.label_col: "first"})
+        .reset_index(drop=False)
+        .sort_values(by=configs.dataset_params.idx_col)
+        .reset_index(drop=True)
+    )
+
+    # Reduce dataset size if testing
+    if configs.test:
+        df = reduce_dataset(
+            df,
+            fraction=configs.dataset_params.test_frac,
+            params=configs.dataset_params,
+            seed=seed,
+        )
+
+    return df, cache
+
+
 def get_mean_img_ratio(df: pd.DataFrame):
     ratios = []
     for paths in df["path"]:
@@ -238,37 +275,26 @@ def reduce_dataset(
     return df
 
 
+def build_full_dataset(
+    configs: Config, transforms: tuple[Compose, Compose], seed: int = 42
+):
+    """Build full dataset without train,val,test splits"""
+
+    df, cache = _prepare_build_dataset(configs, seed)
+    train_transform, _ = transforms
+
+    full_set = PhenologyDataset.from_profile(
+        cache, df, train_transform, configs.dataset_params
+    )
+    logger.debug(f"Dataset type : {type(full_set)}")
+    return full_set
+
+
 def build_datasets(
     configs: Config, transforms: tuple[Compose, Compose], seed: int = 42
 ) -> tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset]:
 
-    df = get_samples(configs.paths_params, configs.dataset_params)
-
-    # Get mean image ratio on raw df
-    mean_image_ratio = get_mean_img_ratio(df)
-
-    # Decide if caching is possible with dataset size and current hardware
-    cache = resolve_cache_decision(
-        configs.hardware_profile, len(df), mean_image_ratio, configs.max_img_resolution
-    )
-
-    # Collapse df by observation
-    df = (
-        df.groupby(configs.dataset_params.idx_col)
-        .agg({"path": list, configs.dataset_params.label_col: "first"})
-        .reset_index(drop=False)
-        .sort_values(by=configs.dataset_params.idx_col)
-        .reset_index(drop=True)
-    )
-
-    # Reduce dataset size if testing
-    if configs.test:
-        df = reduce_dataset(
-            df,
-            fraction=configs.dataset_params.test_frac,
-            params=configs.dataset_params,
-            seed=seed,
-        )
+    df, cache = _prepare_build_dataset(configs, seed)
 
     # Create splits
     train_df, val_df, test_df = split_dataset(df, configs.dataset_params, seed=seed)

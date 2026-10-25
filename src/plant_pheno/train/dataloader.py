@@ -25,6 +25,44 @@ def collate_fn(batch: list[tuple[torch.Tensor, torch.Tensor, int]]):
     return images, torch.stack(labels), obs_ids
 
 
+def build_single_dataloader(
+    params: DataLoadersParams,
+    dataset: PhenologyDataset,
+    generator: torch.Generator,
+    shuffle: bool,
+    seed: int | None,
+):
+
+    if params.use_max_images:
+        sampler = MaxImagesBatchSampler(
+            dataset.bag_sizes,
+            max_images=params.max_images,
+            shuffle=shuffle,
+            seed=seed,
+        )
+        return DataLoader(
+            dataset,
+            batch_sampler=sampler,
+            collate_fn=collate_fn,
+            num_workers=params.num_workers,
+            pin_memory=params.pin_memory,
+            persistent_workers=params.persistent_workers,
+            generator=generator,
+            worker_init_fn=seed_worker,
+        )
+    return DataLoader(
+        dataset,
+        batch_size=params.batch_size,
+        shuffle=shuffle,
+        collate_fn=collate_fn,
+        num_workers=params.num_workers,
+        pin_memory=params.pin_memory,
+        persistent_workers=params.persistent_workers,
+        generator=generator,
+        worker_init_fn=seed_worker,
+    )
+
+
 def build_pipeline_dataloaders(
     datasets: tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset],
     params: DataLoadersParams,
@@ -32,50 +70,17 @@ def build_pipeline_dataloaders(
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
 
     generator = torch.Generator().manual_seed(seed)
+    loaders = []
 
-    if params.use_max_images:
-        samplers = []
-        loaders = []
-        for i, set in enumerate(datasets):
-            samplers.append(
-                MaxImagesBatchSampler(
-                    set.bag_sizes,
-                    max_images=params.max_images,
-                    shuffle=True if i == 0 else False,
-                    seed=seed if i == 0 else None,
-                )
+    for i, set in enumerate(datasets):
+        loaders.append(
+            build_single_dataloader(
+                dataset=set,
+                shuffle=True if i == 0 else False,
+                seed=seed if i == 0 else None,
+                generator=generator,
+                params=params,
             )
+        )
 
-        for sampler, dataset in zip(samplers, datasets):
-            loaders.append(
-                DataLoader(
-                    dataset,
-                    batch_sampler=sampler,
-                    collate_fn=collate_fn,
-                    num_workers=params.num_workers,
-                    pin_memory=params.pin_memory,
-                    persistent_workers=params.persistent_workers,
-                    generator=generator,
-                    worker_init_fn=seed_worker,
-                )
-            )
-        return tuple(loaders)
-
-    else:
-        loaders = []
-        for i, set in enumerate(datasets):
-            loaders.append(
-                DataLoader(
-                    set,
-                    batch_size=params.batch_size,
-                    shuffle=True if i == 0 else False,
-                    collate_fn=collate_fn,
-                    num_workers=params.num_workers,
-                    pin_memory=params.pin_memory,
-                    persistent_workers=params.persistent_workers,
-                    generator=generator,
-                    worker_init_fn=seed_worker,
-                )
-            )
-
-        return tuple(loaders)
+    return tuple(loaders)

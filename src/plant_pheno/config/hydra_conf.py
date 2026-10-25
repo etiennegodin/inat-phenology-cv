@@ -9,6 +9,8 @@ from omegaconf import MISSING, DictConfig, OmegaConf
 
 from .loader import Config
 from .params import (
+    CachingConfig,
+    CachingParams,
     CleanlabParams,
     DataLoadersParams,
     DatasetParams,
@@ -87,6 +89,19 @@ def cfg_to_runtime(cfg: DictConfig | AppConfig) -> Config:
 
 def _init_fields(cls) -> set[str]:
     return {f.name for f in fields(cls) if f.init and not f.name.startswith("_")}
+
+
+def cache_params_from_cfg(
+    cache_cfg: DictConfig | CachingConfig | dict[str, Any],
+    **overrides: Any,
+) -> CachingParams:
+    """Creates CachingParams from DictConfig"""
+    data = OmegaConf.to_container(cache_cfg, resolve=True)  # type: ignore[arg-type]
+    if not isinstance(data, dict):
+        raise TypeError("cache config must resolve to a mapping")
+    data.update({k: v for k, v in overrides.items() if v is not None})
+    allowed = _init_fields(CachingParams)
+    return CachingParams(**{k: data[k] for k in allowed if k in data})
 
 
 def model_params_from_cfg(
