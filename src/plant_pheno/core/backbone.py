@@ -172,7 +172,16 @@ class BioClipBackbone(Backbone):
         embeddings = self.encoder(input)
         return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
 
-    def encode_patches(self, input: Tensor) -> Tensor:
+    def encode_patches(
+        self, input: Tensor, num_blocks: int | None = None, include_cls: bool = False
+    ) -> Tensor:
+        """Returns patch embeddings [B, num_patches (+1), patch_dim].
+
+        Args:
+            input: Batch of images [B, C, H, W]
+            num_blocks: Optional int to truncate transformer execution early
+            include_cls: Whether to keep the class token at index 0 alongside patches
+        """
         x_conv = self.encoder.conv1(input)
         x_tok = x_conv.reshape(x_conv.shape[0], x_conv.shape[1], -1).permute(0, 2, 1)
         cls_tok = self.encoder.class_embedding.to(x_tok.dtype) + torch.zeros(
@@ -183,11 +192,24 @@ class BioClipBackbone(Backbone):
         x_tok = self.encoder.ln_pre(x_tok)
         x_tok = x_tok.permute(1, 0, 2)
         x_tok = self.encoder.transformer(x_tok)
-        x_tok = x_tok.permute(1, 0, 2)
-        patches = x_tok[:, 1:, :]
+        x_tok = x_tok.permute(
+            1, 0, 2
+        )  # OpenCLIP transformer expects [Seq_Len, Batch, Dim]
+
+        blocks = self.get_trainable_blocks()
+        if num_blocks is not None:
+            blocks = blocks[:num_blocks]  # Truncate directly from your existing method!
+
+        for block in blocks:
+            x_tok = block(x_tok)
+
+        x_tok = x_tok.permute(1, 0, 2)  # Back to [Batch, Seq_Len, Dim]
         if hasattr(self.encoder, "ln_post"):
-            patches = self.encoder.ln_post(patches)
-        return patches
+            x_tok = self.encoder.ln_post(x_tok)
+
+        if not include_cls:
+            x_tok = x_tok[:, 1:, :]  # Drop class token if you only want raw patches
+        return x_tok
 
     def get_transforms(self, version="v2") -> tuple[v2.Compose, v2.Compose]:
         if version != "v2":
@@ -260,7 +282,16 @@ class BioClip2Backbone(Backbone):
         embeddings = self.encoder(input)
         return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
 
-    def encode_patches(self, input: Tensor) -> Tensor:
+    def encode_patches(
+        self, input: Tensor, num_blocks: int | None = None, include_cls: bool = False
+    ) -> Tensor:
+        """Returns patch embeddings [B, num_patches (+1), patch_dim].
+
+        Args:
+            input: Batch of images [B, C, H, W]
+            num_blocks: Optional int to truncate transformer execution early
+            include_cls: Whether to keep the class token at index 0 alongside patches
+        """
         x_conv = self.encoder.conv1(input)
         x_tok = x_conv.reshape(x_conv.shape[0], x_conv.shape[1], -1).permute(0, 2, 1)
         cls_tok = self.encoder.class_embedding.to(x_tok.dtype) + torch.zeros(
@@ -271,11 +302,24 @@ class BioClip2Backbone(Backbone):
         x_tok = self.encoder.ln_pre(x_tok)
         x_tok = x_tok.permute(1, 0, 2)
         x_tok = self.encoder.transformer(x_tok)
-        x_tok = x_tok.permute(1, 0, 2)
-        patches = x_tok[:, 1:, :]
+        x_tok = x_tok.permute(
+            1, 0, 2
+        )  # OpenCLIP transformer expects [Seq_Len, Batch, Dim]
+
+        blocks = self.get_trainable_blocks()
+        if num_blocks is not None:
+            blocks = blocks[:num_blocks]  # Truncate directly from your existing method!
+
+        for block in blocks:
+            x_tok = block(x_tok)
+
+        x_tok = x_tok.permute(1, 0, 2)  # Back to [Batch, Seq_Len, Dim]
         if hasattr(self.encoder, "ln_post"):
-            patches = self.encoder.ln_post(patches)
-        return patches
+            x_tok = self.encoder.ln_post(x_tok)
+
+        if not include_cls:
+            x_tok = x_tok[:, 1:, :]  # Drop class token if you only want raw patches
+        return x_tok
 
     def get_transforms(self, version="v2") -> tuple[v2.Compose, v2.Compose]:
         if version != "v2":
