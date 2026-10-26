@@ -82,8 +82,7 @@ class Backbone(nn.Module, ABC):
 
     @abstractmethod
     def encode(self, input: Tensor) -> Tensor:
-        """returns embeddings ready for attention pooling; normalization,
-        if any, is handled per-backbone to match its pretraining regime"""
+        """Returns global cls embedding [B, 768] with optional block truncation."""
         pass
 
     def encode_patches(self, input: Tensor) -> Tensor:
@@ -119,6 +118,7 @@ class EfficientNetBackbone(Backbone):
         self.set_trainable_block_count()
 
     def encode(self, input: Tensor) -> Tensor:
+        """Returns global cls embedding [B, 768] with optional block truncation."""
         return self.encoder(input)
 
     def get_transforms(self):
@@ -167,10 +167,34 @@ class BioClipBackbone(Backbone):
         self.has_patch_support = True
         self.set_trainable_block_count()
 
-    def encode(self, input: Tensor) -> Tensor:
+    def encode(self, input: Tensor, num_blocks: int | None = None) -> Tensor:
+        """Returns global cls embedding [B, 768] with optional block truncation."""
         # Normalising clip embeddings for scale sensitive attention pooling
-        embeddings = self.encoder(input)
-        return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+
+        x_conv = self.encoder.conv1(input)
+        x_tok = x_conv.reshape(x_conv.shape[0], x_conv.shape[1], -1).permute(0, 2, 1)
+        cls_tok = self.encoder.class_embedding.to(x_tok.dtype) + torch.zeros(
+            x_tok.shape[0], 1, x_tok.shape[-1], dtype=x_tok.dtype, device=x_tok.device
+        )
+        x_tok = torch.cat([cls_tok, x_tok], dim=1)
+        x_tok = x_tok + self.encoder.positional_embedding.to(x_tok.dtype)
+        x_tok = self.encoder.ln_pre(x_tok)
+        x_tok = x_tok.permute(1, 0, 2)
+
+        blocks = self.get_trainable_blocks()
+        if num_blocks is not None:
+            blocks = blocks[:num_blocks]
+
+        for block in blocks:
+            x_tok = block(x_tok)
+
+        x_tok = x_tok.permute(1, 0, 2)
+        embeddings = x_tok[:, 0, :]  # Grab CLS token
+
+        if hasattr(self.encoder, "ln_post") and self.encoder.ln_post is not None:
+            embeddings = self.encoder.ln_post(embeddings)
+
+        return F.normalize(embeddings, dim=1)
 
     def encode_patches(
         self, input: Tensor, num_blocks: int | None = None, include_cls: bool = False
@@ -277,10 +301,34 @@ class BioClip2Backbone(Backbone):
         self.has_patch_support = True
         self.set_trainable_block_count()
 
-    def encode(self, input: Tensor) -> Tensor:
+    def encode(self, input: Tensor, num_blocks: int | None = None) -> Tensor:
+        """Returns global cls embedding [B, 768] with optional block truncation."""
         # Normalising clip embeddings for scale sensitive attention pooling
-        embeddings = self.encoder(input)
-        return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+
+        x_conv = self.encoder.conv1(input)
+        x_tok = x_conv.reshape(x_conv.shape[0], x_conv.shape[1], -1).permute(0, 2, 1)
+        cls_tok = self.encoder.class_embedding.to(x_tok.dtype) + torch.zeros(
+            x_tok.shape[0], 1, x_tok.shape[-1], dtype=x_tok.dtype, device=x_tok.device
+        )
+        x_tok = torch.cat([cls_tok, x_tok], dim=1)
+        x_tok = x_tok + self.encoder.positional_embedding.to(x_tok.dtype)
+        x_tok = self.encoder.ln_pre(x_tok)
+        x_tok = x_tok.permute(1, 0, 2)
+
+        blocks = self.get_trainable_blocks()
+        if num_blocks is not None:
+            blocks = blocks[:num_blocks]
+
+        for block in blocks:
+            x_tok = block(x_tok)
+
+        x_tok = x_tok.permute(1, 0, 2)
+        embeddings = x_tok[:, 0, :]  # Grab CLS token
+
+        if hasattr(self.encoder, "ln_post") and self.encoder.ln_post is not None:
+            embeddings = self.encoder.ln_post(embeddings)
+
+        return F.normalize(embeddings, dim=1)
 
     def encode_patches(
         self, input: Tensor, num_blocks: int | None = None, include_cls: bool = False
@@ -401,11 +449,33 @@ class DinoV3Backbone(Backbone):
         self.has_patch_support = True
         self.set_trainable_block_count()
 
-    def encode(self, input: Tensor) -> Tensor:
-        out = self.encoder.forward_features(input)
-        return F.normalize(out["x_norm_clstoken"], dim=1)
+    def encode(self, input: Tensor, num_blocks: int | None = None) -> Tensor:
+        """Returns global cls embedding [B, 768] with optional block truncation."""
+        x = self.encoder.patch_embed(input)
 
-    def encode_patches(self, input: Tensor, num_blocks: int = None) -> Tensor:
+        if hasattr(self.encoder, "cls_token") and self.encoder.cls_token is not None:
+            cls_tokens = self.encoder.cls_token.expand(x.shape[0], -1, -1)
+            x = torch.cat((cls_tokens, x), dim=1)
+
+        if hasattr(self.encoder, "pos_embed") and self.encoder.pos_embed is not None:
+            x = x + self.encoder.pos_embed
+
+        blocks = self.get_trainable_blocks()
+        if num_blocks is not None:
+            blocks = blocks[:num_blocks]
+
+        for block in blocks:
+            x = block(x)
+
+        # Pull the CLS token (index 0)
+        cls_output = x[:, 0, :]
+
+        if hasattr(self.encoder, "norm") and self.encoder.norm is not None:
+            cls_output = self.encoder.norm(cls_output)
+
+        return F.normalize(cls_output, dim=1)
+
+    def encode_patches(self, input: Tensor, num_blocks: int | None = None) -> Tensor:
         """Returns patch embeddings [B, num_patches, patch_dim] with optional
         block truncation.
 
