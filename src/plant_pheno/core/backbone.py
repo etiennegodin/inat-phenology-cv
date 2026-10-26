@@ -405,9 +405,45 @@ class DinoV3Backbone(Backbone):
         out = self.encoder.forward_features(input)
         return F.normalize(out["x_norm_clstoken"], dim=1)
 
-    def encode_patches(self, input: Tensor) -> Tensor:
-        out = self.encoder.forward_features(input)
-        return out["x_norm_patchtokens"]
+    def encode_patches(self, input: Tensor, num_blocks: int = None) -> Tensor:
+        """Returns patch embeddings [B, num_patches, patch_dim] with optional
+        block truncation.
+
+        Args:
+            input: Batch of images [B, C, H, W]
+            num_blocks: Optional int to truncate transformer execution early
+              (speeds up caching)
+        """
+        # 1. Initial patch embedding (standard Meta ViT structure)
+        x = self.encoder.patch_embed(input)
+
+        # 2. Add class token and positional embeddings
+        if hasattr(self.encoder, "cls_token") and self.encoder.cls_token is not None:
+            cls_tokens = self.encoder.cls_token.expand(x.shape[0], -1, -1)
+            x = torch.cat((cls_tokens, x), dim=1)
+
+        if hasattr(self.encoder, "pos_embed") and self.encoder.pos_embed is not None:
+            x = x + self.encoder.pos_embed
+
+        # 3. Pass through transformer blocks with optional culling
+        blocks = self.get_trainable_blocks()
+        if num_blocks is not None:
+            blocks = blocks[:num_blocks]
+
+        for block in blocks:
+            x = block(x)
+
+        # 4. Apply final encoder normalization (if present)
+        if hasattr(self.encoder, "norm") and self.encoder.norm is not None:
+            x = self.encoder.norm(x)
+
+        # 5. Extract patch tokens (dropping the class token at index 0)
+        has_cls = (
+            hasattr(self.encoder, "cls_token") and self.encoder.cls_token is not None
+        )
+        patch_tokens = x[:, 1:, :] if has_cls else x
+
+        return patch_tokens
 
     def get_transforms(self) -> tuple[v2.Compose, v2.Compose]:
         base_transforms = [
