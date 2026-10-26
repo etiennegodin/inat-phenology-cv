@@ -6,15 +6,22 @@ from pathlib import Path
 
 @dataclass
 class CachingParams:
+    """Runtime caching configuration.
+
+    to_layer: Controls backbone depth. 0 = full depth; k > 0 = skip the last k
+              transformer blocks (e.g. to_layer=1 runs all blocks except the last).
+    views:    Reserved for TTA; currently unused by the cache loop.
+    """
+
     to_layer: int
     views: int
 
 
 @dataclass
 class CachingConfig:
-    """Hydra-facing cache section; converted to CacheParams at runtime."""
+    """Hydra-facing cache section; converted to CachingParams at runtime."""
 
-    to_layer: int = 1
+    to_layer: int = 0  # 0 = full depth; k > 0 = skip last k transformer blocks
     views: int = 1
 
     def to_dict(self):
