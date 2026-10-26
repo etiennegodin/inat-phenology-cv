@@ -42,7 +42,7 @@ model:
     checkpoint_path: null
 
 cache:
-  last_block: 1
+  to_layer: 1
   views: 1
 
 # Do not chdir into outputs/; data paths are relative to the repo/CWD.

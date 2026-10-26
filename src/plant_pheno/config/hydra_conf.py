@@ -46,6 +46,7 @@ class AppConfig:
     dataset: DatasetParams = field(default_factory=DatasetParams)
     model: ModelConfig = field(default_factory=ModelConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
+    cache: CachingConfig = field(default_factory=CachingConfig)
     tune: FineTuneParams = field(default_factory=FineTuneParams)
     val: ValParams = field(default_factory=ValParams)
     predict: PredictParams = field(default_factory=PredictParams)
