@@ -80,14 +80,29 @@ class Backbone(nn.Module, ABC):
             dummy_input = torch.zeros(1, *dummy_input_shape)
             self.output_dim = self.encode(dummy_input).shape[-1]
 
+    def _validate_n_blocks(self, n_blocks: int) -> None:
+        """Validate that n_blocks is in [1, total_blocks]."""
+        total = len(self.get_trainable_blocks())
+        if not (1 <= n_blocks <= total):
+            raise ValueError(f"n_blocks={n_blocks} out of range [1, {total}]")
+
     @abstractmethod
-    def encode(self, input: Tensor) -> Tensor:
-        """returns embeddings ready for attention pooling; normalization,
-        if any, is handled per-backbone to match its pretraining regime"""
+    def encode(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
+        """Return CLS embeddings ready for attention pooling.
+
+        Normalization, if any, is handled per-backbone to match its pretraining
+        regime.  Pass ``n_blocks`` to run only the first *n_blocks* transformer
+        blocks instead of the full depth; ``None`` (default) keeps the unchanged
+        full-depth path used during training.
+        """
         pass
 
-    def encode_patches(self, input: Tensor) -> Tensor:
-        """Returns patch embeddings [B, num_patches, patch_dim] if supported"""
+    def encode_patches(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
+        """Return patch embeddings [B, num_patches, patch_dim] if supported.
+
+        Pass ``n_blocks`` to truncate at that block depth (same semantics as
+        ``encode``).
+        """
         raise NotImplementedError(
             f"{self.__class__.__name__} does not support patch encoding."
         )
@@ -118,7 +133,12 @@ class EfficientNetBackbone(Backbone):
         self.set_output_dim()
         self.set_trainable_block_count()
 
-    def encode(self, input: Tensor) -> Tensor:
+    def encode(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
+        if n_blocks is not None:
+            raise ValueError(
+                "EfficientNetBackbone does not support n_blocks; "
+                "CNN stages are not ViT transformer blocks."
+            )
         return self.encoder(input)
 
     def get_transforms(self):
@@ -167,24 +187,44 @@ class BioClipBackbone(Backbone):
         self.has_patch_support = True
         self.set_trainable_block_count()
 
-    def encode(self, input: Tensor) -> Tensor:
+    def encode(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
         # Normalising clip embeddings for scale sensitive attention pooling
-        embeddings = self.encoder(input)
-        return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+        if n_blocks is None:
+            embeddings = self.encoder(input)
+            return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+        self._validate_n_blocks(n_blocks)
+        tokens = self._visual_tokens(input, n_blocks)
+        cls = self.encoder.ln_post(tokens[:, 0, :])
+        if self.encoder.proj is not None:
+            cls = cls @ self.encoder.proj
+        return F.normalize(cls, dim=1)
 
-    def encode_patches(self, input: Tensor) -> Tensor:
-        x_conv = self.encoder.conv1(input)
-        x_tok = x_conv.reshape(x_conv.shape[0], x_conv.shape[1], -1).permute(0, 2, 1)
-        cls_tok = self.encoder.class_embedding.to(x_tok.dtype) + torch.zeros(
-            x_tok.shape[0], 1, x_tok.shape[-1], dtype=x_tok.dtype, device=x_tok.device
+    def _visual_tokens(self, x: Tensor, n_blocks: int | None) -> Tensor:
+        """Run BioCLIP-2 patch embed + positional embed + up to n_blocks resblocks.
+
+        Returns tokens in NLD layout (batch, seq_len, hidden).  Both CLS and
+        patch encode paths share this stem so the two methods stay in sync.
+        """
+        x = self.encoder.conv1(x)
+        x = x.reshape(x.shape[0], x.shape[1], -1).permute(0, 2, 1)  # N, L, D
+        cls_tok = self.encoder.class_embedding.to(x.dtype) + torch.zeros(
+            x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device
         )
-        x_tok = torch.cat([cls_tok, x_tok], dim=1)
-        x_tok = x_tok + self.encoder.positional_embedding.to(x_tok.dtype)
-        x_tok = self.encoder.ln_pre(x_tok)
-        x_tok = x_tok.permute(1, 0, 2)
-        x_tok = self.encoder.transformer(x_tok)
-        x_tok = x_tok.permute(1, 0, 2)
-        patches = x_tok[:, 1:, :]
+        x = torch.cat([cls_tok, x], dim=1)
+        x = x + self.encoder.positional_embedding.to(x.dtype)
+        x = self.encoder.ln_pre(x)
+        x = x.permute(1, 0, 2)  # NLD → LND
+        resblocks = self.encoder.transformer.resblocks
+        blocks_to_run = resblocks if n_blocks is None else resblocks[:n_blocks]
+        for blk in blocks_to_run:
+            x = blk(x)
+        return x.permute(1, 0, 2)  # LND → NLD
+
+    def encode_patches(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
+        if n_blocks is not None:
+            self._validate_n_blocks(n_blocks)
+        tokens = self._visual_tokens(input, n_blocks)
+        patches = tokens[:, 1:, :]
         if hasattr(self.encoder, "ln_post"):
             patches = self.encoder.ln_post(patches)
         return patches
@@ -255,24 +295,44 @@ class BioClip2Backbone(Backbone):
         self.has_patch_support = True
         self.set_trainable_block_count()
 
-    def encode(self, input: Tensor) -> Tensor:
+    def encode(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
         # Normalising clip embeddings for scale sensitive attention pooling
-        embeddings = self.encoder(input)
-        return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+        if n_blocks is None:
+            embeddings = self.encoder(input)
+            return F.normalize(embeddings, dim=1)  # embeddings normalised per row (img)
+        self._validate_n_blocks(n_blocks)
+        tokens = self._visual_tokens(input, n_blocks)
+        cls = self.encoder.ln_post(tokens[:, 0, :])
+        if self.encoder.proj is not None:
+            cls = cls @ self.encoder.proj
+        return F.normalize(cls, dim=1)
 
-    def encode_patches(self, input: Tensor) -> Tensor:
-        x_conv = self.encoder.conv1(input)
-        x_tok = x_conv.reshape(x_conv.shape[0], x_conv.shape[1], -1).permute(0, 2, 1)
-        cls_tok = self.encoder.class_embedding.to(x_tok.dtype) + torch.zeros(
-            x_tok.shape[0], 1, x_tok.shape[-1], dtype=x_tok.dtype, device=x_tok.device
+    def _visual_tokens(self, x: Tensor, n_blocks: int | None) -> Tensor:
+        """Run BioCLIP-2 patch embed + positional embed + up to n_blocks resblocks.
+
+        Returns tokens in NLD layout (batch, seq_len, hidden).  Both CLS and
+        patch encode paths share this stem so the two methods stay in sync.
+        """
+        x = self.encoder.conv1(x)
+        x = x.reshape(x.shape[0], x.shape[1], -1).permute(0, 2, 1)  # N, L, D
+        cls_tok = self.encoder.class_embedding.to(x.dtype) + torch.zeros(
+            x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device
         )
-        x_tok = torch.cat([cls_tok, x_tok], dim=1)
-        x_tok = x_tok + self.encoder.positional_embedding.to(x_tok.dtype)
-        x_tok = self.encoder.ln_pre(x_tok)
-        x_tok = x_tok.permute(1, 0, 2)
-        x_tok = self.encoder.transformer(x_tok)
-        x_tok = x_tok.permute(1, 0, 2)
-        patches = x_tok[:, 1:, :]
+        x = torch.cat([cls_tok, x], dim=1)
+        x = x + self.encoder.positional_embedding.to(x.dtype)
+        x = self.encoder.ln_pre(x)
+        x = x.permute(1, 0, 2)  # NLD → LND
+        resblocks = self.encoder.transformer.resblocks
+        blocks_to_run = resblocks if n_blocks is None else resblocks[:n_blocks]
+        for blk in blocks_to_run:
+            x = blk(x)
+        return x.permute(1, 0, 2)  # LND → NLD
+
+    def encode_patches(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
+        if n_blocks is not None:
+            self._validate_n_blocks(n_blocks)
+        tokens = self._visual_tokens(input, n_blocks)
+        patches = tokens[:, 1:, :]
         if hasattr(self.encoder, "ln_post"):
             patches = self.encoder.ln_post(patches)
         return patches
@@ -357,13 +417,28 @@ class DinoV3Backbone(Backbone):
         self.has_patch_support = True
         self.set_trainable_block_count()
 
-    def encode(self, input: Tensor) -> Tensor:
-        out = self.encoder.forward_features(input)
-        return F.normalize(out["x_norm_clstoken"], dim=1)
+    def encode(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
+        if n_blocks is None:
+            out = self.encoder.forward_features(input)
+            return F.normalize(out["x_norm_clstoken"], dim=1)
+        self._validate_n_blocks(n_blocks)
+        # n=[k] returns the hidden state after block k (0-indexed), i.e. blocks 0..k ran
+        out = self.encoder.get_intermediate_layers(
+            input, n=[n_blocks - 1], norm=True, return_class_token=True
+        )
+        # out is a list of (patch_tokens, cls_token) tuples, one per requested layer
+        cls = out[0][1]
+        return F.normalize(cls, dim=1)
 
-    def encode_patches(self, input: Tensor) -> Tensor:
-        out = self.encoder.forward_features(input)
-        return out["x_norm_patchtokens"]
+    def encode_patches(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
+        if n_blocks is None:
+            out = self.encoder.forward_features(input)
+            return out["x_norm_patchtokens"]
+        self._validate_n_blocks(n_blocks)
+        out = self.encoder.get_intermediate_layers(
+            input, n=[n_blocks - 1], norm=True, return_class_token=True
+        )
+        return out[0][0]
 
     def get_transforms(self) -> tuple[v2.Compose, v2.Compose]:
         base_transforms = [
