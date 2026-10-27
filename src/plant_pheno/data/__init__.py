@@ -7,8 +7,8 @@ from .db import (
     get_model_evaluations,
     log_model_evaluation,
 )
+from .persistence import TorchSaver
 from .sql import DuckDbSQL
-from .torch import TorchSaver
 
 __all__ = [
     "CREATE_EVALUATIONS_TABLE_SQL",

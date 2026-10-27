@@ -57,7 +57,7 @@ class CheckpointSaver(TorchSaver):
             }
         )
 
-        self._execute(
+        self.execute(
             payload=checkpoint_dict,
             save_path=checkpoint_path,
             save_file=checkpoint_file,

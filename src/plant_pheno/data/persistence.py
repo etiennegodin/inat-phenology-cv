@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import threading
+from pathlib import Path
 
 import mlflow
 import torch
@@ -18,11 +19,11 @@ class TorchSaver:
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
 
-    def _execute(
+    def execute(
         self,
         payload: dict,
-        save_path: str,
-        save_file: str,
+        save_path: str | Path,
+        save_file: str | Path,
         to_mlflow: bool = False,
         async_transfer: bool = True,
     ) -> None:
