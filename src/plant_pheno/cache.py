@@ -10,6 +10,7 @@ from tqdm import tqdm
 from .config import CachingParams, Config, ModelParams
 from .core.backbone import build_backbone
 from .core.device import get_device
+from .data import TorchSaver
 from .train.dataloader import build_single_dataloader
 from .train.dataset import build_full_dataset
 
@@ -27,6 +28,9 @@ def execute(
     model_params: ModelParams,
     seed: int,
 ):
+
+    # Init saver
+    saver = TorchSaver()
 
     # Initialise train modules
     device = get_device()
@@ -75,8 +79,9 @@ def execute(
 
     kind = "patches" if use_patches else "cls"
     layer_tag = str(n_blocks) if n_blocks is not None else "full"
+
     base_path = Path(
-        f"{configs.paths_params.data_root}/cached_embeddings"
+        f"{configs.paths_params.remote_root}/data/cached_embeddings"
         f"/{model_params.backbone}/{kind}/to_layer_{layer_tag}"
     )
     base_path.mkdir(parents=True, exist_ok=True)
@@ -120,4 +125,13 @@ def execute(
                 "kind": kind,
                 "to_layer": layer_tag,
             }
-            torch.save(payload, base_path / f"{step}.pt")
+
+            save_file = base_path / f"{step}.pt"
+
+            saver.execute(
+                payload=payload,
+                save_path=base_path,
+                save_file=save_file,
+                to_mlflow=False,
+                async_transfer=True,
+            )
