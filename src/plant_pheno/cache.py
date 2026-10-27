@@ -33,7 +33,7 @@ def execute(
 
     # Build backbone
     backbone = build_backbone(
-        model_params.backbone, model_params.dinov3.checkpoint_path
+        model_params.backbone, model_params.dinov3.checkpoint_path, device=device
     )
 
     # Build full dataset without splits

@@ -489,9 +489,17 @@ LOCAL_CHECKPOINT_BACKBONES = frozenset({"dinov3", "dinov3_vitb16"})
 
 
 def build_backbone(
-    backbone_name: str, dinov3_checkpoint_path: str | None = None
+    backbone_name: str,
+    dinov3_checkpoint_path: str | None = None,
+    device: torch.device | None = None,
 ) -> Backbone:
     backbone_cls = BACKBONE_REGISTRY[backbone_name]
+
     if backbone_name in LOCAL_CHECKPOINT_BACKBONES:
-        return backbone_cls(checkpoint_path=dinov3_checkpoint_path)
-    return backbone_cls()
+        bkb = backbone_cls(checkpoint_path=dinov3_checkpoint_path)
+    else:
+        bkb = backbone_cls()
+
+    if device is not None:
+        return bkb.to(device)
+    return bkb
