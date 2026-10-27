@@ -14,6 +14,7 @@ from tqdm import tqdm
 from ..config import CLASS_ORDER
 from ..infra import save_log
 from .analysis import error_analysis, log_error_analysis
+from .checkpoint import Checkpoint, CheckpointSaver
 from .flow_control import ClassesObjectiveState, TrainingState, create_stage_states
 from .metrics import (
     EpochMetrics,
@@ -22,7 +23,6 @@ from .metrics import (
     log_best_artifacts,
     log_epoch_metrics,
 )
-from .persistence import Checkpoint, CheckpointSaver
 
 if TYPE_CHECKING:
     from torch import Tensor, device, nn

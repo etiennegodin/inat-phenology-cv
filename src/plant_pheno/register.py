@@ -12,7 +12,7 @@ from mlflow.types.schema import Array, ColSpec, DataType, Schema
 
 from .core import PhenologyPyfunc
 from .infra import resolve_uri
-from .train.persistence import Checkpoint
+from .train.checkpoint import Checkpoint
 
 if TYPE_CHECKING:
     from .config import ModelParams
