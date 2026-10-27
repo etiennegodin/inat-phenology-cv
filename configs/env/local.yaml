@@ -7,6 +7,7 @@ model:
 
 paths:
   root: /home/etienne/projects/inat-phenology-cv
+  remote_root: ${paths.root}
   data_root: ${paths.root}/data
   image_dir: ${paths.data_root}/images
   db_path: ${paths.data_root}/train_set.parquet

@@ -340,7 +340,9 @@ class DataLoadersParams:
 @dataclass
 class PathsParams:
     root: str
+    remote_root: str
     data_root: str
+    remote_data_root: str
     image_dir: str
     db_path: str
     checkpoint_path: str

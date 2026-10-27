@@ -7,6 +7,7 @@ model:
 
 paths:
   root: /content/inat-phenology-cv
+  remote_root: /content/drive/MyDrive/inat-phenology-cv
   data_root: ${paths.root}/data
   image_dir: /content/images
   db_path: /content/data/train_set.parquet
