@@ -50,6 +50,7 @@ def train_one_epoch(
     device: device,
     accumulation_steps: int,
     log_step_interval: int = 10,
+    use_cached: bool = False,
 ) -> tuple[float, tuple[float, float]]:
     """Train the model for one epoch with progress tracking and step logging."""
     data_time = 0.0
@@ -91,7 +92,7 @@ def train_one_epoch(
         data_time += t1 - t0
 
         labels: Tensor
-        images = [t.to(device) for t in images]
+        inputs = [t.to(device) for t in images]
         labels = labels.to(device)
 
         # True if this micro-batch completes an accumulation window,
@@ -100,9 +101,10 @@ def train_one_epoch(
             step + 1 == n_batches
         )
 
+        forward_fn = model.forward_from_embeddings if use_cached else model
         if device.type == "cuda":
             with autocast_mode.autocast(device_type=device.type, dtype=dtype):
-                predictions, class_weights = model(images)
+                predictions, class_weights = forward_fn(inputs)
                 raw_loss = criterion(predictions, labels)
                 class_loss = torch.mean(raw_loss, dim=0)
                 for i, c in enumerate(CLASS_ORDER):
@@ -124,7 +126,7 @@ def train_one_epoch(
                         optimizer.zero_grad(set_to_none=True)
             torch.cuda.synchronize()
         else:
-            predictions, class_weights = model(images)
+            predictions, class_weights = forward_fn(inputs)
             raw_loss = criterion(predictions, labels)
             class_loss = torch.mean(raw_loss, dim=0)
             for i, c in enumerate(CLASS_ORDER):
@@ -187,6 +189,7 @@ def evaluate(
     device: device,
     epoch: int,
     pos_ratios: list[float],
+    use_cached: bool = False,
 ) -> tuple[EpochMetrics, tuple[float, float]]:
     """Evaluate the model on validation set with rich multi-label metrics."""
     data_time = 0.0
@@ -212,12 +215,13 @@ def evaluate(
         dynamic_ncols=True,
     )
 
+    forward_fn = model.forward_from_embeddings if use_cached else model
     t0 = time.time()
     with torch.no_grad():
         for step, (images, labels, obs_ids) in enumerate(pbar):
             all_obs_ids.extend(obs_ids)
             labels: Tensor
-            images = [t.to(device) for t in images]
+            inputs = [t.to(device) for t in images]
             labels = labels.to(device)
 
             t1 = time.time()
@@ -225,10 +229,10 @@ def evaluate(
 
             if device.type == "cuda":
                 with autocast_mode.autocast(device_type=device.type, dtype=dtype):
-                    predictions, class_weights = model(images)
+                    predictions, class_weights = forward_fn(inputs)
                     torch.cuda.synchronize()
             else:
-                predictions, class_weights = model(images)
+                predictions, class_weights = forward_fn(inputs)
 
             raw_loss = criterion(predictions, labels)
             class_loss = torch.mean(raw_loss, dim=0)
@@ -277,7 +281,11 @@ def evaluate(
 
     log_attention_metrics(epoch, observations_attention_weights, prefix="val")
 
-    obs_paths_map = dataloader.dataset.get_obs_paths_map()
+    obs_paths_map = (
+        dataloader.dataset.get_obs_paths_map()
+        if hasattr(dataloader.dataset, "get_obs_paths_map")
+        else None
+    )
 
     error_report = error_analysis(
         all_obs_ids,
@@ -302,6 +310,7 @@ def execute(
     checkpoint_path: str,
     training_params: TrainingParams,
     trial: optuna.trial.Trial | None = None,
+    use_cached: bool = False,
 ) -> Checkpoint:
     """Execute training pipeline over requested epochs with full logging."""
     best_eval_metrics = {}
@@ -338,6 +347,7 @@ def execute(
             device=device,
             log_step_interval=log_step_interval,
             accumulation_steps=training_params.accumulation_steps,
+            use_cached=use_cached,
         )
 
         scheduler.step()
@@ -357,6 +367,7 @@ def execute(
             device=device,
             epoch=epoch,
             pos_ratios=training_params.pos_ratios,
+            use_cached=use_cached,
         )
 
         epoch_duration = time.time() - epoch_start_time

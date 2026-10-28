@@ -219,6 +219,22 @@ class MilAttentionModel(nn.Module):
 
         return predictions, class_attention_weights
 
+    def forward_from_embeddings(self, embeddings: list[torch.Tensor]):
+        """Head-only forward pass. Receives pre-computed CLS embeddings
+        (one Tensor per observation, shape (N_i, embed_dim)).
+        Skips backbone.encode() entirely.
+        """
+        class_predictions = []
+        class_attention_weights: dict[str, list[torch.Tensor]] = {}
+
+        for b in self.branches:
+            predictions, attention_weights = b(embeddings)
+            class_predictions.append(predictions)
+            class_attention_weights[b.named_class] = attention_weights
+
+        predictions = torch.stack(class_predictions, dim=1)
+        return predictions, class_attention_weights
+
     def get_attention_params(self):
         return itertools.chain.from_iterable(
             branch.attention.parameters() for branch in self.branches
@@ -266,35 +282,14 @@ class CrossAttentionModel(nn.Module):
         )
         self.heads = nn.ModuleList([nn.Linear(params.proj_dim, 1) for _ in CLASS_ORDER])
 
-    def forward(self, x: list[torch.Tensor]):
-        """Runs forward pass through patch backbone, projection neck,
-        1D image index embedding, cross-attention with class queries, and linear heads.
-
-        Args:
-            x: list of image tensors per observation [Tensor(N_i, C, H, W)]
-
-        Returns:
-            tuple[torch.Tensor, dict[str, list[torch.Tensor]]]:
-                predictions: Tensor of shape (batch, num_classes)
-                class_attention_weights: dict mapping each class name
-                to attention weights per observation
-        """
-        device = x[0].device
-        obs_image_counts = [obs.size(0) for obs in x]
-        batch_size = len(x)
-
-        # Concatenate all images in one tensor
-        stacked = torch.cat(x, dim=0)
-
-        # Extract patch tokens: shape [total_images, num_patches, patch_dim]
-        patch_tokens = self.backbone.encode_patches(stacked)
-        num_patches = patch_tokens.size(1)
-
-        # Project patch tokens: shape [total_images, num_patches, proj_dim]
-        projected = self.projection_neck(patch_tokens)
-
-        # Split back per observation
-        obs_projected = torch.split(projected, obs_image_counts)
+    def _head_forward(
+        self,
+        obs_projected: tuple[torch.Tensor, ...],
+        obs_image_counts: list[int],
+        device: torch.device,
+    ) -> tuple[torch.Tensor, dict[str, list[torch.Tensor]]]:
+        batch_size = len(obs_image_counts)
+        num_patches = obs_projected[0].size(1)
 
         # Add 1D image index embedding and flatten tokens per observation
         obs_tokens_list = []
@@ -319,7 +314,7 @@ class CrossAttentionModel(nn.Module):
             batch_size,
             max_tokens,
             self.params.proj_dim,
-            dtype=projected.dtype,
+            dtype=obs_projected[0].dtype,
             device=device,
         )
         key_padding_mask = torch.ones(
@@ -354,6 +349,50 @@ class CrossAttentionModel(nn.Module):
             ]
 
         return predictions, class_attention_weights
+
+    def forward(self, x: list[torch.Tensor]):
+        """Runs forward pass through patch backbone, projection neck,
+        1D image index embedding, cross-attention with class queries, and linear heads.
+
+        Args:
+            x: list of image tensors per observation [Tensor(N_i, C, H, W)]
+
+        Returns:
+            tuple[torch.Tensor, dict[str, list[torch.Tensor]]]:
+                predictions: Tensor of shape (batch, num_classes)
+                class_attention_weights: dict mapping each class name
+                to attention weights per observation
+        """
+        device = x[0].device
+        obs_image_counts = [obs.size(0) for obs in x]
+
+        # Concatenate all images in one tensor
+        stacked = torch.cat(x, dim=0)
+
+        # Extract patch tokens: shape [total_images, num_patches, patch_dim]
+        patch_tokens = self.backbone.encode_patches(stacked)
+
+        # Project patch tokens: shape [total_images, num_patches, proj_dim]
+        projected = self.projection_neck(patch_tokens)
+
+        # Split back per observation
+        obs_projected = torch.split(projected, obs_image_counts)
+
+        return self._head_forward(obs_projected, obs_image_counts, device)
+
+    def forward_from_embeddings(self, patch_embeddings: list[torch.Tensor]):
+        """Head-only forward pass. Receives pre-computed patch embeddings
+        (one Tensor per observation, shape (N_i, num_patches, patch_dim)).
+        Skips backbone.encode_patches() entirely.
+        """
+        device = patch_embeddings[0].device
+        obs_image_counts = [obs.size(0) for obs in patch_embeddings]
+
+        stacked = torch.cat(patch_embeddings, dim=0)
+        projected = self.projection_neck(stacked)
+        obs_projected = torch.split(projected, obs_image_counts)
+
+        return self._head_forward(obs_projected, obs_image_counts, device)
 
     def get_attention_params(self):
         return itertools.chain(

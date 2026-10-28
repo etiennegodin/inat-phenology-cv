@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, NewType
 
 import numpy as np
@@ -314,4 +316,97 @@ def build_datasets(
 
     logger.debug(f"Dataset type : {type(train_set)}")
 
+    return train_set, val_set, test_set
+
+
+@dataclass
+class CachedObs:
+    obs_id: int
+    embeddings: torch.Tensor
+    label: torch.Tensor
+
+
+class CachedEmbeddingDataset(Dataset):
+    """Dataset that reads pre-computed backbone embeddings
+    from disk and attaches labels."""
+
+    def __init__(
+        self,
+        cache_dir: Path,
+        obs_df: pd.DataFrame,
+        dataset_params: DatasetParams,
+    ) -> None:
+        super().__init__()
+        self.dataset_params = dataset_params
+        self.df = obs_df
+        self._obs: list[CachedObs] = self._load(cache_dir, obs_df, dataset_params)
+        self.bag_sizes = [o.embeddings.size(0) for o in self._obs]
+
+    def _load(
+        self, cache_dir: Path, obs_df: pd.DataFrame, params: DatasetParams
+    ) -> list[CachedObs]:
+        if not cache_dir.exists():
+            raise FileNotFoundError(
+                f"Cached embeddings directory does not exist: '{cache_dir}'. "
+                f"Please run 'python -m plant_pheno command=cache' first."
+            )
+
+        label_map = dict(zip(obs_df[params.idx_col], obs_df[params.label_col]))
+        result = []
+        pt_files = sorted(
+            cache_dir.glob("*.pt"),
+            key=lambda p: int(p.stem) if p.stem.isdigit() else p.stem,
+        )
+        if not pt_files:
+            raise FileNotFoundError(
+                f"No cached embedding (*.pt) files found in '{cache_dir}'. "
+                f"Please run 'python -m plant_pheno command=cache' first."
+            )
+
+        for pt_file in pt_files:
+            payload = torch.load(pt_file, map_location="cpu")
+            embeddings_all = payload["embeddings"].float()
+            bag_sizes = payload["bag_sizes"]
+            obs_ids = payload["obs_ids"]
+            per_obs = torch.split(embeddings_all, bag_sizes)
+            for emb, obs_id in zip(per_obs, obs_ids):
+                if obs_id in label_map:
+                    label = torch.tensor(label_map[obs_id], dtype=torch.float32)
+                    result.append(CachedObs(obs_id=obs_id, embeddings=emb, label=label))
+        return result
+
+    def __len__(self) -> int:
+        return len(self._obs)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, int]:
+        obs = self._obs[index]
+        return obs.embeddings, obs.label, obs.obs_id
+
+    def get_obs_paths_map(self) -> dict[int, str] | None:
+        if "path" in self.df.columns:
+            idx_col = (
+                self.dataset_params.idx_col
+                if self.dataset_params.idx_col in self.df.columns
+                else self.df.columns[0]
+            )
+            return dict(zip(self.df[idx_col], self.df["path"]))
+        return None
+
+
+def build_cached_datasets(
+    configs: Config,
+    cache_dir: Path,
+    seed: int = 42,
+) -> tuple[CachedEmbeddingDataset, CachedEmbeddingDataset, CachedEmbeddingDataset]:
+    df, _ = _prepare_build_dataset(configs, seed)
+    train_df, val_df, test_df = split_dataset(df, configs.dataset_params, seed=seed)
+
+    train_set = CachedEmbeddingDataset(cache_dir, train_df, configs.dataset_params)
+    val_set = CachedEmbeddingDataset(cache_dir, val_df, configs.dataset_params)
+    test_set = CachedEmbeddingDataset(cache_dir, test_df, configs.dataset_params)
+
+    logger.debug(
+        f"Cached dataset counts: train={len(train_set)},"
+        f"val={len(val_set)}, test={len(test_set)}"
+    )
     return train_set, val_set, test_set

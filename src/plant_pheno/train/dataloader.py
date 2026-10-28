@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import torch
 from torch.utils.data import DataLoader
@@ -10,7 +10,7 @@ from .batch_sampler import MaxImagesBatchSampler
 
 if TYPE_CHECKING:
     from ..config import DataLoadersParams
-    from .dataset import PhenologyDataset
+    from .dataset import CachedEmbeddingDataset, PhenologyDataset
 
 
 def collate_fn(batch: list[tuple[torch.Tensor, torch.Tensor, int]]):
@@ -25,12 +25,30 @@ def collate_fn(batch: list[tuple[torch.Tensor, torch.Tensor, int]]):
     return images, torch.stack(labels), obs_ids
 
 
+def collate_fn_cached(batch: list[tuple[torch.Tensor, torch.Tensor, int]]):
+    """Collate for CachedEmbeddingDataset.
+
+    Returns pre-computed embeddings per observation in the first slot instead
+    of raw images, maintaining the same signature as collate_fn.
+    """
+    embeddings = []
+    labels = []
+    obs_ids = []
+    for emb_tensor, label, obs_id in batch:
+        embeddings.append(emb_tensor)
+        labels.append(label)
+        obs_ids.append(obs_id)
+
+    return embeddings, torch.stack(labels), obs_ids
+
+
 def build_single_dataloader(
     params: DataLoadersParams,
-    dataset: PhenologyDataset,
+    dataset: PhenologyDataset | CachedEmbeddingDataset,
     generator: torch.Generator,
     shuffle: bool,
     seed: int | None,
+    collate: Callable = collate_fn,
 ):
 
     if params.use_max_images:
@@ -43,7 +61,7 @@ def build_single_dataloader(
         return DataLoader(
             dataset,
             batch_sampler=sampler,
-            collate_fn=collate_fn,
+            collate_fn=collate,
             num_workers=params.num_workers,
             pin_memory=params.pin_memory,
             persistent_workers=params.persistent_workers,
@@ -54,7 +72,7 @@ def build_single_dataloader(
         dataset,
         batch_size=params.batch_size,
         shuffle=shuffle,
-        collate_fn=collate_fn,
+        collate_fn=collate,
         num_workers=params.num_workers,
         pin_memory=params.pin_memory,
         persistent_workers=params.persistent_workers,
@@ -64,9 +82,14 @@ def build_single_dataloader(
 
 
 def build_pipeline_dataloaders(
-    datasets: tuple[PhenologyDataset, PhenologyDataset, PhenologyDataset],
+    datasets: tuple[
+        PhenologyDataset | CachedEmbeddingDataset,
+        PhenologyDataset | CachedEmbeddingDataset,
+        PhenologyDataset | CachedEmbeddingDataset,
+    ],
     params: DataLoadersParams,
     seed: int = 42,
+    collate: Callable = collate_fn,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
 
     generator = torch.Generator().manual_seed(seed)
@@ -80,6 +103,7 @@ def build_pipeline_dataloaders(
                 seed=seed if i == 0 else None,
                 generator=generator,
                 params=params,
+                collate=collate,
             )
         )
 

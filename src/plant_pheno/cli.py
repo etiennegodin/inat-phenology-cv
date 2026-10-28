@@ -37,6 +37,7 @@ from .inference import InatInferencePipeline
 from .infra import init_logger, mlflow_socks_patch, resolve_uri, seed_everything  # noqa
 from .status import status
 from .train import (
+    build_cached_data_pipeline,
     build_data_pipeline,
     build_datasets,
     build_pipeline_dataloaders,
@@ -117,7 +118,15 @@ def train_cmd(cfg: DictConfig):
     mlflow.set_tracking_uri(resolve_uri())
     print("Initalizing experiment")
 
-    data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
+    if runtime.dataset_params.use_cached:
+        kind = "patches" if cfg.model.architecture == "cross_attention" else "cls"
+        cache_dir = runtime.dataset_params.resolve_cache_dir(
+            runtime.paths_params, cfg.model.backbone, kind
+        )
+        data = build_cached_data_pipeline(runtime, cache_dir, device, seed=cfg.seed)
+    else:
+        data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
+
     model_params = model_params_from_cfg(cfg.model)
     optim_params = optimizer_params_from_cfg(cfg)
     scheduler_params = scheduler_params_from_cfg(cfg)
@@ -140,6 +149,7 @@ def train_cmd(cfg: DictConfig):
             training_params=training_params,
             data=data,
             device=device,
+            use_cached=runtime.dataset_params.use_cached,
         )
         _log_run_file()
 
@@ -153,12 +163,19 @@ def tune_cmd(cfg: DictConfig):
     mlflow.set_experiment(cfg.experiment_name)
     seed_everything(cfg.seed, set_cuda_deterministic=False)
 
-    data = build_data_pipeline(
-        configs=runtime,
-        backbone_name=cfg.model.backbone,
-        device=device,
-        seed=cfg.seed,
-    )
+    if runtime.dataset_params.use_cached:
+        kind = "patches" if cfg.model.architecture == "cross_attention" else "cls"
+        cache_dir = runtime.dataset_params.resolve_cache_dir(
+            runtime.paths_params, cfg.model.backbone, kind
+        )
+        data = build_cached_data_pipeline(runtime, cache_dir, device, seed=cfg.seed)
+    else:
+        data = build_data_pipeline(
+            configs=runtime,
+            backbone_name=cfg.model.backbone,
+            device=device,
+            seed=cfg.seed,
+        )
 
     with mlflow.start_run() as parent_run:
         parent_run_id = parent_run.info.run_id
@@ -238,6 +255,7 @@ def tune_cmd(cfg: DictConfig):
             training_params=training_params,
             data=data,
             device=device,
+            use_cached=runtime.dataset_params.use_cached,
         )
         _log_run_file()
 

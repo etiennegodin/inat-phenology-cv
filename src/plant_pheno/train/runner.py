@@ -28,6 +28,7 @@ def run_training(
     data: DataPipeline | None = None,
     device=None,
     trial: optuna.Trial | None = None,
+    use_cached: bool = False,
 ):
 
     # Initialise train modules
@@ -77,5 +78,6 @@ def run_training(
         checkpoint_path=configs.paths_params.checkpoint_path,
         training_params=training_params,
         trial=trial,
+        use_cached=use_cached,
     )
     return checkpoint, model, data

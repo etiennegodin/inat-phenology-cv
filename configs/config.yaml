@@ -29,6 +29,8 @@ dataset:
   val_frac: 0.1
   test_frac: 0.1
   testing_frac: 1.0
+  use_cached: False
+  cache_to_layer: 0
 
 seed: 42
 test: false

@@ -3,6 +3,7 @@ from __future__ import annotations
 import itertools
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from torch import nn, optim
@@ -12,8 +13,8 @@ from torch.utils.data import DataLoader
 from ..config import Config
 from ..core.backbone import BACKBONE_REGISTRY
 from ..utils import get_pos_ratios, get_pos_weights
-from .dataloader import build_pipeline_dataloaders
-from .dataset import build_datasets
+from .dataloader import build_pipeline_dataloaders, collate_fn, collate_fn_cached
+from .dataset import build_cached_datasets, build_datasets
 
 if TYPE_CHECKING:
     from ..config.params import OptimizerParams, SchedulerParams
@@ -45,7 +46,38 @@ def build_data_pipeline(
     pos_ratios = get_pos_ratios(datasets[1])
 
     train_loader, val_loader, test_loader = build_pipeline_dataloaders(
-        datasets, configs.dataloaders_params, seed=seed
+        datasets, configs.dataloaders_params, seed=seed, collate=collate_fn
+    )
+
+    return DataPipeline(
+        datasets=datasets,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        test_loader=test_loader,
+        criterion=criterion,
+        pos_ratios=pos_ratios,
+    )
+
+
+def build_cached_data_pipeline(
+    configs: Config,
+    cache_dir: Path,
+    device,
+    seed: int = 42,
+) -> DataPipeline:
+    """Builds datasets, dataloaders, criterion, and pos_ratios from
+    pre-computed backbone embeddings."""
+    datasets = build_cached_datasets(configs, cache_dir, seed=seed)
+
+    pos_weights = get_pos_weights(datasets[0], configs.dataset_params, device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights, reduction="none")
+    pos_ratios = get_pos_ratios(datasets[1])
+
+    train_loader, val_loader, test_loader = build_pipeline_dataloaders(
+        datasets,
+        configs.dataloaders_params,
+        seed=seed,
+        collate=collate_fn_cached,
     )
 
     return DataPipeline(

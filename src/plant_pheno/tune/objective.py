@@ -29,7 +29,6 @@ def _subsample_train_loader(
     """
     from ..infra.seed import seed_worker
     from ..train.batch_sampler import MaxImagesBatchSampler
-    from ..train.dataloader import collate_fn as pheno_collate_fn
 
     train_set = data.datasets[0]
     ref = data.train_loader
@@ -41,7 +40,7 @@ def _subsample_train_loader(
 
     # Shared kwargs that are always the same regardless of batching strategy
     common = dict(
-        collate_fn=pheno_collate_fn,
+        collate_fn=ref.collate_fn,
         num_workers=ref.num_workers,
         pin_memory=ref.pin_memory,
         persistent_workers=ref.persistent_workers if ref.num_workers > 0 else False,
@@ -161,6 +160,7 @@ def make_objective(
                     training_params=training_params,
                     data=trial_data,
                     trial=trial,
+                    use_cached=getattr(configs.dataset_params, "use_cached", False),
                 )
                 metric_val = checkpoint.eval_metrics.pr_norm_excess_macro
                 mlflow.log_metric("final_pr_norm_excess_macro", metric_val)
