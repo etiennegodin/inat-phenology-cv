@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import gc
 import importlib
 import pprint
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
-from torch import Tensor, device, nn
+from torch import Tensor, cuda, device, nn
 
 if TYPE_CHECKING:
     from ..train.dataset import DatasetParams, PhenologyDataset
@@ -20,6 +21,13 @@ import numpy as np
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+def cleanup_cuda():
+    """Clear all CUDA memory and garbage collect."""
+    if cuda.is_available():
+        cuda.empty_cache()
+    gc.collect()
 
 
 def df_img_to_path(
