@@ -377,14 +377,5 @@ class DatasetParams:
     def __post_init__(self):
         assert (self.train_frac + self.val_frac + self.test_frac) == 1
 
-    def resolve_cache_dir(self, paths: PathsParams, backbone: str, kind: str) -> Path:
-        layer_tag = str(self.cache_to_layer) if self.cache_to_layer > 0 else "full"
-        base_path = Path(
-            f"{paths.data_root}/cached_embeddings"
-            f"/{backbone}/{kind}/to_layer_{layer_tag}"
-        )
-        base_path.mkdir(parents=True, exist_ok=True)
-        return base_path
-
     def to_dict(self):
         return asdict(self)

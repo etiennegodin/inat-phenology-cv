@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
-from .config import CachingParams, Config, ModelParams
+from .config import CachingParams, Config, ModelParams, PathsParams
 from .core.backbone import build_backbone, resolve_truncation_depth
 from .core.device import get_device
 from .data import TorchSaver
@@ -23,11 +24,42 @@ if dtype == torch.float16:
     scaler = grad_scaler.GradScaler()
 
 
+@dataclass
+class CachedEmbeddingSchema:
+    model_backbone: str
+    layer_tag: str
+    model_kind: str
+    cache_dir: Path = field(init=False)
+
+    @classmethod
+    def from_model_params(cls, to_layer: int, model_params: ModelParams):
+        return cls(
+            model_backbone=model_params.backbone,
+            layer_tag=str(to_layer) if to_layer > 0 else "full",
+            model_kind="patches"
+            if model_params.architecture == "cross_attention"
+            else "cls",
+        )
+
+    def resolve_cache_dir(self, paths: PathsParams) -> Path:
+        base_path = Path(
+            f"{paths.data_root}/cached_embeddings"
+            f"/{self.model_backbone}/{self.model_kind}/to_layer_{self.layer_tag}"
+        )
+        base_path.mkdir(parents=True, exist_ok=True)
+        self.cache_dir = base_path
+        return base_path
+
+    def to_dict(self):
+        return asdict(self)
+
+
 def execute(
     configs: Config,
-    caching_params: CachingParams,
     model_params: ModelParams,
+    to_layer: int,
     seed: int,
+    views: int | None = None,
 ):
 
     # Init saver
@@ -36,10 +68,33 @@ def execute(
     # Initialise train modules
     device = get_device()
 
+    # Cached schema
+    cache_schema = CachedEmbeddingSchema.from_model_params(
+        to_layer=configs.dataset_params.cache_to_layer, model_params=model_params
+    )
+    base_path = cache_schema.resolve_cache_dir(configs.paths_params)
+
     # Build backbone
     backbone = build_backbone(
         model_params.backbone, model_params.dinov3.checkpoint_path, device=device
     )
+
+    # Resolve truncation depth.
+    # to_layer=0 → full depth (None); to_layer=k → skip last k blocks.
+    total_blocks = backbone.trainable_block_count
+    n_blocks = resolve_truncation_depth(
+        total_blocks=total_blocks,
+        to_layer=to_layer,
+        backbone_name=model_params.backbone,
+    )
+
+    # Choose CLS vs patch encoding based on architecture
+    use_patches = model_params.architecture == "cross_attention"
+    if use_patches and not backbone.has_patch_support:
+        raise ValueError(
+            f"Architecture 'cross_attention' requires patch support, "
+            f"but backbone '{model_params.backbone}' does not support it."
+        )
 
     # Build full dataset without splits
     dataset = build_full_dataset(configs, backbone.get_transforms(), seed=seed)
@@ -56,30 +111,9 @@ def execute(
         seed=seed,
     )
 
-    # Resolve truncation depth.
-    # to_layer=0 → full depth (None); to_layer=k → skip last k blocks.
-    total_blocks = backbone.trainable_block_count
-    n_blocks = resolve_truncation_depth(
-        total_blocks=total_blocks,
-        to_layer=caching_params.to_layer,
-        backbone_name=model_params.backbone,
-    )
-
-    # Choose CLS vs patch encoding based on architecture
-    use_patches = model_params.architecture == "cross_attention"
-    if use_patches and not backbone.has_patch_support:
-        raise ValueError(
-            f"Architecture 'cross_attention' requires patch support, "
-            f"but backbone '{model_params.backbone}' does not support it."
-        )
-
-    kind = "patches" if use_patches else "cls"
-    base_path = configs.dataset_params.resolve_cache_dir(
-        configs.paths_params, model_params.backbone, kind=kind
-    )
-
     logger.info(
-        f"Caching '{kind}' embeddings for '{model_params.backbone}' "
+        f"Caching '{cache_schema.model_kind}' embeddings for "
+        f"'{cache_schema.model_backbone}' "
         f"(n_blocks={n_blocks if n_blocks is not None else 'full'}) → {base_path}"
     )
 
@@ -89,6 +123,9 @@ def execute(
         leave=False,
         dynamic_ncols=True,
     )
+
+    if views is not None:
+        pass
 
     with torch.no_grad():
         for step, (images, _, obs_ids) in enumerate(pbar):
@@ -118,7 +155,8 @@ def execute(
                     "embeddings": embeddings.cpu(),
                     "bag_sizes": [t.size(0) for t in images],
                     "obs_ids": obs_ids,
-                    "kind": kind,
+                    "kind": cache_schema.model_kind,
+                    "backbone": cache_schema.model_backbone,
                 }
 
                 save_file = base_path / f"{step}.pt"
@@ -144,10 +182,10 @@ def ensure_cached_embeddings(
     it calls cache.execute() and generates them.
     """
 
-    kind = "patches" if model_params.architecture == "cross_attention" else "cls"
-    cache_dir = configs.dataset_params.resolve_cache_dir(
-        configs.paths_params, model_params.backbone, kind=kind
+    cache_schema = CachedEmbeddingSchema.from_model_params(
+        to_layer=configs.dataset_params.cache_to_layer, model_params=model_params
     )
+    cache_dir = cache_schema.resolve_cache_dir(configs.paths_params)
 
     if not configs.dataset_params.force_recache:
         if cache_dir.exists() and cache_dir.is_dir():
@@ -161,8 +199,8 @@ def ensure_cached_embeddings(
     # Caching process
     execute(
         configs=configs,
-        caching_params=caching_params,
         model_params=model_params,
+        to_layer=configs.dataset_params.cache_to_layer,
         seed=seed,
     )
 

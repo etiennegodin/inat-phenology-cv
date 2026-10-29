@@ -101,7 +101,8 @@ def cache_cmd(cfg: DictConfig):
 
     cache.execute(
         configs=runtime,
-        caching_params=caching_params,
+        to_layer=caching_params.to_layer,
+        views=caching_params.views,
         model_params=model_params,
         seed=cfg.seed,
     )
