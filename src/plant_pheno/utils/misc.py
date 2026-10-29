@@ -25,14 +25,21 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def cuda_cleanup():
-    """Context manager for automatic CUDA cleanup after operations."""
+def cuda_cleanup(verbose=False):
+    """Context manager with optional memory monitoring."""
+    if verbose and cuda.is_available():
+        before = cuda.memory_allocated() / 1e9
+
     try:
         yield
     finally:
         if cuda.is_available():
             cuda.empty_cache()
         gc.collect()
+
+        if verbose and cuda.is_available():
+            after = cuda.memory_allocated() / 1e9
+            print(f"GPU memory: {before:.2f}GB → {after:.2f}GB")
 
 
 def df_img_to_path(
