@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import torch
 from torch.amp import autocast_mode, grad_scaler
@@ -13,6 +12,7 @@ from .core.device import get_device
 from .data import TorchSaver
 from .train.dataloader import build_single_dataloader
 from .train.dataset import build_full_dataset
+from .utils import cuda_cleanup
 
 logger = logging.getLogger(__name__)
 
@@ -73,13 +73,9 @@ def execute(
         )
 
     kind = "patches" if use_patches else "cls"
-    layer_tag = str(n_blocks) if n_blocks is not None else "full"
-
-    base_path = Path(
-        f"{configs.paths_params.remote_root}/data/cached_embeddings"
-        f"/{model_params.backbone}/{kind}/to_layer_{layer_tag}"
+    base_path = configs.dataset_params.resolve_cache_dir(
+        configs.paths_params, model_params.backbone, kind=kind
     )
-    base_path.mkdir(parents=True, exist_ok=True)
 
     logger.info(
         f"Caching '{kind}' embeddings for '{model_params.backbone}' "
@@ -95,38 +91,44 @@ def execute(
 
     with torch.no_grad():
         for step, (images, _, obs_ids) in enumerate(pbar):
-            images = [t.to(device) for t in images]
+            with cuda_cleanup():
+                images = [t.to(device) for t in images]
 
-            # Concatenate all images in one Tensor; bag boundaries are saved separately
-            stacked = torch.cat(images)
+                # Concatenate all images in one Tensor;
+                # bag boundaries are saved separately
+                stacked = torch.cat(images)
 
-            if device.type == "cuda":
-                with autocast_mode.autocast(device_type=device.type, dtype=dtype):
+                if device.type == "cuda":
+                    with autocast_mode.autocast(device_type=device.type, dtype=dtype):
+                        if use_patches:
+                            embeddings = backbone.encode_patches(
+                                stacked, n_blocks=n_blocks
+                            )
+                        else:
+                            embeddings = backbone.encode(stacked, n_blocks=n_blocks)
+                        torch.cuda.synchronize()
+                else:
                     if use_patches:
                         embeddings = backbone.encode_patches(stacked, n_blocks=n_blocks)
                     else:
                         embeddings = backbone.encode(stacked, n_blocks=n_blocks)
-                    torch.cuda.synchronize()
-            else:
-                if use_patches:
-                    embeddings = backbone.encode_patches(stacked, n_blocks=n_blocks)
-                else:
-                    embeddings = backbone.encode(stacked, n_blocks=n_blocks)
 
-            payload = {
-                "embeddings": embeddings.cpu(),
-                "bag_sizes": [t.size(0) for t in images],
-                "obs_ids": obs_ids,
-                "kind": kind,
-                "to_layer": layer_tag,
-            }
+                payload = {
+                    "embeddings": embeddings.cpu(),
+                    "bag_sizes": [t.size(0) for t in images],
+                    "obs_ids": obs_ids,
+                    "kind": kind,
+                }
 
-            save_file = base_path / f"{step}.pt"
+                save_file = base_path / f"{step}.pt"
 
-            saver.execute(
-                payload=payload,
-                save_path=base_path,
-                save_file=save_file,
-                to_mlflow=False,
-                async_transfer=True,
-            )
+                saver.execute(
+                    payload=payload,
+                    save_path=base_path,
+                    save_file=save_file,
+                    to_mlflow=False,
+                    async_transfer=True,
+                )
+
+                # Explicitly delete large tensors to help garbage collection
+                del images, stacked, embeddings
