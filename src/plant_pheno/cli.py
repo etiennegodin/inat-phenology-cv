@@ -118,19 +118,19 @@ def train_cmd(cfg: DictConfig):
     mlflow.set_tracking_uri(resolve_uri())
     print("Initalizing experiment")
 
-    if runtime.dataset_params.use_cached:
-        kind = "patches" if cfg.model.architecture == "cross_attention" else "cls"
-        cache_dir = runtime.dataset_params.resolve_cache_dir(
-            runtime.paths_params, cfg.model.backbone, kind
-        )
-        data = build_cached_data_pipeline(runtime, cache_dir, device, seed=cfg.seed)
-    else:
-        data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
-
     model_params = model_params_from_cfg(cfg.model)
     optim_params = optimizer_params_from_cfg(cfg)
     scheduler_params = scheduler_params_from_cfg(cfg)
     training_params = training_params_from_cfg(cfg, best_objective=1e-5)
+
+    if runtime.dataset_params.use_cached:
+        caching_params = cache_params_from_cfg(cfg.cache)
+        cache_dir = cache.ensure_cached_embeddings(
+            runtime, caching_params, model_params, cfg.seed
+        )
+        data = build_cached_data_pipeline(runtime, cache_dir, device, seed=cfg.seed)
+    else:
+        data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
 
     mlflow.set_experiment(cfg.experiment_name)
 
@@ -164,18 +164,16 @@ def tune_cmd(cfg: DictConfig):
     seed_everything(cfg.seed, set_cuda_deterministic=False)
 
     if runtime.dataset_params.use_cached:
-        kind = "patches" if cfg.model.architecture == "cross_attention" else "cls"
-        cache_dir = runtime.dataset_params.resolve_cache_dir(
-            runtime.paths_params, cfg.model.backbone, kind
+        # Base model params from compose configs
+        # Not fed in tuning workflow and actual hp reinstanced per objective
+        default_model_params = model_params_from_cfg(cfg.model)
+        caching_params = cache_params_from_cfg(cfg.cache)
+        cache_dir = cache.ensure_cached_embeddings(
+            runtime, caching_params, default_model_params, cfg.seed
         )
         data = build_cached_data_pipeline(runtime, cache_dir, device, seed=cfg.seed)
     else:
-        data = build_data_pipeline(
-            configs=runtime,
-            backbone_name=cfg.model.backbone,
-            device=device,
-            seed=cfg.seed,
-        )
+        data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
 
     with mlflow.start_run() as parent_run:
         parent_run_id = parent_run.info.run_id

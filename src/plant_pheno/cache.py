@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import torch
 from torch.amp import autocast_mode, grad_scaler
@@ -132,3 +133,37 @@ def execute(
 
                 # Explicitly delete large tensors to help garbage collection
                 del images, stacked, embeddings
+
+
+def ensure_cached_embeddings(
+    configs: Config, caching_params: CachingParams, model_params: ModelParams, seed
+) -> Path:
+    """
+    Checks for local cached embeddings matching (backbone, architecture, to_layer).
+    If missing (or dataset.force_recache=true),
+    it calls cache.execute() and generates them.
+    """
+
+    kind = "patches" if model_params.architecture == "cross_attention" else "cls"
+    cache_dir = configs.dataset_params.resolve_cache_dir(
+        configs.paths_params, model_params.backbone, kind=kind
+    )
+
+    if not configs.dataset_params.force_recache:
+        if cache_dir.exists() and cache_dir.is_dir():
+            if any(cache_dir.glob("*.pt")):
+                logger.info(f"Found cached .pt files on disk under {cache_dir}")
+                return cache_dir
+            logger.info(f"Found no cached embeddings in {cache_dir}. Launching process")
+    else:
+        logger.info("Force recaching embeddings")
+
+    # Caching process
+    execute(
+        configs=configs,
+        caching_params=caching_params,
+        model_params=model_params,
+        seed=seed,
+    )
+
+    return cache_dir
