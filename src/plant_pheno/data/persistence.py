@@ -37,7 +37,7 @@ class TorchSaver:
         temp_path = temp_file.name
         temp_file.close()
 
-        logger.info(f"Saving checkpoint locally to temporary file: {temp_path}")
+        logger.debug(f"Saving file locally to temporary file: {temp_path}")
         torch.save(payload, temp_path)
 
         # 2. Transfer job to copy from temp_path to final destination
@@ -49,9 +49,9 @@ class TorchSaver:
                     os.replace(dst_tmp, dst_file)
                 else:
                     shutil.move(dst_tmp, dst_file)
-                logger.info(f"Successfully updated target checkpoint: {dst_file}")
+                logger.info(f"Successfully updated target file: {dst_file}")
             except Exception as e:
-                logger.error(f"Failed to copy checkpoint to {dst_file}: {e}")
+                logger.error(f"Failed to copy file to {dst_file}: {e}")
                 if os.path.exists(dst_tmp):
                     try:
                         os.remove(dst_tmp)
@@ -83,5 +83,5 @@ class TorchSaver:
     def wait(self) -> None:
         """Wait for any active background checkpoint transfer to complete."""
         if self._thread is not None and self._thread.is_alive():
-            logger.info("Waiting for active background checkpoint transfer...")
+            logger.info("Waiting for active background file transfer...")
             self._thread.join()
