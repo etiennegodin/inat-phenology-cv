@@ -371,6 +371,7 @@ class DatasetParams:
     test_frac: float = 0.1
     testing_frac: float = 1.0
     use_cached: bool = False
+    force_recache: bool = False
     cache_to_layer: int = 0
 
     def __post_init__(self):
@@ -379,7 +380,7 @@ class DatasetParams:
     def resolve_cache_dir(self, paths: PathsParams, backbone: str, kind: str) -> Path:
         layer_tag = str(self.cache_to_layer) if self.cache_to_layer > 0 else "full"
         return Path(
-            f"{paths.remote_root}/data/cached_embeddings"
+            f"{paths.data_root}/cached_embeddings"
             f"/{backbone}/{kind}/to_layer_{layer_tag}"
         )
 

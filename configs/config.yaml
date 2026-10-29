@@ -30,6 +30,7 @@ dataset:
   test_frac: 0.1
   testing_frac: 1.0
   use_cached: False
+  force_recache: False
   cache_to_layer: 0
 
 seed: 42
