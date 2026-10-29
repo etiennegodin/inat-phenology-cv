@@ -503,3 +503,22 @@ def build_backbone(
     if device is not None:
         return bkb.to(device)
     return bkb
+
+
+def resolve_truncation_depth(
+    total_blocks: int, to_layer: int, backbone_name: str = ""
+) -> int | None:
+    """Resolve truncation depth.
+    to_layer=0 -> full depth (None);
+    to_layer=k -> skip last k blocks (run first total_blocks - k blocks).
+    """
+    if to_layer <= 0:
+        return None
+    n_blocks = total_blocks - to_layer
+    if n_blocks < 1:
+        raise ValueError(
+            f"to_layer={to_layer} would leave 0 blocks for backbone "
+            f"'{backbone_name}' which has {total_blocks} trainable blocks. "
+            f"Valid range: 0 (full) to {total_blocks - 1}."
+        )
+    return n_blocks

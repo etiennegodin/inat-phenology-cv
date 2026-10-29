@@ -5,6 +5,7 @@ from .backbone import (
     BioClipBackbone,
     DinoV3Backbone,
     EfficientNetBackbone,
+    resolve_truncation_depth,
 )
 
 # from .checkpoint import Checkpoint
@@ -37,4 +38,5 @@ __all__ = [
     "PhenologyModel",
     "build_pipeline_model",
     "PhenologyPyfunc",
+    "resolve_truncation_depth",
 ]

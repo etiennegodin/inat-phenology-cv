@@ -8,7 +8,7 @@ from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
 from .config import CachingParams, Config, ModelParams
-from .core.backbone import build_backbone
+from .core.backbone import build_backbone, resolve_truncation_depth
 from .core.device import get_device
 from .data import TorchSaver
 from .train.dataloader import build_single_dataloader
@@ -58,16 +58,11 @@ def execute(
     # Resolve truncation depth.
     # to_layer=0 → full depth (None); to_layer=k → skip last k blocks.
     total_blocks = backbone.trainable_block_count
-    if caching_params.to_layer <= 0:
-        n_blocks: int | None = None
-    else:
-        n_blocks = total_blocks - caching_params.to_layer
-        if n_blocks < 1:
-            raise ValueError(
-                f"to_layer={caching_params.to_layer} would leave 0 blocks for backbone "
-                f"'{model_params.backbone}' which has {total_blocks} trainable blocks. "
-                f"Valid range: 0 (full) to {total_blocks - 1}."
-            )
+    n_blocks = resolve_truncation_depth(
+        total_blocks=total_blocks,
+        to_layer=caching_params.to_layer,
+        backbone_name=model_params.backbone,
+    )
 
     # Choose CLS vs patch encoding based on architecture
     use_patches = model_params.architecture == "cross_attention"
