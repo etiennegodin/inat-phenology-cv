@@ -3,6 +3,7 @@ from __future__ import annotations
 import gc
 import importlib
 import pprint
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -23,11 +24,15 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
-def cleanup_cuda():
-    """Clear all CUDA memory and garbage collect."""
-    if cuda.is_available():
-        cuda.empty_cache()
-    gc.collect()
+@contextmanager
+def cuda_cleanup():
+    """Context manager for automatic CUDA cleanup after operations."""
+    try:
+        yield
+    finally:
+        if cuda.is_available():
+            cuda.empty_cache()
+        gc.collect()
 
 
 def df_img_to_path(

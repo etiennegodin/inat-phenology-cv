@@ -1,7 +1,7 @@
 from .misc import (
     _instantiate,
     clean_data,
-    cleanup_cuda,
+    cuda_cleanup,
     df_img_to_path,
     format_dict,
     get_current_git_branch,
@@ -23,5 +23,5 @@ __all__ = [
     "get_git_hash",
     "get_pos_ratios",
     "_instantiate",
-    "cleanup_cuda",
+    "cuda_cleanup",
 ]
