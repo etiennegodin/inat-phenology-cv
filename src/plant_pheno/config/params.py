@@ -1,31 +1,8 @@
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-
-
-@dataclass
-class CachingParams:
-    """Runtime caching configuration.
-
-    to_layer: Controls backbone depth. 0 = full depth; k > 0 = skip the last k
-              transformer blocks (e.g. to_layer=1 runs all blocks except the last).
-    views:    Reserved for TTA; currently unused by the cache loop.
-    """
-
-    to_layer: int
-    views: int
-
-
-@dataclass
-class CachingConfig:
-    """Hydra-facing cache section; converted to CachingParams at runtime."""
-
-    to_layer: int = 0  # 0 = full depth; k > 0 = skip last k transformer blocks
-    views: int = 1
-
-    def to_dict(self):
-        return asdict(self)
 
 
 @dataclass
@@ -361,6 +338,14 @@ class PathsParams:
 
 
 @dataclass
+class CacheParams:
+    enable: bool = False
+    force_recache: bool = False
+    cache_to_layer: int = 0
+    cache_views: int = 1
+
+
+@dataclass
 class DatasetParams:
     source_table: str = "cv_photos3"
     idx_col: str = "observation_id"
@@ -370,12 +355,12 @@ class DatasetParams:
     val_frac: float = 0.1
     test_frac: float = 0.1
     testing_frac: float = 1.0
-    use_cached: bool = False
-    force_recache: bool = False
-    cache_to_layer: int = 0
+    cache: CacheParams = field(default_factory=CacheParams)
 
     def __post_init__(self):
-        assert (self.train_frac + self.val_frac + self.test_frac) == 1
+        if isinstance(self.cache, dict):
+            self.cache = CacheParams(**self.cache)
+        assert math.isclose(self.train_frac + self.val_frac + self.test_frac, 1)
 
     def to_dict(self):
         return asdict(self)

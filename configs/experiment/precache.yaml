@@ -1,0 +1,7 @@
+# @package _global_
+dataset:
+  cache:
+    enable: True
+    force_recache: False
+    cache_to_layer: 0
+    cache_views: 1

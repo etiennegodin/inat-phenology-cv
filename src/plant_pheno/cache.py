@@ -8,7 +8,7 @@ import torch
 from torch.amp import autocast_mode, grad_scaler
 from tqdm import tqdm
 
-from .config import CachingParams, Config, ModelParams, PathsParams
+from .config import CacheParams, Config, ModelParams, PathsParams
 from .core.backbone import build_backbone, resolve_truncation_depth
 from .core.device import get_device
 from .data import TorchSaver
@@ -27,14 +27,20 @@ if dtype == torch.float16:
 @dataclass
 class CachedEmbeddingSchema:
     model_backbone: str
+    to_layer: int
+    views: int
     layer_tag: str
     model_kind: str
     cache_dir: Path = field(init=False)
 
     @classmethod
-    def from_model_params(cls, to_layer: int, model_params: ModelParams):
+    def from_params(cls, cache_params: CacheParams, model_params: ModelParams):
+        to_layer = cache_params.cache_to_layer
+        views = cache_params.cache_views
         return cls(
             model_backbone=model_params.backbone,
+            to_layer=to_layer,
+            views=views,
             layer_tag=str(to_layer) if to_layer > 0 else "full",
             model_kind="patches"
             if model_params.architecture == "cross_attention"
@@ -57,9 +63,7 @@ class CachedEmbeddingSchema:
 def execute(
     configs: Config,
     model_params: ModelParams,
-    to_layer: int,
     seed: int,
-    views: int | None = None,
 ):
 
     # Init saver
@@ -69,8 +73,9 @@ def execute(
     device = get_device()
 
     # Cached schema
-    cache_schema = CachedEmbeddingSchema.from_model_params(
-        to_layer=configs.dataset_params.cache_to_layer, model_params=model_params
+    cache_params = configs.dataset_params.cache
+    cache_schema = CachedEmbeddingSchema.from_params(
+        cache_params, model_params=model_params
     )
     base_path = cache_schema.resolve_cache_dir(configs.paths_params)
 
@@ -84,7 +89,7 @@ def execute(
     total_blocks = backbone.trainable_block_count
     n_blocks = resolve_truncation_depth(
         total_blocks=total_blocks,
-        to_layer=to_layer,
+        to_layer=cache_params.cache_to_layer,
         backbone_name=model_params.backbone,
     )
 
@@ -123,9 +128,6 @@ def execute(
         leave=False,
         dynamic_ncols=True,
     )
-
-    if views is not None:
-        pass
 
     with torch.no_grad():
         for step, (images, _, obs_ids) in enumerate(pbar):
@@ -173,21 +175,21 @@ def execute(
                 del images, stacked, embeddings
 
 
-def ensure_cached_embeddings(
-    configs: Config, caching_params: CachingParams, model_params: ModelParams, seed
-) -> Path:
+def ensure_cached_embeddings(configs: Config, model_params: ModelParams, seed) -> Path:
     """
     Checks for local cached embeddings matching (backbone, architecture, to_layer).
     If missing (or dataset.force_recache=true),
     it calls cache.execute() and generates them.
     """
 
-    cache_schema = CachedEmbeddingSchema.from_model_params(
-        to_layer=configs.dataset_params.cache_to_layer, model_params=model_params
+    cache_params = configs.dataset_params.cache
+
+    cache_schema = CachedEmbeddingSchema.from_params(
+        cache_params, model_params=model_params
     )
     cache_dir = cache_schema.resolve_cache_dir(configs.paths_params)
 
-    if not configs.dataset_params.force_recache:
+    if not cache_params.force_recache:
         if cache_dir.exists() and cache_dir.is_dir():
             if any(cache_dir.glob("*.pt")):
                 logger.info(f"Found cached .pt files on disk under {cache_dir}")
@@ -200,7 +202,6 @@ def ensure_cached_embeddings(
     execute(
         configs=configs,
         model_params=model_params,
-        to_layer=configs.dataset_params.cache_to_layer,
         seed=seed,
     )
 

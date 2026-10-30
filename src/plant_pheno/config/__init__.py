@@ -4,7 +4,6 @@ from .constants import ANGIOSPERMAE_ID, CLASS_ORDER, LABEL_MAPPING, OBSERVATIONS
 from .hydra_conf import (
     CONFIG_DIR,
     AppConfig,
-    cache_params_from_cfg,
     cfg_to_runtime,
     model_params_from_cfg,
     optimizer_params_from_cfg,
@@ -15,7 +14,7 @@ from .hydra_conf import (
 )
 from .loader import Config
 from .params import (
-    CachingParams,
+    CacheParams,
     CleanlabParams,
     DataLoadersParams,
     DatasetParams,
@@ -63,10 +62,8 @@ __all__ = [
     "CleanlabParams",
     "ValParams",
     "PredictParams",
-    "CachingParams",
     "ProgressiveUnfreezingConfig",
     "cfg_to_runtime",
-    "cache_params_from_cfg",
     "model_params_from_cfg",
     "optimizer_params_from_cfg",
     "training_params_from_cfg",
@@ -77,4 +74,5 @@ __all__ = [
     "OPTUNA_PRUNERS",
     "OPTUNA_SAMPLERS",
     "DinoV3Params",
+    "CacheParams",
 ]

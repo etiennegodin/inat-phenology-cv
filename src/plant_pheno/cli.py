@@ -22,7 +22,6 @@ from .config import (
     SEARCH_SPACES,
     InferenceParams,
     IngestPhotosParams,
-    cache_params_from_cfg,
     cfg_to_runtime,
     model_params_from_cfg,
     optimizer_params_from_cfg,
@@ -97,12 +96,9 @@ def cache_cmd(cfg: DictConfig):
     _require_colab_gpu(cfg)
 
     model_params = model_params_from_cfg(cfg.model)
-    caching_params = cache_params_from_cfg(cfg.cache)
 
     cache.execute(
         configs=runtime,
-        to_layer=caching_params.to_layer,
-        views=caching_params.views,
         model_params=model_params,
         seed=cfg.seed,
     )
@@ -124,11 +120,10 @@ def train_cmd(cfg: DictConfig):
     scheduler_params = scheduler_params_from_cfg(cfg)
     training_params = training_params_from_cfg(cfg, best_objective=1e-5)
 
-    if runtime.dataset_params.use_cached:
-        caching_params = cache_params_from_cfg(cfg.cache)
-        cache_dir = cache.ensure_cached_embeddings(
-            runtime, caching_params, model_params, cfg.seed
-        )
+    print(runtime.dataset_params.cache.enable)
+    print(type(runtime.dataset_params.cache.enable))
+    if runtime.dataset_params.cache.enable:
+        cache_dir = cache.ensure_cached_embeddings(runtime, model_params, cfg.seed)
         data = build_cached_data_pipeline(runtime, cache_dir, device, seed=cfg.seed)
     else:
         data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
@@ -150,7 +145,7 @@ def train_cmd(cfg: DictConfig):
             training_params=training_params,
             data=data,
             device=device,
-            use_cached=runtime.dataset_params.use_cached,
+            use_cached=runtime.dataset_params.cache.enable,
         )
         _log_run_file()
 
@@ -164,13 +159,12 @@ def tune_cmd(cfg: DictConfig):
     mlflow.set_experiment(cfg.experiment_name)
     seed_everything(cfg.seed, set_cuda_deterministic=False)
 
-    if runtime.dataset_params.use_cached:
+    if runtime.dataset_params.cache.enable:
         # Base model params from compose configs
         # Not fed in tuning workflow and actual hp reinstanced per objective
         default_model_params = model_params_from_cfg(cfg.model)
-        caching_params = cache_params_from_cfg(cfg.cache)
         cache_dir = cache.ensure_cached_embeddings(
-            runtime, caching_params, default_model_params, cfg.seed
+            runtime, default_model_params, cfg.seed
         )
         data = build_cached_data_pipeline(runtime, cache_dir, device, seed=cfg.seed)
     else:
@@ -254,7 +248,7 @@ def tune_cmd(cfg: DictConfig):
             training_params=training_params,
             data=data,
             device=device,
-            use_cached=runtime.dataset_params.use_cached,
+            use_cached=runtime.dataset_params.cache.enable,
         )
         _log_run_file()
 

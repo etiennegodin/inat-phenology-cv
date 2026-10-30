@@ -29,9 +29,11 @@ dataset:
   val_frac: 0.1
   test_frac: 0.1
   testing_frac: 1.0
-  use_cached: False
-  force_recache: False
-  cache_to_layer: 0
+  cache:
+    enable: False
+    force_recache: False
+    cache_to_layer: 0
+    cache_views: 1
 
 seed: 42
 test: false
@@ -43,10 +45,6 @@ model:
   start_unfreezed: 1
   dinov3:
     checkpoint_path: null
-
-cache:
-  to_layer: 0  # 0 = full depth; k > 0 = skip last k transformer blocks
-  views: 1
 
 # Do not chdir into outputs/; data paths are relative to the repo/CWD.
 hydra:
