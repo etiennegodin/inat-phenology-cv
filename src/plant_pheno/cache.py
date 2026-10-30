@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from tqdm import tqdm
 from .config import CacheParams, Config, ModelParams, PathsParams
 from .core.backbone import build_backbone, resolve_truncation_depth
 from .core.device import get_device
-from .data import TorchSaver
+from .data import LocalTorchSaver
 from .train.dataloader import build_single_dataloader
 from .train.dataset import build_full_dataset
 from .utils import cuda_cleanup
@@ -65,9 +66,6 @@ def execute(
     model_params: ModelParams,
     seed: int,
 ):
-
-    # Init saver
-    saver = TorchSaver()
 
     # Initialise train modules
     device = get_device()
@@ -128,51 +126,58 @@ def execute(
         leave=False,
         dynamic_ncols=True,
     )
+    with LocalTorchSaver(max_pending=2) as saver:
+        with torch.no_grad():
+            for step, (images, _, obs_ids) in enumerate(pbar):
+                save_file = base_path / f"{step}.pt"
+                if save_file.exists():
+                    continue
 
-    with torch.no_grad():
-        for step, (images, _, obs_ids) in enumerate(pbar):
-            with cuda_cleanup():
-                images = [t.to(device) for t in images]
+                with cuda_cleanup():
+                    images = [t.to(device) for t in images]
 
-                # Concatenate all images in one Tensor;
-                # bag boundaries are saved separately
-                stacked = torch.cat(images)
+                    # Concatenate all images in one Tensor;
+                    # bag boundaries are saved separately
+                    stacked = torch.cat(images)
+                    t0 = time.perf_counter()
 
-                if device.type == "cuda":
-                    with autocast_mode.autocast(device_type=device.type, dtype=dtype):
+                    if device.type == "cuda":
+                        with autocast_mode.autocast(
+                            device_type=device.type, dtype=dtype
+                        ):
+                            if use_patches:
+                                embeddings = backbone.encode_patches(
+                                    stacked, n_blocks=n_blocks
+                                )
+                            else:
+                                embeddings = backbone.encode(stacked, n_blocks=n_blocks)
+                            torch.cuda.synchronize()
+                    else:
                         if use_patches:
                             embeddings = backbone.encode_patches(
                                 stacked, n_blocks=n_blocks
                             )
                         else:
                             embeddings = backbone.encode(stacked, n_blocks=n_blocks)
-                        torch.cuda.synchronize()
-                else:
-                    if use_patches:
-                        embeddings = backbone.encode_patches(stacked, n_blocks=n_blocks)
-                    else:
-                        embeddings = backbone.encode(stacked, n_blocks=n_blocks)
+                    t1 = time.perf_counter()
 
-                payload = {
-                    "embeddings": embeddings.cpu(),
-                    "bag_sizes": [t.size(0) for t in images],
-                    "obs_ids": obs_ids,
-                    "kind": cache_schema.model_kind,
-                    "backbone": cache_schema.model_backbone,
-                }
+                    payload = {
+                        "embeddings": embeddings.cpu(),
+                        "bag_sizes": [t.size(0) for t in images],
+                        "obs_ids": obs_ids,
+                        "kind": cache_schema.model_kind,
+                        "backbone": cache_schema.model_backbone,
+                    }
 
-                save_file = base_path / f"{step}.pt"
+                    saver.save(
+                        payload=payload,
+                        path=save_file,
+                    )
+                    t2 = time.perf_counter()
+                    logger.debug(f"compute {t1 - t0:.1f}s  save {t2 - t1:.1f}s")
 
-                saver.execute(
-                    payload=payload,
-                    save_path=base_path,
-                    save_file=save_file,
-                    to_mlflow=False,
-                    async_transfer=True,
-                )
-
-                # Explicitly delete large tensors to help garbage collection
-                del images, stacked, embeddings
+                    # Explicitly delete large tensors to help garbage collection
+                    del images, stacked, embeddings
 
 
 def ensure_cached_embeddings(configs: Config, model_params: ModelParams, seed) -> Path:

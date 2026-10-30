@@ -7,7 +7,7 @@ from .db import (
     get_model_evaluations,
     log_model_evaluation,
 )
-from .persistence import TorchSaver
+from .persistence import LocalTorchSaver, RemoteTorchSaver
 from .sql import DuckDbSQL
 
 __all__ = [
@@ -17,5 +17,6 @@ __all__ = [
     "log_model_evaluation",
     "DuckDBAdapter",
     "DuckDbSQL",
-    "TorchSaver",
+    "RemoteTorchSaver",
+    "LocalTorchSaver",
 ]

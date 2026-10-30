@@ -11,7 +11,7 @@ import torch
 from ..config.params import ModelParams
 from ..core import build_pipeline_model, get_device
 from ..core.model import PhenologyModel
-from ..data import TorchSaver
+from ..data import RemoteTorchSaver
 from ..infra import get_mlflow_run_id
 from .metrics import EpochMetrics, log_best_artifacts
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class CheckpointSaver(TorchSaver):
+class CheckpointSaver(RemoteTorchSaver):
     """Manages robust, non-blocking asynchronous checkpoint saving."""
 
     def __init__(self) -> None:

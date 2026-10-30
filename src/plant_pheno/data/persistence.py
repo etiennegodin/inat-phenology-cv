@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
 import shutil
 import tempfile
 import threading
@@ -13,60 +14,35 @@ import torch
 logger = logging.getLogger(__name__)
 
 
-class TorchSaver:
-    """Manages robust, non-blocking asynchronous checkpoint saving."""
-
+class RemoteTorchSaver:
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
+        self._err: BaseException | None = None
 
     def execute(
-        self,
-        payload: dict,
-        save_path: str | Path,
-        save_file: str | Path,
-        to_mlflow: bool = False,
-        async_transfer: bool = True,
-    ) -> None:
-        """Saves torch payload to fast local disk first,
-        then copies to target path asynchronously."""
-
+        self, payload, save_path, save_file, to_mlflow=False, async_transfer=True
+    ):
         os.makedirs(save_path, exist_ok=True)
+        self.wait()  # also re-raises a previous failure
 
-        # 1. Fast synchronous write to local temp file (~50ms)
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pth")
-        temp_path = temp_file.name
-        temp_file.close()
-
-        logger.debug(f"Saving file locally to temporary file: {temp_path}")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pth") as f:
+            temp_path = f.name
         torch.save(payload, temp_path)
 
-        # 2. Transfer job to copy from temp_path to final destination
-        def _transfer_job(src_path: str, dst_file: str):
-            dst_tmp = f"{dst_file}.tmp"
+        def _transfer_job(src, dst):
+            dst_tmp = f"{dst}.tmp"
             try:
-                shutil.copy2(src_path, dst_tmp)
-                if os.path.exists(dst_file):
-                    os.replace(dst_tmp, dst_file)
-                else:
-                    shutil.move(dst_tmp, dst_file)
-                logger.info(f"Successfully updated target file: {dst_file}")
-            except Exception as e:
-                logger.error(f"Failed to copy file to {dst_file}: {e}")
-                if os.path.exists(dst_tmp):
-                    try:
-                        os.remove(dst_tmp)
-                    except Exception:
-                        pass
-                raise e
+                shutil.copy2(src, dst_tmp)
+                os.replace(dst_tmp, dst)  # dst_tmp is beside dst, so same filesystem
+                logger.info("Successfully updated target file: %s", dst)
+                if to_mlflow and mlflow.active_run():
+                    mlflow.log_artifact(dst)  # only after the file exists
+            except BaseException as e:
+                self._err = e
+                logger.error("Failed to copy file to %s: %s", dst, e)
+                Path(dst_tmp).unlink(missing_ok=True)
             finally:
-                if os.path.exists(src_path):
-                    try:
-                        os.remove(src_path)
-                    except Exception:
-                        pass
-
-        # Wait for any prior background transfer to finish before starting a new one
-        self.wait()
+                Path(src).unlink(missing_ok=True)
 
         if async_transfer:
             self._thread = threading.Thread(
@@ -75,13 +51,74 @@ class TorchSaver:
             self._thread.start()
         else:
             _transfer_job(temp_path, save_file)
-
-        if to_mlflow:
-            if mlflow.active_run():
-                mlflow.log_artifact(save_file)
+            self._raise()
 
     def wait(self) -> None:
-        """Wait for any active background checkpoint transfer to complete."""
         if self._thread is not None and self._thread.is_alive():
             logger.info("Waiting for active background file transfer...")
             self._thread.join()
+        self._raise()
+
+    def _raise(self) -> None:
+        if self._err is not None:
+            err, self._err = self._err, None
+            raise RuntimeError("background transfer failed") from err
+
+
+class LocalTorchSaver:
+    """Background writer for same-disk saves. Bounded queue gives backpressure."""
+
+    def __init__(self, max_pending: int = 2) -> None:
+        self._q: queue.Queue = queue.Queue(maxsize=max_pending)
+        self._err: BaseException | None = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while True:
+            item = self._q.get()
+            try:
+                if item is None:
+                    return
+                payload, path = item
+                if self._err is not None:  # a write already failed; drain the queue
+                    continue
+                tmp = path.with_name(path.name + ".tmp")  # same dir => same filesystem
+                try:
+                    torch.save(payload, tmp)
+                    os.replace(tmp, path)
+                    logger.info("Saved %s", path)
+                except BaseException as e:
+                    self._err = e
+                    tmp.unlink(missing_ok=True)
+            finally:
+                self._q.task_done()
+
+    def save(self, payload, path: str | Path) -> None:
+        self._raise()
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._q.put((payload, path))  # blocks when full
+
+    def wait(self) -> None:
+        self._q.join()
+        self._raise()
+
+    def close(self) -> None:
+        self._q.put(None)
+        self._thread.join()
+        self._raise()
+
+    def _raise(self) -> None:
+        if self._err is not None:
+            raise RuntimeError("background write failed") from self._err
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            self.close()
+        except RuntimeError:
+            if exc[0] is None:
+                raise
