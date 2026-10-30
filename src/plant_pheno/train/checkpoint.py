@@ -27,6 +27,7 @@ class CheckpointSaver(RemoteTorchSaver):
     """Manages robust, non-blocking asynchronous checkpoint saving."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._thread: threading.Thread | None = None
 
     def _prep_checkpoint(

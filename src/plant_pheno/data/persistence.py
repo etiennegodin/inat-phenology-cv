@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class RemoteTorchSaver:
+    _thread: threading.Thread | None = None
+    _err: BaseException | None = None
+
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
         self._err: BaseException | None = None
