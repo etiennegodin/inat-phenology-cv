@@ -180,7 +180,7 @@ def _prepare_build_dataset(
     if configs.test:
         df = reduce_dataset(
             df,
-            fraction=configs.dataset_params.test_frac,
+            fraction=configs.test_frac,
             params=configs.dataset_params,
             seed=seed,
         )

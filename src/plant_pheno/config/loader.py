@@ -25,6 +25,7 @@ class Config:
     dataset_params: DatasetParams = field(default_factory=DatasetParams)
     cuda: bool = False
     test: bool = False
+    test_frac: float = 0.1
     max_img_resolution: int = 500
 
     def to_dict(self):

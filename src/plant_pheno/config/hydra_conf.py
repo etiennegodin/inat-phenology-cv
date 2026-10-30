@@ -86,6 +86,7 @@ def cfg_to_runtime(cfg: DictConfig | AppConfig) -> Config:
         git_branch=get_current_git_branch(),
         git_hash=get_git_hash(),
         test=bool(data.get("test", False)),
+        test_frac=data.get("test_frac", 0.1),
     )
 
 
