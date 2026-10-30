@@ -120,8 +120,6 @@ def train_cmd(cfg: DictConfig):
     scheduler_params = scheduler_params_from_cfg(cfg)
     training_params = training_params_from_cfg(cfg, best_objective=1e-5)
 
-    print(runtime.dataset_params.cache.enable)
-    print(type(runtime.dataset_params.cache.enable))
     if runtime.dataset_params.cache.enable:
         cache_dir = cache.ensure_cached_embeddings(runtime, model_params, cfg.seed)
         data = build_cached_data_pipeline(runtime, cache_dir, device, seed=cfg.seed)
