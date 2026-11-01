@@ -90,7 +90,7 @@ class LocalTorchSaver:
                 try:
                     torch.save(payload, tmp)
                     os.replace(tmp, path)
-                    logger.info("Saved %s", path)
+                    logger.debug("Saved %s", path)
                 except BaseException as e:
                     self._err = e
                     tmp.unlink(missing_ok=True)
