@@ -21,7 +21,7 @@ defaults:
 
 # Shared dataset schema (not machine-specific)
 dataset:
-  source_table: train_set
+  source_table: train
   idx_col: observation_id
   photo_idx_col: photo_id
   label_col: label
