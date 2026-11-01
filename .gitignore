@@ -226,3 +226,4 @@ outputs/
 notes/
 AGENTS.md
 .aider*
+_*.py

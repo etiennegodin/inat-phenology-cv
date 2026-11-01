@@ -10,7 +10,7 @@ paths:
   remote_root: /content/drive/MyDrive/inat-phenology-cv
   data_root: /content/data
   image_dir: /content/images
-  db_path: /content/data/train_set.parquet
+  db_path: /content/data/train.parquet
   checkpoint_path: /content/drive/MyDrive/inat-phenology-cv/checkpoints
   eval_db_path: /content/drive/MyDrive/inat-phenology-cv/data/model_evaluations.duckdb
   inference_db_path: /content/drive/MyDrive/inat-phenology-cv/data/inference.duckdb
