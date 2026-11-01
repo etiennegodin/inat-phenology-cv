@@ -172,7 +172,7 @@ def execute(
                     t1 = time.perf_counter()
 
                     payload = {
-                        "embeddings": embeddings.to(device="cpu", dtype=torch.bfloat16),
+                        "embeddings": embeddings.to(device="cpu", dtype=dtype),
                         "bag_sizes": [t.size(0) for t in images],
                         "obs_ids": obs_ids,
                         "kind": cache_schema.model_kind,

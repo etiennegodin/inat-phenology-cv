@@ -74,3 +74,11 @@ class EpochProfiling(Profile):
                         mlflow.log_metric(
                             f"profiling/{k}/{sub_k}", float(sub_v), step=epoch
                         )
+
+        if hasattr(self, "epoch_duration"):
+            mlflow.log_metric(
+                "profiling/epoch_duration", float(self.epoch_duration), step=epoch
+            )
+            mlflow.log_metric(
+                "time/epoch_duration", float(self.epoch_duration), step=epoch
+            )
