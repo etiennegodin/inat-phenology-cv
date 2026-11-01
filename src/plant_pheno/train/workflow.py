@@ -23,6 +23,7 @@ from .metrics import (
     log_best_artifacts,
     log_epoch_metrics,
 )
+from .profiling import EpochProfiling, MetricsProfiling, StepProfiling
 
 if TYPE_CHECKING:
     from torch import Tensor, device, nn
@@ -51,7 +52,7 @@ def train_one_epoch(
     accumulation_steps: int,
     log_step_interval: int = 10,
     use_cached: bool = False,
-) -> tuple[float, tuple[float, float]]:
+) -> tuple[float, StepProfiling]:
     """Train the model for one epoch with progress tracking and step logging."""
     data_time = 0.0
     compute_time = 0.0
@@ -74,7 +75,7 @@ def train_one_epoch(
         dynamic_ncols=True,
     )
 
-    t0 = time.time()
+    t0 = time.perf_counter()
 
     optimizer.zero_grad(set_to_none=True)
 
@@ -88,7 +89,7 @@ def train_one_epoch(
         obs_per_batch.append(obs_count)
         img_per_batch.append(total_img)
 
-        t1 = time.time()
+        t1 = time.perf_counter()
         data_time += t1 - t0
 
         labels: Tensor
@@ -139,7 +140,7 @@ def train_one_epoch(
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
-        t0 = time.time()
+        t0 = time.perf_counter()
         compute_time += t0 - t1
 
         current_loss = loss.item()
@@ -179,7 +180,7 @@ def train_one_epoch(
     # Attention
     log_attention_metrics(epoch, all_obs_weights, prefix="train")
 
-    return train_loss, (data_time, compute_time)
+    return train_loss, StepProfiling(data_time, compute_time)
 
 
 def evaluate(
@@ -190,7 +191,7 @@ def evaluate(
     epoch: int,
     pos_ratios: list[float],
     use_cached: bool = False,
-) -> tuple[EpochMetrics, tuple[float, float]]:
+) -> tuple[EpochMetrics, StepProfiling, MetricsProfiling]:
     """Evaluate the model on validation set with rich multi-label metrics."""
     data_time = 0.0
     compute_time = 0.0
@@ -216,7 +217,7 @@ def evaluate(
     )
 
     forward_fn = model.forward_from_embeddings if use_cached else model
-    t0 = time.time()
+    t0 = time.perf_counter()
     with torch.no_grad():
         for step, (images, labels, obs_ids) in enumerate(pbar):
             all_obs_ids.extend(obs_ids)
@@ -224,7 +225,7 @@ def evaluate(
             inputs = [t.to(device) for t in images]
             labels = labels.to(device)
 
-            t1 = time.time()
+            t1 = time.perf_counter()
             data_time += t1 - t0
 
             if device.type == "cuda":
@@ -249,7 +250,7 @@ def evaluate(
             all_preds_raw.append(preds_raw.detach().float().cpu())
             for class_name, batch_weights in class_weights.items():
                 observations_attention_weights[class_name].extend(batch_weights)
-            t0 = time.time()
+            t0 = time.perf_counter()
             compute_time += t0 - t1
             pbar.set_postfix({"val_loss": f"{total_loss / (step + 1):.4f}"})
 
@@ -264,6 +265,8 @@ def evaluate(
             c_loss = v / len(dataloader)
             mlflow.log_metric(f"val/{k}_loss", c_loss, step=epoch)
 
+    t1 = time.perf_counter()
+
     eval_metrics = compute_metrics(
         all_preds_raw=all_preds_raw_np,
         all_labels=all_labels_np,
@@ -271,6 +274,8 @@ def evaluate(
         val_loss=val_loss,
         prefix="val",
     )
+    compute_metrics_time = time.perf_counter() - t1
+    t2 = time.perf_counter()
 
     log_epoch_metrics(
         metrics=eval_metrics,
@@ -278,9 +283,12 @@ def evaluate(
         all_labels=all_labels_np,
         epoch=epoch,
     )
+    log_metrics_time = time.perf_counter() - t2
+    t2 = time.perf_counter()
 
     log_attention_metrics(epoch, observations_attention_weights, prefix="val")
-
+    log_attention_metrics_time = time.perf_counter() - t2
+    t3 = time.perf_counter()
     obs_paths_map = (
         dataloader.dataset.get_obs_paths_map()
         if hasattr(dataloader.dataset, "get_obs_paths_map")
@@ -295,8 +303,19 @@ def evaluate(
         eval_metrics,
         all_obs_paths=obs_paths_map,
     )
+
     log_error_analysis(error_report, epoch)
-    return eval_metrics, (data_time, compute_time)
+
+    error_analysis_time = time.perf_counter() - t3
+
+    metrics_time = MetricsProfiling(
+        compute_metrics_time=compute_metrics_time,
+        log_metrics_time=log_metrics_time,
+        log_attention_metrics_time=log_attention_metrics_time,
+        error_analysis_time=error_analysis_time,
+    )
+
+    return eval_metrics, StepProfiling(data_time, compute_time), metrics_time
 
 
 def execute(
@@ -336,9 +355,7 @@ def execute(
     )
 
     for epoch in range(training_params.epochs):
-        epoch_start_time = time.time()
-
-        train_loss, train_times = train_one_epoch(
+        train_loss, train_profile = train_one_epoch(
             epoch,
             model=model,
             dataloader=train_loader,
@@ -350,17 +367,18 @@ def execute(
             use_cached=use_cached,
         )
 
+        t0 = time.perf_counter()
         scheduler.step()
         current_lr = scheduler.get_last_lr()
+
+        epoch_scheduler_time = time.perf_counter() - t0
 
         if mlflow.active_run():
             mlflow.log_metric("lr/backbone", float(current_lr[0]), step=epoch)
             mlflow.log_metric("lr/attention", float(current_lr[1]), step=epoch)
             mlflow.log_metric("lr/head", float(current_lr[2]), step=epoch)
-            mlflow.log_metric("time/train_data", float(train_times[0]), step=epoch)
-            mlflow.log_metric("time/train_compute", float(train_times[1]), step=epoch)
 
-        eval_metrics, eval_times = evaluate(
+        eval_metrics, eval_profile, metrics_profile = evaluate(
             model=model,
             dataloader=val_loader,
             criterion=criterion,
@@ -370,15 +388,18 @@ def execute(
             use_cached=use_cached,
         )
 
-        epoch_duration = time.time() - epoch_start_time
+        epoch_profile = EpochProfiling(
+            train=train_profile,
+            epoch_scheduler_time=epoch_scheduler_time,
+            eval=eval_profile,
+            metrics=metrics_profile,
+        )
 
-        if mlflow.active_run():
-            mlflow.log_metric("time/eval_data", float(eval_times[0]), step=epoch)
-            mlflow.log_metric("time/eval_compute", float(eval_times[1]), step=epoch)
-            mlflow.log_metric("time/epoch_duration", float(epoch_duration), step=epoch)
+        epoch_profile.log_to_mlflow(epoch=epoch)
 
         logger.info(
-            f"Epoch {epoch:02d}/{training_params.epochs:02d} [{epoch_duration:.1f}s] - "
+            f"Epoch {epoch:02d}/{training_params.epochs:02d} "
+            f"[{epoch_profile.epoch_duration:.1f}s] - "
             f"pr_norm_excess_macro: {eval_metrics.pr_norm_excess_macro:.5f} | "
             f"ROC-AUC: {eval_metrics.roc_auc_macro:.3f} | "
             f"PR-AUC: {eval_metrics.pr_auc_macro:.3f} "
@@ -386,10 +407,11 @@ def execute(
         )
 
         logger.debug(
-            f"Timings -> Train Data: {train_times[0]:.1f}s, "
-            f"Compute: {train_times[1]:.1f}s | "
-            f"Eval Data: {eval_times[0]:.1f}s, "
-            f"Compute: {eval_times[1]:.1f}s"
+            f"Timings -> Train Data: {epoch_profile.train.data_time:.1f}s, "
+            f"Compute: {epoch_profile.train.compute_time:.1f}s | "
+            f"Eval Data: {epoch_profile.eval.data_time:.1f}s, "
+            f"Compute: {epoch_profile.eval.compute_time:.1f}s"
+            f"Metrics: {epoch_profile.metrics.total():.1f}s"
         )
 
         logger.debug(f"Eval metrics: {eval_metrics.pr_norm_excess_per_class()}")
