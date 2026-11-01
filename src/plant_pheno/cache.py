@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 import torch
@@ -65,6 +65,7 @@ def execute(
     configs: Config,
     model_params: ModelParams,
     seed: int,
+    force_recache: bool = False,
 ):
 
     # Initialise train modules
@@ -76,6 +77,10 @@ def execute(
         cache_params, model_params=model_params
     )
     base_path = cache_schema.resolve_cache_dir(configs.paths_params)
+    if force_recache:
+        for cached_file in base_path.glob("*.pt"):
+            cached_file.unlink()
+        logger.info("Removed existing embeddings from %s before recaching", base_path)
 
     # Build backbone
     backbone = build_backbone(
@@ -106,8 +111,13 @@ def execute(
     generator = torch.Generator().manual_seed(seed)
 
     # Create datalaoder from full dataset
+    dataloader_params = replace(
+        configs.dataloaders_params,
+        num_workers=0,
+        persistent_workers=False,
+    )
     dataloader = build_single_dataloader(
-        params=configs.dataloaders_params,
+        params=dataloader_params,
         dataset=dataset,
         generator=generator,
         shuffle=False,
@@ -162,7 +172,7 @@ def execute(
                     t1 = time.perf_counter()
 
                     payload = {
-                        "embeddings": embeddings.cpu(),
+                        "embeddings": embeddings.to(device="cpu", dtype=torch.bfloat16),
                         "bag_sizes": [t.size(0) for t in images],
                         "obs_ids": obs_ids,
                         "kind": cache_schema.model_kind,
@@ -208,6 +218,7 @@ def ensure_cached_embeddings(configs: Config, model_params: ModelParams, seed) -
         configs=configs,
         model_params=model_params,
         seed=seed,
+        force_recache=cache_params.force_recache,
     )
 
     return cache_dir

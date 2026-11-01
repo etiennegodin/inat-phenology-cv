@@ -35,6 +35,8 @@ def test_colab_environment_overrides_machine_settings() -> None:
     assert cfg.env_name == "colab"
     assert cfg.paths.root == "/content/inat-phenology-cv"
     assert cfg.dataloaders.batch_size == 256
+    assert cfg.dataloaders.num_workers == 2
+    assert cfg.dataloaders.persistent_workers is True
     assert cfg.model.backbone == "bioclip"
     assert cfg.model.dinov3.checkpoint_path.endswith(
         "dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"

@@ -101,6 +101,7 @@ def cache_cmd(cfg: DictConfig):
         configs=runtime,
         model_params=model_params,
         seed=cfg.seed,
+        force_recache=runtime.dataset_params.cache.force_recache,
     )
 
 

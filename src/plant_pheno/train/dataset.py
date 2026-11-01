@@ -152,20 +152,23 @@ class CacheDatasetdPhenologyDataset(PhenologyDataset):
 
 
 def _prepare_build_dataset(
-    configs: Config, seed: int = 42
+    configs: Config, seed: int = 42, cache_images: bool = True
 ) -> tuple[pd.DataFrame, CacheDataset]:
     """Reusable function to prepare dataframe and cache dataset
     for further datasets creation"""
 
     df = get_samples(configs.paths_params, configs.dataset_params)
 
-    # Get mean image ratio on raw df
-    mean_image_ratio = get_mean_img_ratio(df)
-
-    # Decide if caching is possible with dataset size and current hardware
-    cache = resolve_cache_decision(
-        configs.hardware_profile, len(df), mean_image_ratio, configs.max_img_resolution
-    )
+    if cache_images:
+        mean_image_ratio = get_mean_img_ratio(df)
+        cache = resolve_cache_decision(
+            configs.hardware_profile,
+            len(df),
+            mean_image_ratio,
+            configs.max_img_resolution,
+        )
+    else:
+        cache = CacheDataset(False)
 
     # Collapse df by observation
     df = (
@@ -280,14 +283,12 @@ def reduce_dataset(
 def build_full_dataset(
     configs: Config, transforms: tuple[Compose, Compose], seed: int = 42
 ):
-    """Build full dataset without train,val,test splits"""
+    """Build a streaming dataset for embedding-cache generation."""
 
-    df, cache = _prepare_build_dataset(configs, seed)
+    df, _ = _prepare_build_dataset(configs, seed, cache_images=False)
     train_transform, _ = transforms
 
-    full_set = PhenologyDataset.from_profile(
-        cache, df, train_transform, configs.dataset_params
-    )
+    full_set = UncachedPhenologyDataset(df, train_transform, configs.dataset_params)
     logger.debug(f"Dataset type : {type(full_set)}")
     return full_set
 

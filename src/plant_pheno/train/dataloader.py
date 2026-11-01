@@ -64,7 +64,7 @@ def build_single_dataloader(
             collate_fn=collate,
             num_workers=params.num_workers,
             pin_memory=params.pin_memory,
-            persistent_workers=params.persistent_workers,
+            persistent_workers=params.persistent_workers and params.num_workers > 0,
             generator=generator,
             worker_init_fn=seed_worker,
         )
@@ -75,7 +75,7 @@ def build_single_dataloader(
         collate_fn=collate,
         num_workers=params.num_workers,
         pin_memory=params.pin_memory,
-        persistent_workers=params.persistent_workers,
+        persistent_workers=params.persistent_workers and params.num_workers > 0,
         generator=generator,
         worker_init_fn=seed_worker,
     )

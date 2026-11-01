@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -75,7 +75,11 @@ def build_cached_data_pipeline(
 
     train_loader, val_loader, test_loader = build_pipeline_dataloaders(
         datasets,
-        configs.dataloaders_params,
+        replace(
+            configs.dataloaders_params,
+            num_workers=0,
+            persistent_workers=False,
+        ),
         seed=seed,
         collate=collate_fn_cached,
     )
