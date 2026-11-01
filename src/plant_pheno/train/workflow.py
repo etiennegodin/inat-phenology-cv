@@ -13,7 +13,6 @@ from tqdm import tqdm
 
 from ..config import CLASS_ORDER
 from ..infra import save_log
-from .analysis import error_analysis, log_error_analysis
 from .checkpoint import Checkpoint, CheckpointSaver
 from .flow_control import ClassesObjectiveState, TrainingState, create_stage_states
 from .metrics import (
@@ -288,31 +287,11 @@ def evaluate(
 
     log_attention_metrics(epoch, observations_attention_weights, prefix="val")
     log_attention_metrics_time = time.perf_counter() - t2
-    t3 = time.perf_counter()
-    obs_paths_map = (
-        dataloader.dataset.get_obs_paths_map()
-        if hasattr(dataloader.dataset, "get_obs_paths_map")
-        else None
-    )
-
-    error_report = error_analysis(
-        all_obs_ids,
-        all_preds_raw_np,
-        all_labels_np,
-        observations_attention_weights,
-        eval_metrics,
-        all_obs_paths=obs_paths_map,
-    )
-
-    log_error_analysis(error_report, epoch)
-
-    error_analysis_time = time.perf_counter() - t3
 
     metrics_time = MetricsProfiling(
         compute_metrics_time=compute_metrics_time,
         log_metrics_time=log_metrics_time,
         log_attention_metrics_time=log_attention_metrics_time,
-        error_analysis_time=error_analysis_time,
     )
 
     return eval_metrics, StepProfiling(data_time, compute_time), metrics_time
@@ -388,45 +367,24 @@ def execute(
             use_cached=use_cached,
         )
 
-        epoch_profile = EpochProfiling(
-            train=train_profile,
-            epoch_scheduler_time=epoch_scheduler_time,
-            eval=eval_profile,
-            metrics=metrics_profile,
-        )
-
-        epoch_profile.log_to_mlflow(epoch=epoch)
-
-        logger.info(
-            f"Epoch {epoch:02d}/{training_params.epochs:02d} "
-            f"[{epoch_profile.epoch_duration:.1f}s] - "
-            f"pr_norm_excess_macro: {eval_metrics.pr_norm_excess_macro:.5f} | "
-            f"ROC-AUC: {eval_metrics.roc_auc_macro:.3f} | "
-            f"PR-AUC: {eval_metrics.pr_auc_macro:.3f} "
-            f"| Best-F1: {eval_metrics.f1_macro_best:.3f}"
-        )
-
-        logger.debug(
-            f"Timings -> Train Data: {epoch_profile.train.data_time:.1f}s, "
-            f"Compute: {epoch_profile.train.compute_time:.1f}s | "
-            f"Eval Data: {epoch_profile.eval.data_time:.1f}s, "
-            f"Compute: {epoch_profile.eval.compute_time:.1f}s"
-            f"Metrics: {epoch_profile.metrics.total():.1f}s"
-        )
-
         logger.debug(f"Eval metrics: {eval_metrics.pr_norm_excess_per_class()}")
 
         training_state.patience_counter(
             classes_metric=eval_metrics.pr_norm_excess_per_class()
         )
 
+        checkpoint_time = None
+
         if training_state.checkpoint_condition():
+            t1 = time.perf_counter()
+
             # If any class improved, checkpoint
             logger.info(f"Saving checkpoint for epoch {epoch} to {checkpoint_path}")
             best_eval_metrics = eval_metrics
             checkpoint = Checkpoint(
                 model=model, optimizer=optimizer, eval_metrics=best_eval_metrics
             )
+
             saver.save(
                 checkpoint=checkpoint,
                 checkpoint_path=checkpoint_path,
@@ -435,6 +393,7 @@ def execute(
                 save_optimizer=False,
                 async_transfer=True,
             )
+            checkpoint_time = time.perf_counter() - t1
 
         if training_state.stop_condition():
             logger.info(
@@ -458,6 +417,33 @@ def execute(
             trial.report(eval_metrics.pr_norm_excess_macro, step=epoch)
             if trial.should_prune():
                 raise optuna.TrialPruned(f"Trial pruned at epoch {epoch}")
+
+        epoch_profile = EpochProfiling(
+            train=train_profile,
+            epoch_scheduler_time=epoch_scheduler_time,
+            eval=eval_profile,
+            metrics=metrics_profile,
+            checkpoint=checkpoint_time,
+        )
+
+        epoch_profile.log_to_mlflow(epoch=epoch)
+
+        logger.info(
+            f"Epoch {epoch:02d}/{training_params.epochs:02d} "
+            f"[{epoch_profile.epoch_duration:.1f}s] - "
+            f"pr_norm_excess_macro: {eval_metrics.pr_norm_excess_macro:.5f} | "
+            f"ROC-AUC: {eval_metrics.roc_auc_macro:.3f} | "
+            f"PR-AUC: {eval_metrics.pr_auc_macro:.3f} "
+            f"| Best-F1: {eval_metrics.f1_macro_best:.3f}"
+        )
+
+        logger.debug(
+            f"Timings -> Train Data: {epoch_profile.train.data_time:.1f}s, "
+            f"Compute: {epoch_profile.train.compute_time:.1f}s | "
+            f"Eval Data: {epoch_profile.eval.data_time:.1f}s, "
+            f"Compute: {epoch_profile.eval.compute_time:.1f}s"
+            f"Metrics: {epoch_profile.metrics.total():.1f}s"
+        )
 
     save_log()
     saver.wait()

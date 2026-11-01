@@ -16,7 +16,6 @@ def metrics_profile():
         compute_metrics_time=0.1,
         log_metrics_time=0.2,
         log_attention_metrics_time=0.3,
-        error_analysis_time=0.4,
     )
 
 
@@ -27,7 +26,7 @@ def test_step_profile(step_profile):
 
 
 def test_metrics_profile(metrics_profile):
-    assert math.isclose(metrics_profile.total(), 1.0)
+    assert math.isclose(metrics_profile.total(), 0.6)
 
 
 def test_epoch_metrics(step_profile, metrics_profile):
@@ -37,4 +36,4 @@ def test_epoch_metrics(step_profile, metrics_profile):
         eval=step_profile,
         metrics=metrics_profile,
     )
-    assert math.isclose(e.epoch_duration, 1.7)
+    assert math.isclose(e.epoch_duration, 1.3)

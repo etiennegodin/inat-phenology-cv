@@ -38,7 +38,6 @@ class MetricsProfiling(Profile):
     compute_metrics_time: float
     log_metrics_time: float
     log_attention_metrics_time: float
-    error_analysis_time: float
 
 
 @dataclass
@@ -54,6 +53,7 @@ class EpochProfiling(Profile):
     epoch_scheduler_time: float
     eval: StepProfiling
     metrics: MetricsProfiling
+    checkpoint: float | None = None
 
     # Total
     epoch_duration: float = field(init=False, default=0.0, repr=False)
