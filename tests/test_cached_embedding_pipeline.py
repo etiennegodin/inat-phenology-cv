@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -7,9 +8,13 @@ import torch
 
 from plant_pheno.config import DatasetParams, ModelParams
 from plant_pheno.core.model import CrossAttentionModel, MilAttentionModel
+from plant_pheno.train import dataset as dataset_module
 from plant_pheno.train.batch_sampler import MaxImagesBatchSampler
 from plant_pheno.train.dataloader import collate_fn_cached
-from plant_pheno.train.dataset import CachedEmbeddingDataset
+from plant_pheno.train.dataset import (
+    CachedEmbeddingDataset,
+    build_cached_datasets,
+)
 
 
 def test_cached_embedding_dataset_and_collate():
@@ -19,7 +24,7 @@ def test_cached_embedding_dataset_and_collate():
         # Create dummy cached .pt files
         # Step 0: 2 observations (obs 1: 3 images, obs 2: 2 images) => total 5 images
         payload_0 = {
-            "embeddings": torch.randn(5, 768),
+            "embeddings": torch.randn(5, 768, dtype=torch.bfloat16),
             "bag_sizes": [3, 2],
             "obs_ids": [101, 102],
             "kind": "cls",
@@ -29,7 +34,7 @@ def test_cached_embedding_dataset_and_collate():
 
         # Step 1: 1 observation (obs 3: 4 images) => total 4 images
         payload_1 = {
-            "embeddings": torch.randn(4, 768),
+            "embeddings": torch.randn(4, 768, dtype=torch.bfloat16),
             "bag_sizes": [4],
             "obs_ids": [103],
             "kind": "cls",
@@ -64,6 +69,7 @@ def test_cached_embedding_dataset_and_collate():
 
         emb, label, obs_id = dataset[0]
         assert emb.shape == (3, 768)
+        assert emb.dtype == torch.bfloat16
         assert obs_id == 101
         assert torch.equal(label, torch.tensor([1.0, 0.0, 0.0]))
 
@@ -161,3 +167,62 @@ def test_cached_dataset_raises_on_nonexistent_or_empty_dir():
                 obs_df=df,
                 dataset_params=dataset_params,
             )
+
+
+def test_cached_splits_load_embeddings_once_and_share_storage(tmp_path, monkeypatch):
+    observation_ids = list(range(10))
+    dataset_params = DatasetParams(
+        idx_col="observation_id",
+        label_col="label",
+        train_frac=0.6,
+        val_frac=0.2,
+        test_frac=0.2,
+    )
+    df = pd.DataFrame(
+        {
+            "observation_id": observation_ids,
+            "label": [[1, 0, 0]] * len(observation_ids),
+            "path": [["image.jpg"]] * len(observation_ids),
+        }
+    )
+    torch.save(
+        {
+            "embeddings": torch.randn(len(observation_ids), 2, 4, dtype=torch.bfloat16),
+            "bag_sizes": [1] * len(observation_ids),
+            "obs_ids": observation_ids,
+        },
+        tmp_path / "0.pt",
+    )
+
+    load_calls = 0
+    original_load = CachedEmbeddingDataset._load
+
+    def count_loads(self, cache_dir, obs_df, params):
+        nonlocal load_calls
+        load_calls += 1
+        return original_load(self, cache_dir, obs_df, params)
+
+    monkeypatch.setattr(CachedEmbeddingDataset, "_load", count_loads)
+    monkeypatch.setattr(
+        dataset_module,
+        "_prepare_build_dataset",
+        lambda configs, seed: (df, False),
+    )
+
+    train_set, val_set, test_set = build_cached_datasets(
+        SimpleNamespace(dataset_params=dataset_params), tmp_path
+    )
+
+    assert load_calls == 1
+    assert len(train_set) + len(val_set) + len(test_set) == len(df)
+    assert all(
+        obs.embeddings.dtype == torch.bfloat16
+        for dataset in (train_set, val_set, test_set)
+        for obs in dataset._obs
+    )
+    backing_storages = {
+        obs.embeddings.untyped_storage().data_ptr()
+        for dataset in (train_set, val_set, test_set)
+        for obs in dataset._obs
+    }
+    assert len(backing_storages) == 1

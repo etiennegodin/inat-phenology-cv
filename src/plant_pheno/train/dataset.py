@@ -335,11 +335,18 @@ class CachedEmbeddingDataset(Dataset):
         cache_dir: Path,
         obs_df: pd.DataFrame,
         dataset_params: DatasetParams,
+        shared_cache: CachedEmbeddingDataset | None = None,
     ) -> None:
         super().__init__()
         self.dataset_params = dataset_params
         self.df = obs_df
-        self._obs: list[CachedObs] = self._load(cache_dir, obs_df, dataset_params)
+        if shared_cache is None:
+            self._obs = self._load(cache_dir, obs_df, dataset_params)
+        else:
+            cached_obs = {obs.obs_id: obs for obs in shared_cache._obs}
+            self._obs = [
+                cached_obs[int(obs_id)] for obs_id in self.df[dataset_params.idx_col]
+            ]
         self.bag_sizes = [o.embeddings.size(0) for o in self._obs]
 
     def _load(
@@ -365,7 +372,7 @@ class CachedEmbeddingDataset(Dataset):
 
         for pt_file in pt_files:
             payload = torch.load(pt_file, map_location="cpu")
-            embeddings_all = payload["embeddings"].float()
+            embeddings_all = payload["embeddings"]
             bag_sizes = payload["bag_sizes"]
             obs_ids = payload["obs_ids"]
             per_obs = torch.split(embeddings_all, bag_sizes)
@@ -401,9 +408,16 @@ def build_cached_datasets(
     df, _ = _prepare_build_dataset(configs, seed)
     train_df, val_df, test_df = split_dataset(df, configs.dataset_params, seed=seed)
 
-    train_set = CachedEmbeddingDataset(cache_dir, train_df, configs.dataset_params)
-    val_set = CachedEmbeddingDataset(cache_dir, val_df, configs.dataset_params)
-    test_set = CachedEmbeddingDataset(cache_dir, test_df, configs.dataset_params)
+    full_set = CachedEmbeddingDataset(cache_dir, df, configs.dataset_params)
+    train_set = CachedEmbeddingDataset(
+        cache_dir, train_df, configs.dataset_params, shared_cache=full_set
+    )
+    val_set = CachedEmbeddingDataset(
+        cache_dir, val_df, configs.dataset_params, shared_cache=full_set
+    )
+    test_set = CachedEmbeddingDataset(
+        cache_dir, test_df, configs.dataset_params, shared_cache=full_set
+    )
 
     logger.debug(
         f"Cached dataset counts: train={len(train_set)},"
