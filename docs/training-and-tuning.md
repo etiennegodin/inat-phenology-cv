@@ -25,6 +25,22 @@ Other commands (`cleanlab`, `predict`, `test`, `list`, `options`) are listed in 
 - Mixed precision where the hardware allows
 - Optional progressive unfreezing
 
+## Cached embeddings
+
+Set `dataset.cache.enable=true` to cache backbone features before training.
+`dataset.cache.cache_to_layer=k` leaves the final `k` transformer blocks out of
+the cache: those blocks run on the cached intermediate tokens during training.
+For a 12-block backbone, `cache_to_layer=1` caches the state after blocks 1–11
+and runs block 12 followed by the configured MIL or cross-attention head.
+`model.start_unfreezed` controls how many blocks in this uncached tail are
+trainable; it cannot exceed `cache_to_layer`. With `cache_to_layer=0`, the full
+backbone output is cached and training is head-only.
+
+Partial token caching is supported for BioCLIP, BioCLIP-2, and DINOv3
+transformer backbones. EfficientNet supports only full-depth caching. Partial
+caches use a versioned cache directory; if a cache-format validation error is
+reported, set `dataset.cache.force_recache=true` and rerun.
+
 ## Metrics and stopping
 
 This is where I made my most useful mistake. My early stopping watched BCE loss, which is sensitive to calibration. For Fruiting, the loss rose while the model was still ranking examples better, so the "divergence" was a metric artifact and not a training problem.

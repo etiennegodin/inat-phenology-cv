@@ -15,12 +15,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def create_stage_states(training_params: TrainingParams, trainable_block_count: int):
+def create_stage_states(
+    training_params: TrainingParams,
+    trainable_block_count: int,
+    first_block: int = 0,
+):
     block_per_stage = training_params.block_per_stage
     stage_count = training_params.max_stages
     stages = []
 
-    blocks = list(range(0, trainable_block_count))
+    blocks = list(range(first_block, first_block + trainable_block_count))
     blocks.reverse()
 
     for i in range(0, len(blocks), block_per_stage):

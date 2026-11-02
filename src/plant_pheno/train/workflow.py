@@ -320,10 +320,25 @@ def execute(
     )
 
     if training_params.unfreeze:
+        total_blocks = len(model.backbone.get_trainable_blocks())
+        first_unfreezable_block = (
+            model.cache_prefix_blocks
+            if use_cached and model.cache_prefix_blocks is not None
+            else 0
+        )
+        stage_block_count = max(
+            0,
+            total_blocks - training_params.starting_block - first_unfreezable_block,
+        )
+        if stage_block_count == 0:
+            raise ValueError(
+                "Progressive unfreezing has no remaining backbone blocks to add. "
+                "Reduce model.start_unfreezed or disable progressive unfreezing."
+            )
         training_state.stages_states = create_stage_states(
             training_params=training_params,
-            trainable_block_count=len(model.backbone.get_trainable_blocks())
-            - training_params.starting_block,
+            trainable_block_count=stage_block_count,
+            first_block=first_unfreezable_block,
         )
 
     log_step_interval = getattr(training_params, "log_step_interval", 10)

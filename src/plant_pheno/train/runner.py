@@ -44,7 +44,8 @@ def run_training(
         training_params.pos_ratios = data.pos_ratios
 
     # 2. Build fresh trial components
-    model = build_pipeline_model(device, model_params)
+    cache_to_layer = configs.dataset_params.cache.cache_to_layer if use_cached else None
+    model = build_pipeline_model(device, model_params, cache_to_layer=cache_to_layer)
     optimizer = build_pipeline_optimizer(model, optim_params)
     scheduler = build_scheduler(optimizer, scheduler_params)
 

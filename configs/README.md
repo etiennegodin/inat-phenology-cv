@@ -27,6 +27,12 @@ Progressive-only training controls are grouped under
 them on. `model.start_unfreezed` separately controls how many backbone blocks
 start trainable.
 
+Embedding caching is controlled by `dataset.cache.enable`. With
+`dataset.cache.cache_to_layer=k`, the cache stores tokens after the first
+`N-k` transformer blocks and cached training runs only the final `k` blocks
+before the head. `model.start_unfreezed` must be no greater than `k`;
+`cache_to_layer=0` caches full-depth outputs for head-only training.
+
 On Colab, `COLAB_GPU` selects `env=colab` unless you pass `env=` yourself.
 
 `hydra.job.chdir` is false so relative data paths stay at the repo CWD. Resolved YAML is written under `outputs/<command>/...`.

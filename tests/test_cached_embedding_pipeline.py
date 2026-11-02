@@ -6,7 +6,9 @@ import pandas as pd
 import pytest
 import torch
 
+from plant_pheno import cache as cache_module
 from plant_pheno.config import DataLoadersParams, DatasetParams, ModelParams
+from plant_pheno.core import model as model_module
 from plant_pheno.core.model import CrossAttentionModel, MilAttentionModel
 from plant_pheno.train import dataset as dataset_module
 from plant_pheno.train import factory as factory_module
@@ -138,6 +140,126 @@ def test_cross_attention_model_forward_from_embeddings():
     assert len(weights) == 3
 
 
+@pytest.mark.parametrize(
+    ("architecture", "model_cls"),
+    [
+        ("mil_pooling", MilAttentionModel),
+        ("cross_attention", CrossAttentionModel),
+    ],
+)
+def test_partial_cached_forward_trains_only_uncached_tail(
+    monkeypatch, architecture, model_cls
+):
+    class TinyBackbone(torch.nn.Module):
+        output_dim = 4
+        patch_dim = 4
+        has_patch_support = True
+        supports_token_continuation = True
+        trainable_block_count = 3
+
+        def __init__(self):
+            super().__init__()
+            self.encoder = torch.nn.Module()
+            self.encoder.blocks = torch.nn.ModuleList(
+                [torch.nn.Linear(4, 4) for _ in range(self.trainable_block_count)]
+            )
+
+        def get_trainable_blocks(self):
+            return self.encoder.blocks
+
+        def continue_intermediate_tokens(self, tokens, start_block, *, use_patches):
+            for block in self.get_trainable_blocks()[start_block:]:
+                tokens = block(tokens)
+            return tokens[:, 1:] if use_patches else tokens[:, 0]
+
+    monkeypatch.setattr(
+        model_module, "build_backbone", lambda *args, **kwargs: TinyBackbone()
+    )
+    params = ModelParams(
+        backbone="test",
+        architecture=architecture,
+        start_unfreezed=1,
+        proj_dim=4,
+        cross_attn_heads=2,
+    )
+    model = model_cls(params, cache_to_layer=1)
+    model.train()
+    cached_tokens = [
+        torch.randn(2, 3, 4),
+        torch.randn(1, 3, 4),
+    ]
+
+    predictions, _ = model.forward_from_embeddings(cached_tokens)
+    predictions.sum().backward()
+
+    blocks = model.backbone.get_trainable_blocks()
+    assert blocks[0].weight.grad is None
+    assert blocks[1].weight.grad is None
+    assert blocks[2].weight.grad is not None
+    assert blocks[2].weight.grad.abs().sum() > 0
+
+
+@pytest.mark.parametrize("model_cls", [MilAttentionModel, CrossAttentionModel])
+def test_partial_cache_rejects_more_trainable_blocks_than_tail(monkeypatch, model_cls):
+    class TinyBackbone(torch.nn.Module):
+        output_dim = 4
+        patch_dim = 4
+        has_patch_support = True
+        supports_token_continuation = True
+        trainable_block_count = 3
+
+        def __init__(self):
+            super().__init__()
+            self.encoder = torch.nn.Module()
+            self.encoder.blocks = torch.nn.ModuleList(
+                [torch.nn.Linear(4, 4) for _ in range(self.trainable_block_count)]
+            )
+
+        def get_trainable_blocks(self):
+            return self.encoder.blocks
+
+    monkeypatch.setattr(
+        model_module, "build_backbone", lambda *args, **kwargs: TinyBackbone()
+    )
+    params = ModelParams(backbone="test", start_unfreezed=2)
+
+    with pytest.raises(ValueError, match="exceeds the 1 uncached tail blocks"):
+        model_cls(params, cache_to_layer=1)
+
+
+def test_full_depth_cached_model_freezes_backbone(monkeypatch):
+    class TinyBackbone(torch.nn.Module):
+        output_dim = 4
+        trainable_block_count = 2
+        supports_token_continuation = False
+
+        def __init__(self):
+            super().__init__()
+            self.encoder = torch.nn.Module()
+            self.encoder.blocks = torch.nn.ModuleList(
+                [torch.nn.Linear(4, 4) for _ in range(self.trainable_block_count)]
+            )
+
+        def get_trainable_blocks(self):
+            return self.encoder.blocks
+
+        def log_trainable_blocks(self):
+            pass
+
+    monkeypatch.setattr(
+        model_module, "build_backbone", lambda *args, **kwargs: TinyBackbone()
+    )
+    model = model_module.build_pipeline_model(
+        torch.device("cpu"),
+        ModelParams(backbone="test", start_unfreezed=1),
+        cache_to_layer=0,
+    )
+
+    assert all(
+        not parameter.requires_grad for parameter in model.backbone.encoder.parameters()
+    )
+
+
 def test_cached_dataset_raises_on_nonexistent_or_empty_dir():
     df = pd.DataFrame(
         {
@@ -170,6 +292,134 @@ def test_cached_dataset_raises_on_nonexistent_or_empty_dir():
                 obs_df=df,
                 dataset_params=dataset_params,
             )
+
+
+def test_cached_dataset_rejects_legacy_partial_cache_format(tmp_path):
+    torch.save(
+        {
+            "embeddings": torch.randn(1, 2, 4),
+            "bag_sizes": [1],
+            "obs_ids": [101],
+        },
+        tmp_path / "0.pt",
+    )
+    df = pd.DataFrame({"observation_id": [101], "label": [[1, 0, 0]]})
+    params = DatasetParams(
+        idx_col="observation_id",
+        label_col="label",
+        train_frac=0.8,
+        val_frac=0.1,
+        test_frac=0.1,
+    )
+
+    with pytest.raises(ValueError, match="expected 'tokens_v1'.*force_recache"):
+        CachedEmbeddingDataset(
+            cache_dir=tmp_path,
+            obs_df=df,
+            dataset_params=params,
+            expected_cache_format="tokens_v1",
+        )
+
+
+def test_cached_dataset_rejects_partial_cache_with_wrong_depth(tmp_path):
+    torch.save(
+        {
+            "embeddings": torch.randn(1, 2, 4),
+            "bag_sizes": [1],
+            "obs_ids": [101],
+            "cache_format": "tokens_v1",
+            "cache_to_layer": 2,
+        },
+        tmp_path / "0.pt",
+    )
+    df = pd.DataFrame({"observation_id": [101], "label": [[1, 0, 0]]})
+    params = DatasetParams(
+        idx_col="observation_id",
+        label_col="label",
+        train_frac=0.8,
+        val_frac=0.1,
+        test_frac=0.1,
+    )
+
+    with pytest.raises(ValueError, match="expected 1.*force_recache"):
+        CachedEmbeddingDataset(
+            cache_dir=tmp_path,
+            obs_df=df,
+            dataset_params=params,
+            expected_cache_format="tokens_v1",
+            expected_cache_to_layer=1,
+        )
+
+
+def test_cache_command_writes_intermediate_token_payload(tmp_path, monkeypatch):
+    class TinyBackbone(torch.nn.Module):
+        trainable_block_count = 3
+        supports_token_continuation = True
+        has_patch_support = False
+
+        def get_transforms(self):
+            return None, None
+
+        def encode_intermediate_tokens(self, images, n_blocks):
+            assert n_blocks == 2
+            return images.mean(dim=(-2, -1)).unsqueeze(1)
+
+    backbone = TinyBackbone()
+    monkeypatch.setattr(cache_module, "get_device", lambda: torch.device("cpu"))
+    monkeypatch.setattr(
+        cache_module,
+        "build_backbone",
+        lambda *args, **kwargs: backbone,
+    )
+    monkeypatch.setattr(
+        cache_module, "build_full_dataset", lambda *args, **kwargs: object()
+    )
+    monkeypatch.setattr(
+        cache_module,
+        "build_single_dataloader",
+        lambda **kwargs: [
+            (
+                [torch.randn(2, 3, 4, 4), torch.randn(1, 3, 4, 4)],
+                None,
+                [101, 102],
+            )
+        ],
+    )
+    configs = SimpleNamespace(
+        dataset_params=SimpleNamespace(
+            cache=SimpleNamespace(cache_to_layer=1, cache_views=1)
+        ),
+        paths_params=SimpleNamespace(data_root=str(tmp_path)),
+        dataloaders_params=DataLoadersParams(
+            batch_size=2,
+            max_images=4,
+            num_workers=0,
+            pin_memory=False,
+            persistent_workers=False,
+            use_max_images=False,
+        ),
+    )
+
+    cache_module.execute(
+        configs=configs,
+        model_params=ModelParams(backbone="tiny"),
+        seed=42,
+    )
+
+    cache_file = (
+        tmp_path
+        / "cached_embeddings"
+        / "tiny"
+        / "cls"
+        / "to_layer_1"
+        / "tokens_v1"
+        / "0.pt"
+    )
+    payload = torch.load(cache_file, map_location="cpu")
+    assert payload["embeddings"].shape == (3, 1, 3)
+    assert payload["cache_format"] == "tokens_v1"
+    assert payload["cache_to_layer"] == 1
+    assert payload["bag_sizes"] == [2, 1]
 
 
 def test_cached_splits_load_embeddings_once_and_share_storage(tmp_path, monkeypatch):

@@ -32,6 +32,7 @@ class CachedEmbeddingSchema:
     views: int
     layer_tag: str
     model_kind: str
+    cache_format: str | None
     cache_dir: Path = field(init=False)
 
     @classmethod
@@ -46,6 +47,7 @@ class CachedEmbeddingSchema:
             model_kind="patches"
             if model_params.architecture == "cross_attention"
             else "cls",
+            cache_format="tokens_v1" if to_layer > 0 else None,
         )
 
     def resolve_cache_dir(self, paths: PathsParams) -> Path:
@@ -53,6 +55,8 @@ class CachedEmbeddingSchema:
             f"{paths.data_root}/cached_embeddings"
             f"/{self.model_backbone}/{self.model_kind}/to_layer_{self.layer_tag}"
         )
+        if self.cache_format is not None:
+            base_path /= self.cache_format
         base_path.mkdir(parents=True, exist_ok=True)
         self.cache_dir = base_path
         return base_path
@@ -95,6 +99,12 @@ def execute(
         to_layer=cache_params.cache_to_layer,
         backbone_name=model_params.backbone,
     )
+    if cache_params.cache_to_layer > 0 and not backbone.supports_token_continuation:
+        raise ValueError(
+            f"Backbone '{model_params.backbone}' does not support partial token "
+            "caching. Set cache_to_layer=0 or use a transformer backbone that "
+            "supports token continuation."
+        )
 
     # Choose CLS vs patch encoding based on architecture
     use_patches = model_params.architecture == "cross_attention"
@@ -155,7 +165,12 @@ def execute(
                         with autocast_mode.autocast(
                             device_type=device.type, dtype=dtype
                         ):
-                            if use_patches:
+                            if cache_params.cache_to_layer > 0:
+                                assert n_blocks is not None
+                                embeddings = backbone.encode_intermediate_tokens(
+                                    stacked, n_blocks=n_blocks
+                                )
+                            elif use_patches:
                                 embeddings = backbone.encode_patches(
                                     stacked, n_blocks=n_blocks
                                 )
@@ -163,7 +178,12 @@ def execute(
                                 embeddings = backbone.encode(stacked, n_blocks=n_blocks)
                             torch.cuda.synchronize()
                     else:
-                        if use_patches:
+                        if cache_params.cache_to_layer > 0:
+                            assert n_blocks is not None
+                            embeddings = backbone.encode_intermediate_tokens(
+                                stacked, n_blocks=n_blocks
+                            )
+                        elif use_patches:
                             embeddings = backbone.encode_patches(
                                 stacked, n_blocks=n_blocks
                             )
@@ -177,6 +197,8 @@ def execute(
                         "obs_ids": obs_ids,
                         "kind": cache_schema.model_kind,
                         "backbone": cache_schema.model_backbone,
+                        "cache_format": cache_schema.cache_format,
+                        "cache_to_layer": cache_params.cache_to_layer,
                     }
 
                     saver.save(

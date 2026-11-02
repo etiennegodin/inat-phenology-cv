@@ -10,7 +10,7 @@ from torch import nn
 
 from ..config import CLASS_ORDER
 from ..utils.misc import unfreeze
-from .backbone import build_backbone
+from .backbone import Backbone, build_backbone
 
 if TYPE_CHECKING:
     from torch import nn
@@ -18,6 +18,35 @@ if TYPE_CHECKING:
     from ..config.params import ModelParams
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_cache_depth(
+    backbone: Backbone, params: ModelParams, cache_to_layer: int | None
+) -> int | None:
+    if cache_to_layer is None:
+        return None
+    if cache_to_layer < 0:
+        raise ValueError("cache_to_layer must be >= 0.")
+
+    total_blocks = backbone.trainable_block_count
+    if cache_to_layer == 0:
+        return total_blocks
+    if cache_to_layer >= total_blocks:
+        raise ValueError(
+            f"cache_to_layer={cache_to_layer} must be less than the backbone "
+            f"depth ({total_blocks}) so at least one block is cached."
+        )
+    if not backbone.supports_token_continuation:
+        raise ValueError(
+            f"Backbone '{params.backbone}' does not support partial token caching."
+        )
+    if params.start_unfreezed > cache_to_layer:
+        raise ValueError(
+            f"model.start_unfreezed={params.start_unfreezed} exceeds the "
+            f"{cache_to_layer} uncached tail blocks. Reduce start_unfreezed or "
+            "increase cache_to_layer."
+        )
+    return total_blocks - cache_to_layer
 
 
 class BaseAttentionPooling(nn.Module):
@@ -174,10 +203,20 @@ class CrossAttentionBlock(nn.Module):
 
 
 class MilAttentionModel(nn.Module):
-    def __init__(self, params: ModelParams, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        params: ModelParams,
+        cache_to_layer: int | None = None,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.params = params
         self.backbone = build_backbone(params.backbone, params.dinov3.checkpoint_path)
+        self.cache_to_layer = cache_to_layer
+        self.cache_prefix_blocks = _validate_cache_depth(
+            self.backbone, params, cache_to_layer
+        )
         self.branches = nn.ModuleList(
             [AttentionBranch(self.backbone.output_dim, params, c) for c in CLASS_ORDER]
         )
@@ -220,10 +259,19 @@ class MilAttentionModel(nn.Module):
         return predictions, class_attention_weights
 
     def forward_from_embeddings(self, embeddings: list[torch.Tensor]):
-        """Head-only forward pass. Receives pre-computed CLS embeddings
-        (one Tensor per observation, shape (N_i, embed_dim)).
-        Skips backbone.encode() entirely.
-        """
+        """Forward cached CLS features or intermediate tokens through the model."""
+        image_counts = [emb.size(0) for emb in embeddings]
+        stacked = torch.cat(embeddings)
+        if self.cache_to_layer:
+            assert self.cache_prefix_blocks is not None
+            stacked = self.backbone.continue_intermediate_tokens(
+                stacked, self.cache_prefix_blocks, use_patches=False
+            )
+        else:
+            dtype = next(self.branches[0].attention.parameters()).dtype
+            stacked = stacked.to(dtype=dtype)
+        embeddings = list(torch.split(stacked, image_counts))
+
         class_predictions = []
         class_attention_weights: dict[str, list[torch.Tensor]] = {}
 
@@ -251,10 +299,20 @@ PhenologyModel = MilAttentionModel
 
 
 class CrossAttentionModel(nn.Module):
-    def __init__(self, params: ModelParams, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        params: ModelParams,
+        cache_to_layer: int | None = None,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.params = params
         self.backbone = build_backbone(params.backbone, params.dinov3.checkpoint_path)
+        self.cache_to_layer = cache_to_layer
+        self.cache_prefix_blocks = _validate_cache_depth(
+            self.backbone, params, cache_to_layer
+        )
 
         if not self.backbone.has_patch_support:
             raise ValueError(
@@ -381,14 +439,19 @@ class CrossAttentionModel(nn.Module):
         return self._head_forward(obs_projected, obs_image_counts, device)
 
     def forward_from_embeddings(self, patch_embeddings: list[torch.Tensor]):
-        """Head-only forward pass. Receives pre-computed patch embeddings
-        (one Tensor per observation, shape (N_i, num_patches, patch_dim)).
-        Skips backbone.encode_patches() entirely.
-        """
+        """Forward cached patch features or intermediate tokens through the model."""
         device = patch_embeddings[0].device
         obs_image_counts = [obs.size(0) for obs in patch_embeddings]
 
         stacked = torch.cat(patch_embeddings, dim=0)
+        if self.cache_to_layer:
+            assert self.cache_prefix_blocks is not None
+            stacked = self.backbone.continue_intermediate_tokens(
+                stacked, self.cache_prefix_blocks, use_patches=True
+            )
+        else:
+            dtype = next(self.projection_neck.parameters()).dtype
+            stacked = stacked.to(dtype=dtype)
         projected = self.projection_neck(stacked)
         obs_projected = torch.split(projected, obs_image_counts)
 
@@ -406,19 +469,25 @@ class CrossAttentionModel(nn.Module):
         return self.heads.parameters()
 
 
-def build_pipeline_model(device: torch.device, model_params: ModelParams) -> nn.Module:
+def build_pipeline_model(
+    device: torch.device,
+    model_params: ModelParams,
+    cache_to_layer: int | None = None,
+) -> nn.Module:
     """Instantiate model and unfreezes backbone last params.
 
     Dispatches to MilAttentionModel (formerly PhenologyModel) or
-    CrossAttentionModel based on model_params.architecture.
+    CrossAttentionModel based on model_params.architecture. When caching is
+    enabled, ``cache_to_layer`` controls how many final backbone blocks are
+    executed after the cached prefix.
 
     Returns:
         nn.Module: instantiated model
     """
     if model_params.architecture == "cross_attention":
-        model: nn.Module = CrossAttentionModel(model_params)
+        model: nn.Module = CrossAttentionModel(model_params, cache_to_layer)
     elif model_params.architecture == "mil_pooling":
-        model = MilAttentionModel(model_params)
+        model = MilAttentionModel(model_params, cache_to_layer)
     else:
         raise ValueError(
             f"Unknown architecture '{model_params.architecture}'",
@@ -427,8 +496,13 @@ def build_pipeline_model(device: torch.device, model_params: ModelParams) -> nn.
 
     blocks = model.backbone.get_trainable_blocks()
 
-    # Unfreeze last block
-    if model_params.start_unfreezed > 0:
+    # Cached full-depth features cannot update the backbone; partial caches
+    # permit training only within the uncached tail.
+    if cache_to_layer is not None and cache_to_layer == 0:
+        for block in blocks:
+            for parameter in block.parameters():
+                parameter.requires_grad = False
+    elif model_params.start_unfreezed > 0:
         logger.debug("Unfreezing backbone parameters")
         for block in blocks[-model_params.start_unfreezed :]:
             unfreeze(block)

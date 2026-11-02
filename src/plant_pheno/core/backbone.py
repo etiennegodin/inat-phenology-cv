@@ -20,11 +20,34 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _continue_open_clip_tokens(
+    encoder: nn.Module, tokens: Tensor, start_block: int, *, use_patches: bool
+) -> Tensor:
+    blocks = encoder.transformer.resblocks
+    x = tokens.to(dtype=next(blocks[start_block].parameters()).dtype)
+    batch_first = encoder.transformer.batch_first
+    if not batch_first:
+        x = x.permute(1, 0, 2)
+    for block in blocks[start_block:]:
+        x = block(x)
+    if not batch_first:
+        x = x.permute(1, 0, 2)
+
+    if use_patches:
+        return encoder.ln_post(x[:, 1:, :])
+
+    cls = encoder.ln_post(x[:, 0, :])
+    if encoder.proj is not None:
+        cls = cls @ encoder.proj
+    return F.normalize(cls, dim=1)
+
+
 class Backbone(nn.Module, ABC):
     encoder: nn.Module
     output_dim: int
     patch_dim: int = 0
     has_patch_support: bool = False
+    supports_token_continuation: bool = False
     trainable_block_count: int
 
     def __init__(self) -> None:
@@ -107,6 +130,20 @@ class Backbone(nn.Module, ABC):
             f"{self.__class__.__name__} does not support patch encoding."
         )
 
+    def encode_intermediate_tokens(self, input: Tensor, n_blocks: int) -> Tensor:
+        """Return unnormalized tokens after the first ``n_blocks`` blocks."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support partial token caching."
+        )
+
+    def continue_intermediate_tokens(
+        self, tokens: Tensor, start_block: int, *, use_patches: bool
+    ) -> Tensor:
+        """Run the remaining blocks and return final CLS or patch features."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support partial token caching."
+        )
+
     @abstractmethod
     def get_transforms(self) -> tuple[v2.Compose, v2.Compose]:
         """Returns backbone specific image transformations"""
@@ -173,6 +210,8 @@ class EfficientNetBackbone(Backbone):
 
 
 class BioClipBackbone(Backbone):
+    supports_token_continuation = True
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         model, self.train_transform, self.val_transform = (
@@ -213,12 +252,30 @@ class BioClipBackbone(Backbone):
         x = torch.cat([cls_tok, x], dim=1)
         x = x + self.encoder.positional_embedding.to(x.dtype)
         x = self.encoder.ln_pre(x)
-        x = x.permute(1, 0, 2)  # NLD → LND
         resblocks = self.encoder.transformer.resblocks
         blocks_to_run = resblocks if n_blocks is None else resblocks[:n_blocks]
+        batch_first = self.encoder.transformer.batch_first
+        if not batch_first:
+            x = x.permute(1, 0, 2)
         for blk in blocks_to_run:
             x = blk(x)
-        return x.permute(1, 0, 2)  # LND → NLD
+        if not batch_first:
+            x = x.permute(1, 0, 2)
+        return x
+
+    def encode_intermediate_tokens(self, input: Tensor, n_blocks: int) -> Tensor:
+        self._validate_n_blocks(n_blocks)
+        if n_blocks == self.trainable_block_count:
+            raise ValueError("Partial token caching requires at least one tail block.")
+        return self._visual_tokens(input, n_blocks)
+
+    def continue_intermediate_tokens(
+        self, tokens: Tensor, start_block: int, *, use_patches: bool
+    ) -> Tensor:
+        self._validate_n_blocks(start_block)
+        return _continue_open_clip_tokens(
+            self.encoder, tokens, start_block, use_patches=use_patches
+        )
 
     def encode_patches(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
         if n_blocks is not None:
@@ -282,6 +339,8 @@ class BioClipBackbone(Backbone):
 
 
 class BioClip2Backbone(Backbone):
+    supports_token_continuation = True
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         model, self.train_transform, self.val_transform = (
@@ -322,12 +381,30 @@ class BioClip2Backbone(Backbone):
         x = torch.cat([cls_tok, x], dim=1)
         x = x + self.encoder.positional_embedding.to(x.dtype)
         x = self.encoder.ln_pre(x)
-        x = x.permute(1, 0, 2)  # NLD → LND
         resblocks = self.encoder.transformer.resblocks
         blocks_to_run = resblocks if n_blocks is None else resblocks[:n_blocks]
+        batch_first = self.encoder.transformer.batch_first
+        if not batch_first:
+            x = x.permute(1, 0, 2)
         for blk in blocks_to_run:
             x = blk(x)
-        return x.permute(1, 0, 2)  # LND → NLD
+        if not batch_first:
+            x = x.permute(1, 0, 2)
+        return x
+
+    def encode_intermediate_tokens(self, input: Tensor, n_blocks: int) -> Tensor:
+        self._validate_n_blocks(n_blocks)
+        if n_blocks == self.trainable_block_count:
+            raise ValueError("Partial token caching requires at least one tail block.")
+        return self._visual_tokens(input, n_blocks)
+
+    def continue_intermediate_tokens(
+        self, tokens: Tensor, start_block: int, *, use_patches: bool
+    ) -> Tensor:
+        self._validate_n_blocks(start_block)
+        return _continue_open_clip_tokens(
+            self.encoder, tokens, start_block, use_patches=use_patches
+        )
 
     def encode_patches(self, input: Tensor, n_blocks: int | None = None) -> Tensor:
         if n_blocks is not None:
@@ -392,6 +469,8 @@ class BioClip2Backbone(Backbone):
 
 
 class DinoV3Backbone(Backbone):
+    supports_token_continuation = True
+
     def __init__(self, checkpoint_path: str | None = None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         import sys
@@ -442,6 +521,60 @@ class DinoV3Backbone(Backbone):
             input, n=[n_blocks - 1], norm=True, return_class_token=True
         )
         return out[0][0]
+
+    def encode_intermediate_tokens(self, input: Tensor, n_blocks: int) -> Tensor:
+        self._validate_n_blocks(n_blocks)
+        if n_blocks == self.trainable_block_count:
+            raise ValueError("Partial token caching requires at least one tail block.")
+
+        tokens, (height, width) = self.encoder.prepare_tokens_with_masks(input)
+        for block in self.get_trainable_blocks()[:n_blocks]:
+            rope = (
+                self.encoder.rope_embed(H=height, W=width)
+                if self.encoder.rope_embed is not None
+                else None
+            )
+            tokens = block(tokens, rope)
+        return tokens
+
+    def continue_intermediate_tokens(
+        self, tokens: Tensor, start_block: int, *, use_patches: bool
+    ) -> Tensor:
+        self._validate_n_blocks(start_block)
+        token_count = tokens.shape[1] - self.encoder.n_storage_tokens - 1
+        grid_size = int(token_count**0.5)
+        if grid_size * grid_size != token_count:
+            raise ValueError(
+                "DINOv3 cached tokens must contain a square patch grid; "
+                f"found {token_count} patch tokens."
+            )
+
+        blocks = self.get_trainable_blocks()
+        x = tokens.to(dtype=next(blocks[start_block].parameters()).dtype)
+        for block in blocks[start_block:]:
+            rope = (
+                self.encoder.rope_embed(H=grid_size, W=grid_size)
+                if self.encoder.rope_embed is not None
+                else None
+            )
+            x = block(x, rope)
+
+        if (
+            self.encoder.untie_cls_and_patch_norms
+            or self.encoder.untie_global_and_local_cls_norm
+        ):
+            if self.encoder.untie_cls_and_patch_norms:
+                cls_norm = self.encoder.cls_norm
+            else:
+                cls_norm = self.encoder.norm
+            if use_patches:
+                return self.encoder.norm(x[:, self.encoder.n_storage_tokens + 1 :])
+            return F.normalize(cls_norm(x[:, 0]), dim=1)
+
+        x = self.encoder.norm(x)
+        if use_patches:
+            return x[:, self.encoder.n_storage_tokens + 1 :]
+        return F.normalize(x[:, 0], dim=1)
 
     def get_transforms(self) -> tuple[v2.Compose, v2.Compose]:
         base_transforms = [
@@ -512,7 +645,9 @@ def resolve_truncation_depth(
     to_layer=0 -> full depth (None);
     to_layer=k -> skip last k blocks (run first total_blocks - k blocks).
     """
-    if to_layer <= 0:
+    if to_layer < 0:
+        raise ValueError(f"to_layer must be >= 0; got {to_layer}.")
+    if to_layer == 0:
         return None
     n_blocks = total_blocks - to_layer
     if n_blocks < 1:

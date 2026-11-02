@@ -58,6 +58,29 @@ def test_warmup_lr_linear_interpolation():
     assert instant_stage.get_warmup_lr(epoch=2) == 1.0
 
 
+def test_cached_progressive_stages_stay_within_uncached_tail():
+    training_params = TrainingParams(
+        epochs=10,
+        stopping_patience=10,
+        unfreezing_patience=2,
+        unfreezing_cooldown=3,
+        starting_block=1,
+        max_stages=3,
+        block_per_stage=1,
+        best_objective=0.0,
+        backbone_decay=0.9,
+        unfreeze=True,
+    )
+
+    stages = create_stage_states(
+        training_params=training_params,
+        trainable_block_count=2,
+        first_block=9,
+    )
+
+    assert [stage.blocks for stage in stages] == [[10], [9]]
+
+
 def test_unfreeze_pathway_multiepoch_simulation():
     """Simulate a multi-epoch training lifecycle to test the whole unfreezing pathway:
     - Staleness detection triggering first unfreeze

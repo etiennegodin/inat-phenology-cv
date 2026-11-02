@@ -337,12 +337,25 @@ class CachedEmbeddingDataset(Dataset):
         obs_df: pd.DataFrame,
         dataset_params: DatasetParams,
         shared_cache: CachedEmbeddingDataset | None = None,
+        expected_cache_format: str | None = None,
+        expected_cache_to_layer: int | None = None,
     ) -> None:
         super().__init__()
         self.dataset_params = dataset_params
         self.df = obs_df
+        self.expected_cache_format = expected_cache_format
+        self.expected_cache_to_layer = expected_cache_to_layer
         if shared_cache is None:
-            self._obs = self._load(cache_dir, obs_df, dataset_params)
+            if expected_cache_format is None and expected_cache_to_layer is None:
+                self._obs = self._load(cache_dir, obs_df, dataset_params)
+            else:
+                self._obs = self._load(
+                    cache_dir,
+                    obs_df,
+                    dataset_params,
+                    expected_cache_format=expected_cache_format,
+                    expected_cache_to_layer=expected_cache_to_layer,
+                )
         else:
             cached_obs = {obs.obs_id: obs for obs in shared_cache._obs}
             self._obs = [
@@ -351,7 +364,12 @@ class CachedEmbeddingDataset(Dataset):
         self.bag_sizes = [o.embeddings.size(0) for o in self._obs]
 
     def _load(
-        self, cache_dir: Path, obs_df: pd.DataFrame, params: DatasetParams
+        self,
+        cache_dir: Path,
+        obs_df: pd.DataFrame,
+        params: DatasetParams,
+        expected_cache_format: str | None = None,
+        expected_cache_to_layer: int | None = None,
     ) -> list[CachedObs]:
         if not cache_dir.exists():
             raise FileNotFoundError(
@@ -373,6 +391,22 @@ class CachedEmbeddingDataset(Dataset):
 
         for pt_file in pt_files:
             payload = torch.load(pt_file, map_location="cpu")
+            if expected_cache_format is not None:
+                actual_format = payload.get("cache_format")
+                if actual_format != expected_cache_format:
+                    raise ValueError(
+                        f"Cached embedding file '{pt_file}' has format "
+                        f"{actual_format!r}, expected {expected_cache_format!r}. "
+                        "Set dataset.cache.force_recache=true and rerun caching."
+                    )
+            if expected_cache_to_layer is not None:
+                actual_to_layer = payload.get("cache_to_layer")
+                if actual_to_layer != expected_cache_to_layer:
+                    raise ValueError(
+                        f"Cached embedding file '{pt_file}' has cache_to_layer="
+                        f"{actual_to_layer!r}, expected {expected_cache_to_layer}. "
+                        "Set dataset.cache.force_recache=true and rerun caching."
+                    )
             embeddings_all = payload["embeddings"]
             bag_sizes = payload["bag_sizes"]
             obs_ids = payload["obs_ids"]
@@ -409,7 +443,16 @@ def build_cached_datasets(
     df, _ = _prepare_build_dataset(configs, seed)
     train_df, val_df, test_df = split_dataset(df, configs.dataset_params, seed=seed)
 
-    full_set = CachedEmbeddingDataset(cache_dir, df, configs.dataset_params)
+    cache_to_layer = configs.dataset_params.cache.cache_to_layer
+    expected_cache_format = "tokens_v1" if cache_to_layer > 0 else None
+    expected_cache_to_layer = cache_to_layer if cache_to_layer > 0 else None
+    full_set = CachedEmbeddingDataset(
+        cache_dir,
+        df,
+        configs.dataset_params,
+        expected_cache_format=expected_cache_format,
+        expected_cache_to_layer=expected_cache_to_layer,
+    )
     train_set = CachedEmbeddingDataset(
         cache_dir, train_df, configs.dataset_params, shared_cache=full_set
     )

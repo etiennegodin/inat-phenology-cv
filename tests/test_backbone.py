@@ -136,3 +136,26 @@ def test_bioclip_truncated_patches_shape():
     x = torch.randn(2, 3, 224, 224)
     patches = backbone.encode_patches(x, n_blocks=6)
     assert patches.shape == (2, 196, 768)
+
+
+@pytest.mark.parametrize("backbone_name", ["bioclip", "bioclip2", "dinov3"])
+def test_partial_token_continuation_matches_full_encoding(backbone_name):
+    from plant_pheno.core.backbone import build_backbone
+
+    backbone = build_backbone(backbone_name).eval()
+    images = torch.randn(1, 3, 224, 224)
+    prefix_blocks = backbone.trainable_block_count - 1
+
+    with torch.no_grad():
+        intermediate = backbone.encode_intermediate_tokens(images, prefix_blocks)
+        cls_features = backbone.continue_intermediate_tokens(
+            intermediate, prefix_blocks, use_patches=False
+        )
+        patch_features = backbone.continue_intermediate_tokens(
+            intermediate, prefix_blocks, use_patches=True
+        )
+        full_cls = backbone.encode(images)
+        full_patches = backbone.encode_patches(images)
+
+    assert torch.allclose(cls_features, full_cls, atol=1e-5, rtol=1e-5)
+    assert torch.allclose(patch_features, full_patches, atol=1e-5, rtol=1e-5)
