@@ -2,7 +2,7 @@
 
 ## The problem
 
-Plant phenology is the timing of recurring life-cycle events like flowering and fruiting. It's a useful ecological signal, and iNaturalist is a large source of dated, geolocated plant photos. Turning those photos into phenology labels is harder than it sounds:
+Plant phenology is the timing of recurring life-cycle events like flowering and fruiting. It's a useful ecological signal, and iNaturalist is a large source of dated, geolocated plant photos. Some challenges include:
 
 - One observation often has several photos, and the useful evidence may be in only one of them.
 - An observation can be flowering and fruiting at once, so the labels aren't mutually exclusive.
@@ -10,7 +10,7 @@ Plant phenology is the timing of recurring life-cycle events like flowering and 
 
 ## The approach
 
-The unit of prediction is the **observation**, not the photo. Photos from one observation form a bag. A pretrained backbone embeds each photo, and an attention-based multiple-instance learning (MIL) head combines them into three independent predictions: Flowering, Fruiting and Flower Budding.
+The unit of prediction is the **observation**, not the photo. Photos from one observation form a bag. A pretrained backbone embeds each photo, and an attention-based head combines them into three independent predictions: Flowering, Fruiting and Flower Budding.
 
 Around the model there's the machinery I wanted to learn properly: configurable experiments, tracked runs, hyperparameter search, staged fine-tuning, label auditing, and a validated batch-scoring path.
 

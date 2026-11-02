@@ -5,15 +5,19 @@ Multi-image, multi-label plant phenology classification from iNaturalist photos.
 <!-- TODO: add the attention heatmap figure, e.g. docs/img/attention_example.png -->
 <!-- ![Attention weights over the photos of one observation](docs/img/attention_example.png) -->
 
-## Why this project exists
+## Motivation
 
 I come from VFX, where I spent 8+ years as a lookdev and lighting TD, and I'm moving into computer science with a focus on machine learning and computer vision. I wanted a project where I could learn the full stack of a vision system, not just train one model.
 
-It started small: a frozen ResNet-50 and a binary flowering / not-flowering classifier trained on 736 photos, at roughly 80% validation accuracy. It was meant to enrich a companion project, [inat-obs-scorer](https://github.com/etiennegodin/inat-obs-scorer). Each version since then has been driven by something that broke or didn't make sense in the previous one: multiple photos per observation, attention-based pooling, multi-label targets, better metrics, hardware-aware caching, new backbones and aggregation strategies, a registered model for inference, and now a label audit before the next round of tuning. The [project history](docs/project-history.md) and [lessons learned](docs/lessons-learned.md) cover that path, including the mistakes.
+It started small: a frozen ResNet-50 and a binary flowering / not-flowering classifier trained on 736 photos, at roughly 80% validation accuracy. It was meant to enrich a companion project, [inat-obs-scorer](https://github.com/etiennegodin/inat-obs-scorer).
+
+Each version since then has been driven by something that broke or didn't make sense in the previous one: multiple photos per observation, attention-based pooling, multi-label targets, better metrics, hardware-aware caching, new backbones and aggregation strategies, a registered model for inference, and now a label audit before the next round of tuning.
+
+The [project history](docs/project-history.md) and [lessons learned](docs/lessons-learned.md) cover that path, including the mistakes.
 
 ## The problem
 
-Plant phenology is the timing of life-cycle events such as flowering and fruiting. iNaturalist holds a huge number of dated, geolocated plant photos, but the data is awkward for a classifier:
+Plant phenology is the timing of life-cycle events such as flowering and fruiting. iNaturalist holds a huge number of dated, geolocated plant photos, but data some challenges include:
 
 - An **observation** usually has several photos, and the informative one may be a single close-up.
 - An observation can carry **several labels at once**, for example flowering and fruiting.
@@ -25,9 +29,9 @@ The dataset covers about 15k observations from Québec, Canada. The current spli
 
 ## How it works
 
-- **Backbone:** a pretrained vision encoder embeds every photo in the bag. I've worked with BioCLIP, BioCLIP 2 and DINOv3, and the backbone is swappable through config.
+- **Backbone:** a pretrained vision encoder embeds every photo in the bag. I've tested BioCLIP, BioCLIP 2 and DINOv3. The backbone is swappable through config.
 - **Aggregation:** two strategies, also swappable.
-  - **MIL (CLAM-MB):** attention-based multiple-instance learning with a separate attention branch and classifier head per class, all sharing one backbone pass. This started as plain MIL and grew into CLAM-MB. Attention can be gated and uses dropout.
+  - **MIL (CLAM-MB):** attention-based multiple-instance learning with a separate attention branch and classifier head per class, all sharing one backbone pass. This started as plain MIL and grew into CLAM-MB.
   - **Cross-attention:** a newer alternative for combining the photos in a bag.
 - **Outputs:** independent sigmoid outputs per class, with per-class thresholds computed after training.
 - **Attention as an explanation:** the attention weights show which photos in an observation drove each prediction.
@@ -41,10 +45,7 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 | Backbone | Aggregation | Macro PR-AUC | Flowering | Fruiting | Flower Budding |
 |---|---|---|---|---|---|
 | BioCLIP | MIL (CLAM-MB) | – | – | – | – |
-| BioCLIP | Cross-attention | – | – | – | – |
 | BioCLIP 2 | MIL (CLAM-MB) | – | – | – | – |
-| BioCLIP 2 | Cross-attention | – | – | – | – |
-| DINOv3 | MIL (CLAM-MB) | – | – | – | – |
 | DINOv3 | Cross-attention | – | – | – | – |
 
 <!-- TODO: trim or reorder the grid to the combinations you actually run, and fill in numbers when the runs are final. -->
@@ -85,14 +86,13 @@ torch_pipe command=predict
 #Example
 torch_pipe command=predict \
   predict.model_name=cv_pheno_bioclip \
-  predict.urls=["https://www.inaturalist.ca/observations/409673980"]
+  predict.urls=["https://www.inaturalist.ca/observations/303786110"]
 ```
 
 By default, `predict` uses the latest registered version for the specified
 `predict.model_name`. Set `predict.model_version=<number>` to pin a specific
 version.
 
-<!-- TODO: replace with the exact predict example, including the URL argument. -->
 
 **Training and experiments** (needs `[train]`):
 
@@ -155,10 +155,14 @@ In progress:
 
 Next:
 
-- Progressive backbone unfreezing (built, still to be validated) and a two-stage Optuna search
+- Two-stage Optuna search
 - Hosting inference, possibly as a small API server (undecided)
 - Per-observation prediction agreement across seeds
 - Possibly publishing model weights on Hugging Face
+
+On pause:
+
+- Progressive backbone unfreezing (built, still to be validated)
 
 ## Limitations
 
@@ -184,5 +188,4 @@ The code is released under the [MIT License](LICENSE). Datasets and pretrained w
 
 ## Author
 
-Étienne, Montreal. [GitHub](https://github.com/etiennegodin)
-<!-- TODO: add your full name / contact if you want them on the page -->
+Étienne Godin, Montreal. [GitHub](https://github.com/etiennegodin)

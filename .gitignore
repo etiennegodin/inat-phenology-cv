@@ -210,8 +210,9 @@ __marimo__/
 
 
 # Project
-
 data/
+datasets/
+
 !src/*/data
 .vscode/
 checkpoints/
