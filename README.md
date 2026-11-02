@@ -7,7 +7,7 @@ Multi-image, multi-label plant phenology classification from iNaturalist photos.
 
 ## Motivation
 
-I come from VFX, where I spent 8+ years as a lookdev and lighting TD, and I'm moving into computer science with a focus on machine learning and computer vision. I wanted a project where I could learn the full stack of a vision system, not just train one model.
+I wanted a project where I could learn the full stack of a vision system, not just train one model. I come from VFX, where I spent 8+ years as a lookdev and lighting TD, and I'm moving into computer science with a focus on machine learning and computer vision.
 
 It started small: a frozen ResNet-50 and a binary flowering / not-flowering classifier trained on 736 photos, at roughly 80% validation accuracy. It was meant to enrich a companion project, [inat-obs-scorer](https://github.com/etiennegodin/inat-obs-scorer).
 
