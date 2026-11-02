@@ -228,3 +228,4 @@ notes/
 AGENTS.md
 .aider*
 _*.py
+_*.sql
