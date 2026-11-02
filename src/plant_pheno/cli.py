@@ -219,7 +219,6 @@ def tune_cmd(cfg: DictConfig):
             show_progress_bar=False,
             callbacks=[],
         )
-
         mlflow.log_params({f"best_{k}": v for k, v in study.best_params.items()})
         mlflow.log_dict(study.best_params, "best_params.json")
         mlflow.log_metric("best_pr_norm_excess_macro", study.best_value)
@@ -230,11 +229,14 @@ def tune_cmd(cfg: DictConfig):
         print(f"[Optuna] Best params: {study.best_params}")
         print("Retraining with full model & best params")
 
+        best_trial_seed = int(cfg.seed) + study.best_trial.number
+        seed_everything(best_trial_seed, set_cuda_deterministic=False)
         best = study.best_params
         model_params = model_params_from_cfg(cfg.model, **best)
         training_params = training_params_from_cfg(
             cfg,
             best_objective=1e-5,
+            seed=best_trial_seed,
             backbone_decay=best.get("backbone_decay"),
         )
         train.run_training(

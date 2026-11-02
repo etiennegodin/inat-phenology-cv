@@ -74,6 +74,8 @@ The coarse search space covers base learning rate (1e-5 to 1e-3, log scale), hea
 One thing I found while testing is that the subsample isn't a faithful, cheap proxy. A 20% run takes about half the time of a full run, not a fifth, because it needs more epochs to converge (it hit the 30-epoch cap, which full runs never do). So I treat stage 1 as a filter for bad configurations, not as a source of final values.
 
 Runs are logged as a parent MLflow run per study with a child run per trial.
+Each trial uses `seed + trial number`; the full-data retraining of the best
+trial reuses that trial's derived seed.
 
 ## Label quality (Cleanlab)
 
