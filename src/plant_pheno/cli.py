@@ -218,6 +218,7 @@ def tune_cmd(cfg: DictConfig):
             n_trials=cfg.tune.n_trials,
             show_progress_bar=False,
             callbacks=[],
+            timeout=cfg.tune.timeout,
         )
         mlflow.log_params({f"best_{k}": v for k, v in study.best_params.items()})
         mlflow.log_dict(study.best_params, "best_params.json")

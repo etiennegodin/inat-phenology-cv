@@ -30,7 +30,7 @@ class IngestPhotosParams:
 @dataclass
 class FineTuneParams:
     n_trials: int = 20
-    timeout: int = 1000
+    timeout: int = 10800
     sampler: str = "tpe"
     pruner: str = "median"
     study_name: str | None = None
