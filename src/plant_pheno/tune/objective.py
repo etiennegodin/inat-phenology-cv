@@ -160,7 +160,7 @@ def make_objective(
                     training_params=training_params,
                     data=trial_data,
                     trial=trial,
-                    use_cached=getattr(configs.dataset_params, "use_cached", False),
+                    use_cached=configs.dataset_params.cache.enable,
                 )
                 metric_val = checkpoint.eval_metrics.pr_norm_excess_macro
                 mlflow.log_metric("final_pr_norm_excess_macro", metric_val)
