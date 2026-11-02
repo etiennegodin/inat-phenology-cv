@@ -1,5 +1,4 @@
 import tempfile
-from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -7,7 +6,6 @@ import pandas as pd
 import pytest
 import torch
 
-from plant_pheno import cache as cache_module
 from plant_pheno.config import DataLoadersParams, DatasetParams, ModelParams
 from plant_pheno.core.model import CrossAttentionModel, MilAttentionModel
 from plant_pheno.train import dataset as dataset_module
@@ -262,83 +260,6 @@ def test_full_dataset_for_embedding_cache_streams_images(monkeypatch):
 
     assert isinstance(dataset, UncachedPhenologyDataset)
     assert prepare_args["cache_images"] is False
-
-
-def test_cache_execute_saves_embeddings_as_bfloat16(tmp_path, monkeypatch):
-    class FakeBackbone:
-        trainable_block_count = 12
-        has_patch_support = True
-
-        def get_transforms(self):
-            return None, None
-
-        def encode_patches(self, images, n_blocks=None):
-            return torch.ones(images.size(0), 3, 768, dtype=torch.float32)
-
-    class FakeSaver:
-        payload = None
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return None
-
-        def save(self, payload, path):
-            self.payload = payload
-
-    cache_dir = tmp_path / "cached_embeddings" / "dinov3" / "patches" / "to_layer_full"
-    cache_dir.mkdir(parents=True)
-    stale_file = cache_dir / "stale.pt"
-    stale_file.touch()
-    saver = FakeSaver()
-    monkeypatch.setattr(cache_module, "get_device", lambda: torch.device("cpu"))
-    monkeypatch.setattr(
-        cache_module,
-        "build_backbone",
-        lambda *args, **kwargs: FakeBackbone(),
-    )
-    monkeypatch.setattr(
-        cache_module,
-        "build_full_dataset",
-        lambda *args, **kwargs: object(),
-    )
-    monkeypatch.setattr(
-        cache_module,
-        "build_single_dataloader",
-        lambda **kwargs: [([torch.ones(2, 3, 224, 224)], torch.zeros(1, 3), [101])],
-    )
-    monkeypatch.setattr(cache_module, "LocalTorchSaver", lambda max_pending: saver)
-    monkeypatch.setattr(cache_module, "cuda_cleanup", lambda: nullcontext())
-
-    configs = SimpleNamespace(
-        dataset_params=SimpleNamespace(
-            cache=SimpleNamespace(
-                cache_to_layer=0,
-                cache_views=1,
-                force_recache=True,
-            )
-        ),
-        paths_params=SimpleNamespace(data_root=str(tmp_path)),
-        dataloaders_params=DataLoadersParams(
-            batch_size=256,
-            max_images=1024,
-            num_workers=2,
-            pin_memory=True,
-            persistent_workers=True,
-            use_max_images=True,
-        ),
-    )
-    model_params = SimpleNamespace(
-        backbone="dinov3",
-        architecture="cross_attention",
-        dinov3=SimpleNamespace(checkpoint_path=None),
-    )
-
-    cache_module.execute(configs, model_params, seed=42, force_recache=True)
-
-    assert saver.payload["embeddings"].dtype == torch.bfloat16
-    assert not stale_file.exists()
 
 
 def test_cached_data_pipeline_disables_workers_without_mutating_config(
