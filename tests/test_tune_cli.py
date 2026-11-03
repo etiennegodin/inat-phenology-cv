@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 from types import SimpleNamespace
 
+import pytest
 from hydra import compose, initialize_config_dir
 
 from plant_pheno import cli
@@ -28,6 +29,9 @@ def test_tune_retraining_reuses_best_trial_seed(monkeypatch) -> None:
     )
     training_params = []
     seeds = []
+    study_kwargs = {}
+    storage_urls = []
+    storage = object()
 
     monkeypatch.setattr(cli, "cfg_to_runtime", lambda _cfg: runtime)
     monkeypatch.setattr(cli, "_require_colab_gpu", lambda _cfg: None)
@@ -42,12 +46,25 @@ def test_tune_retraining_reuses_best_trial_seed(monkeypatch) -> None:
     monkeypatch.setattr(cli.mlflow, "set_tag", lambda *_args: None)
     monkeypatch.setattr(cli, "_log_resolved_config", lambda *_args: None)
     monkeypatch.setattr(cli, "_log_run_file", lambda: None)
+    monkeypatch.setenv(
+        "OPTUNA_STORAGE_URL",
+        "postgresql+psycopg2://optuna_user:secret@100.64.0.1:5432/optuna",
+    )
+    monkeypatch.setattr(
+        cli.optuna.storages,
+        "RDBStorage",
+        lambda *, url: storage_urls.append(url) or storage,
+    )
     monkeypatch.setattr(
         cli, "seed_everything", lambda seed, **_kwargs: seeds.append(seed)
     )
     monkeypatch.setattr(cli, "build_data_pipeline", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(cli, "_instantiate", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(cli.optuna, "create_study", lambda **_kwargs: study)
+    monkeypatch.setattr(
+        cli.optuna,
+        "create_study",
+        lambda **kwargs: study_kwargs.update(kwargs) or study,
+    )
     monkeypatch.setattr(cli, "make_objective", lambda **_kwargs: object())
     monkeypatch.setattr(
         cli,
@@ -61,3 +78,28 @@ def test_tune_retraining_reuses_best_trial_seed(monkeypatch) -> None:
     expected_seed = cfg.seed + study.best_trial.number
     assert seeds == [cfg.seed, expected_seed]
     assert training_params[0]["seed"] == expected_seed
+    assert storage_urls == [
+        "postgresql+psycopg2://optuna_user:secret@100.64.0.1:5432/optuna"
+    ]
+    assert study_kwargs["storage"] is storage
+
+
+def test_optuna_storage_uses_config_fallback_when_env_is_unset(monkeypatch) -> None:
+    monkeypatch.delenv("OPTUNA_STORAGE_URL", raising=False)
+    storage_urls = []
+    storage = object()
+    monkeypatch.setattr(
+        cli.optuna.storages,
+        "RDBStorage",
+        lambda *, url: storage_urls.append(url) or storage,
+    )
+
+    assert cli._create_optuna_storage("sqlite:///data/optuna.sqlite3") is storage
+    assert storage_urls == ["sqlite:///data/optuna.sqlite3"]
+
+
+def test_optuna_storage_rejects_empty_url(monkeypatch) -> None:
+    monkeypatch.setenv("OPTUNA_STORAGE_URL", " ")
+
+    with pytest.raises(ValueError, match="Optuna storage URL is empty"):
+        cli._create_optuna_storage("sqlite:///data/optuna.sqlite3")

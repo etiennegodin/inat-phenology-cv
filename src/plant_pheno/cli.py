@@ -83,6 +83,13 @@ def _log_resolved_config(cfg: DictConfig, runtime) -> None:
     mlflow.log_params(runtime.dataloaders_params.to_dict())
 
 
+def _create_optuna_storage(default_storage: str) -> optuna.storages.RDBStorage:
+    storage_url = os.environ.get("OPTUNA_STORAGE_URL", default_storage).strip()
+    if not storage_url:
+        raise ValueError("Optuna storage URL is empty")
+    return optuna.storages.RDBStorage(url=storage_url)
+
+
 def _log_run_file() -> None:
     log_path = Path.cwd() / "log.log"
     if log_path.exists():
@@ -192,7 +199,7 @@ def tune_cmd(cfg: DictConfig):
 
         study = optuna.create_study(
             study_name=study_name,
-            storage=runtime.paths_params.optuna_storage,
+            storage=_create_optuna_storage(runtime.paths_params.optuna_storage),
             load_if_exists=bool(cfg.tune.resume),
             direction="maximize",
             sampler=_instantiate(OPTUNA_SAMPLERS, cfg.tune.sampler, {"seed": cfg.seed}),

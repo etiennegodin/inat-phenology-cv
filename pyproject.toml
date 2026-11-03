@@ -34,6 +34,8 @@ train = [
     "matplotlib>=3.10,<3.11",
     "duckdb>=1.5,<1.6",
     "optuna>=4.8,<4.9",
+    "optuna-dashboard",
+    "psycopg2-binary",
     "scikit-learn>=1.7,<1.8",
     "mlflow>=3.11,<3.12",
     "seaborn",
