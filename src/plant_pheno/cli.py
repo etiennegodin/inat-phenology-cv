@@ -12,6 +12,7 @@ import optuna
 from dotenv import load_dotenv
 from mlflow import MlflowException
 from omegaconf import DictConfig, OmegaConf
+from sqlalchemy.engine import make_url
 from torch import cuda, nn
 
 from . import cache, train
@@ -83,10 +84,22 @@ def _log_resolved_config(cfg: DictConfig, runtime) -> None:
     mlflow.log_params(runtime.dataloaders_params.to_dict())
 
 
-def _create_optuna_storage(default_storage: str) -> optuna.storages.RDBStorage:
-    storage_url = os.environ.get("OPTUNA_STORAGE_URL", default_storage).strip()
+def _create_optuna_storage(
+    default_storage: str,
+) -> optuna.storages.RDBStorage:
+
+    storage_url = os.environ.get(
+        "OPTUNA_STORAGE_URL",
+        default_storage,
+    ).strip()
+
     if not storage_url:
         raise ValueError("Optuna storage URL is empty")
+
+    url = make_url(storage_url)
+
+    print(f"Connecting Optuna to {url.host}:{url.port}/{url.database}")
+
     return optuna.storages.RDBStorage(url=storage_url)
 
 
