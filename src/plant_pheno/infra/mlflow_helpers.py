@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import mlflow
 from omegaconf import DictConfig
@@ -14,37 +14,49 @@ if TYPE_CHECKING:
     from mlflow.entities import Experiment
 
 
-def resolve_resume_run(experiment_id: str, run_name: str | None = None):
+def resolve_resume_run(
+    experiment_id: str | None,
+    run_name: str | None = None,
+):
     if run_name is None:
         raise ValueError(
             f"Attempted to resume run without name provided. run_name: {run_name}"
         )
 
     # Make sure experiment_id is a str
-    if not isinstance(experiment_id, str):
+    if experiment_id is not None and not isinstance(experiment_id, str):
         experiment_id = str(experiment_id)
 
     # Search for the specific run name
-    runs = mlflow.search_runs(
-        experiment_ids=[experiment_id],
-        filter_string=f"tags.mlflow.runName = '{run_name}'",
-        output_format="pandas",
-    )
+    escaped_name = run_name.replace("'", "''")
+    search_kwargs: dict[str, Any] = {
+        "filter_string": f"tags.mlflow.runName = '{escaped_name}'",
+        "output_format": "pandas",
+    }
+    if experiment_id is None:
+        search_kwargs["search_all_experiments"] = True
+    else:
+        search_kwargs["experiment_ids"] = [str(experiment_id)]
 
-    if not runs.empty:
-        # Grab the run ID from the first matching result
-        run_id = runs.iloc[0]["run_id"]
-        return run_id
+    runs = mlflow.search_runs(**search_kwargs)
+
+    if len(runs) == 1:
+        return runs.iloc[0]["run_id"]
+    if len(runs) > 1:
+        raise ValueError(
+            f"Multiple MLflow runs are named {run_name!r}; "
+            "use a unique run name before resuming"
+        )
 
     raise ValueError(
-        "Attempted to resume run without name provided. Defaulting to new run"
+        f"Didn't find a run under {run_name} for experiment {experiment_id}"
     )
 
 
 def resolve_mlflow_experiment(cfg: DictConfig) -> Experiment:
     """Resolve mlflow run id and experiment name from configs"""
-    experiment_name = f"""{cfg.model.backbone}_{cfg.model.architecture}_
-    {cfg.command}{"_test" if cfg.test else ""}"""
+    experiment_name = f"{cfg.model.backbone}_{cfg.model.architecture}"
+    experiment_name += f"_{cfg.command}{'_test' if cfg.test else ''}"
     experiment = mlflow.set_experiment(experiment_name)
     return experiment
 

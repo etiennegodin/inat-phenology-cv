@@ -48,6 +48,20 @@ def test_resolve_resume_run_returns_run_id(monkeypatch):
     assert mlflow_helpers.resolve_resume_run("123", "baseline") == "run-abc"
 
 
+def test_resolve_resume_run_can_search_all_experiments(monkeypatch):
+    def fake_search_runs(**kwargs):
+        assert kwargs == {
+            "filter_string": "tags.mlflow.runName = 'baseline'",
+            "output_format": "pandas",
+            "search_all_experiments": True,
+        }
+        return pd.DataFrame([{"run_id": "run-abc"}])
+
+    monkeypatch.setattr(mlflow_helpers.mlflow, "search_runs", fake_search_runs)
+
+    assert mlflow_helpers.resolve_resume_run(None, "baseline") == "run-abc"
+
+
 def test_resolve_resume_run_raises_when_no_run_matches(monkeypatch):
     monkeypatch.setattr(
         mlflow_helpers.mlflow,

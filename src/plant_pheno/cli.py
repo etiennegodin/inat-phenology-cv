@@ -49,7 +49,7 @@ from .train import (
     build_datasets,
     build_pipeline_dataloaders,
 )
-from .tune import make_objective, resolve_study_name
+from .tune import load_tune_resume_config, make_objective, resolve_study_name
 from .utils import (
     _instantiate,
     get_pos_ratios,
@@ -86,7 +86,6 @@ def _log_resolved_config(cfg: DictConfig, runtime) -> None:
     payload = resolved_container(cfg)
     mlflow.log_dict(payload, "configs.json")
     mlflow.log_params({"git_branch": runtime.git_branch})
-    mlflow.log_params({"git_hash": runtime.git_hash})
     mlflow.log_params(runtime.dataset_params.to_dict())
     mlflow.log_params(runtime.dataloaders_params.to_dict())
 
@@ -178,19 +177,28 @@ def train_cmd(cfg: DictConfig):
 
 @_command("tune")
 def tune_cmd(cfg: DictConfig):
+    mlflow.set_tracking_uri(resolve_uri())
+
+    if cfg.tune.resume:
+        resume_name = cfg.tune.resume_name
+        if not resume_name:
+            raise ValueError("tune.resume_name is required when tune.resume=True")
+        run_id = resolve_resume_run(None, resume_name)
+        cfg, search_space = load_tune_resume_config(
+            run_id,
+            resume_name,
+            SEARCH_SPACES,
+        )
+        parent_run = mlflow.get_run(run_id)
+        experiment = mlflow.MlflowClient().get_experiment(parent_run.info.experiment_id)
+    else:
+        run_id = None
+        experiment = resolve_mlflow_experiment(cfg)
+        search_space = SEARCH_SPACES[cfg.tune.search_space]
+
     runtime = cfg_to_runtime(cfg)
     _require_colab_gpu(cfg)
     device = get_device()
-    mlflow.set_tracking_uri(resolve_uri())
-    experiment = resolve_mlflow_experiment(cfg)
-
-    # Resolve resuming process
-    if cfg.tune.resume:
-        run_id = resolve_resume_run(experiment.experiment_id, cfg.tune.resume_name)
-        print(run_id)
-    else:
-        run_id = None
-
     seed_everything(cfg.seed, set_cuda_deterministic=False)
 
     if runtime.dataset_params.cache.enable:
@@ -222,8 +230,10 @@ def tune_cmd(cfg: DictConfig):
             "search_space": cfg.tune.search_space,
             "resume": cfg.tune.resume,
         }
-        mlflow.log_dict(tune_params, "tune_params.json")
-        _log_resolved_config(cfg, runtime)
+        if run_id is None:
+            mlflow.log_dict(search_space, "tune_search_space.json")
+            mlflow.log_dict(tune_params, "tune_params.json")
+            _log_resolved_config(cfg, runtime)
         mlflow.set_tag("optuna.study_name", study_name)
 
         study = optuna.create_study(
@@ -245,7 +255,7 @@ def tune_cmd(cfg: DictConfig):
             configs=runtime,
             data=data,
             cfg=cfg,
-            search_space=SEARCH_SPACES[cfg.tune.search_space],
+            search_space=search_space,
             subsample_frac=cfg.tune.subsample_frac,
         )
 
