@@ -38,7 +38,6 @@ dataset:
 seed: 42
 test: false
 test_frac: 0.33
-experiment_name: cv_inat_bioclip
 
 model:
   backbone: bioclip

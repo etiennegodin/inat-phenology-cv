@@ -39,7 +39,6 @@ class AppConfig:
     seed: int = 42
     test: bool = False
     test_frac: float = 1.0
-    experiment_name: str = "cv_inat_v0.4"
     paths: PathsParams = MISSING
     dataloaders: DataLoadersParams = MISSING
     dataset: DatasetParams = field(default_factory=DatasetParams)

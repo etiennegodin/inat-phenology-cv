@@ -37,6 +37,7 @@ class FineTuneParams:
     subsample_frac: float = 1.0
     search_space: str = "coarse"
     resume: bool = False
+    resume_name: str | None = None
 
     def to_dict(self):
         return asdict(self)

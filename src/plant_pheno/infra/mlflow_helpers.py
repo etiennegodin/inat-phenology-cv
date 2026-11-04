@@ -3,8 +3,50 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import mlflow
+from omegaconf import DictConfig
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from mlflow.entities import Experiment
+
+
+def resolve_resume_run(experiment_id: str, run_name: str | None = None):
+    if run_name is None:
+        raise ValueError(
+            f"Attempted to resume run without name provided. run_name: {run_name}"
+        )
+
+    # Make sure experiment_id is a str
+    if not isinstance(experiment_id, str):
+        experiment_id = str(experiment_id)
+
+    # Search for the specific run name
+    runs = mlflow.search_runs(
+        experiment_ids=[experiment_id],
+        filter_string=f"tags.mlflow.runName = '{run_name}'",
+        output_format="pandas",
+    )
+
+    if not runs.empty:
+        # Grab the run ID from the first matching result
+        run_id = runs.iloc[0]["run_id"]
+        return run_id
+
+    raise ValueError(
+        "Attempted to resume run without name provided. Defaulting to new run"
+    )
+
+
+def resolve_mlflow_experiment(cfg: DictConfig) -> Experiment:
+    """Resolve mlflow run id and experiment name from configs"""
+    experiment_name = f"""{cfg.model.backbone}_{cfg.model.architecture}_
+    {cfg.command}{"_test" if cfg.test else ""}"""
+    experiment = mlflow.set_experiment(experiment_name)
+    return experiment
 
 
 def save_log():

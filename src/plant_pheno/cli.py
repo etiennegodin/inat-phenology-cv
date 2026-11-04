@@ -34,7 +34,14 @@ from .config.choices import format_available_choices, validate_config_choices
 from .core.device import get_device, set_device
 from .data import log_model_evaluation
 from .inference import InatInferencePipeline
-from .infra import init_logger, mlflow_socks_patch, resolve_uri, seed_everything  # noqa
+from .infra import (
+    init_logger,
+    mlflow_socks_patch,  # noqa
+    resolve_mlflow_experiment,
+    resolve_resume_run,
+    resolve_uri,
+    seed_everything,
+)
 from .status import status
 from .train import (
     build_cached_data_pipeline,
@@ -42,7 +49,7 @@ from .train import (
     build_datasets,
     build_pipeline_dataloaders,
 )
-from .tune import make_objective
+from .tune import make_objective, resolve_study_name
 from .utils import (
     _instantiate,
     get_pos_ratios,
@@ -147,7 +154,7 @@ def train_cmd(cfg: DictConfig):
     else:
         data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
 
-    mlflow.set_experiment(cfg.experiment_name)
+    resolve_mlflow_experiment(cfg)
 
     with mlflow.start_run() as parent_run:
         parent_run_id = parent_run.info.run_id
@@ -175,7 +182,15 @@ def tune_cmd(cfg: DictConfig):
     _require_colab_gpu(cfg)
     device = get_device()
     mlflow.set_tracking_uri(resolve_uri())
-    mlflow.set_experiment(cfg.experiment_name)
+    experiment = resolve_mlflow_experiment(cfg)
+
+    # Resolve resuming process
+    if cfg.tune.resume:
+        run_id = resolve_resume_run(experiment.experiment_id, cfg.tune.resume_name)
+        print(run_id)
+    else:
+        run_id = None
+
     seed_everything(cfg.seed, set_cuda_deterministic=False)
 
     if runtime.dataset_params.cache.enable:
@@ -189,13 +204,14 @@ def tune_cmd(cfg: DictConfig):
     else:
         data = build_data_pipeline(runtime, cfg.model.backbone, device, seed=cfg.seed)
 
-    with mlflow.start_run() as parent_run:
+    with mlflow.start_run(run_id=run_id) as parent_run:
         parent_run_id = parent_run.info.run_id
         print(f"\n{'=' * 60}")
         print(f"MLflow Run ID: {parent_run_id}")
         print(f"{'=' * 60}\n")
 
-        study_name = cfg.tune.study_name or f"{cfg.experiment_name}_{parent_run_id[:8]}"
+        study_name = resolve_study_name(cfg, parent_run_id)
+
         tune_params = {
             "n_trials": cfg.tune.n_trials,
             "timeout": cfg.tune.timeout,
@@ -223,7 +239,7 @@ def tune_cmd(cfg: DictConfig):
             ),
         )
         study.set_user_attr("mlflow_run_id", parent_run_id)
-        study.set_user_attr("mlflow_experiment", cfg.experiment_name)
+        study.set_user_attr("mlflow_experiment", experiment.name)
 
         objective = make_objective(
             configs=runtime,

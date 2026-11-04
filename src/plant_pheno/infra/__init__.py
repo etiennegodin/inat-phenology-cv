@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from .logger import init_logger
-from .mlflow_helpers import get_mlflow_run_id, patch_mlflow_socks, resolve_uri, save_log
+from .mlflow_helpers import (
+    get_mlflow_run_id,
+    patch_mlflow_socks,
+    resolve_mlflow_experiment,
+    resolve_resume_run,
+    resolve_uri,
+    save_log,
+)
 from .seed import seed_everything, seed_worker
 
 __all__ = [
@@ -12,4 +19,6 @@ __all__ = [
     "get_mlflow_run_id",
     "resolve_uri",
     "patch_mlflow_socks",
+    "resolve_mlflow_experiment",
+    "resolve_resume_run",
 ]
